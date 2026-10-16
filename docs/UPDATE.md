@@ -198,88 +198,133 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 
 ---
 
-## §5 常量清单（**全量**；标 ⚠️ 的是多处重复，最容易漏换）
+## §5 常量清单（**全量**）→ 全部映射到 `version.json` 的键
 
-> **常量现在都在 `version.json`**（`make` 生成 `src/version.hpp`）——
-> 下表的「行」列是历史遗留（当年还在 `main.cpp`），**已失效**，看**常量值/含义**即可。
-> 换版本时按 **键名** 改 `version.json`：`stringDecrypt` / `keyFormulas` / `fieldDecode` / `structSizes`。
-> **⚠️ 的表示"同一个常量在语义上出现在多处"** —— 在 JSON 里它们可能已经是"一个值被多处引用"，
-> 改了自然全部生效；但若发现某处仍硬编码，必须全部换掉（本项目漏换过一处 → 2787 行乱码）。
+> **换版本 = 改 `version.json` 的值**（`make` 生成 `src/version.hpp`）。
+> 下表给出**「JSON 键 → 当前值 → 含义」**，直接照键名改即可。
+> JSON 里是**一个键被多处引用**，所以历史上的"同一个常量抄了 7 份、必须同步换"的风险**已经消除**。
 
-### 5.1 字符串解密（`il2cpp::utils` 顶部）
+### 5.1 字符串解密 → `stringDecrypt`
 
-| 常量（`stringDecrypt`）| 行(废弃) | 含义 |
+| `version.json` 键 | 当前值 | 含义 |
 |---|---|---|
-| `kStringEntryXor = 0x772FA51E` | L448 | 字符串条目解码 XOR |
-| `kKeyMulA = 0x5C2B4E660E2D0544` | L449 | 解密密钥派生 |
-| `kKeyMulB = 0x694418957C890198` | L450 | 〃 |
-| `kKeySeed = 0x55A357D81EF0E48B` | L451 | 〃 |
-| `kKeyStep = 0x6B0B40C349AE61E5` | L452 | 每 8 字节递增 |
+| `stringDecrypt.entryXor` | `0x772FA51E` | 条目解码：`entry = indexKey ^ raw ^ entryXor` |
+| `stringDecrypt.keyMulA` | `0x5C2B4E660E2D0544` | 密钥派生（逐索引）|
+| `stringDecrypt.keyMulB` | `0x694418957C890198` | 〃 |
+| `stringDecrypt.keySeed` | `0x55A357D81EF0E48B` | 〃 |
+| `stringDecrypt.keyStep` | `0x6B0B40C349AE61E5` | 每 8 字节递增 |
+| `stringDecrypt.offsetMask` / `.lengthShift` | `0xFFFFFF` / `24` | 条目打包：`offset = idx & mask`、`length = idx >> shift` |
 
 **验收**：`verify.py` 的「程序集名解码 75/75」。
-**重定位**：见 `gi_string_decrypt.py`（同一算法的独立实现，可对照）与文章 §string。
+**重定位**：`tools/relocate.py` ③ 用 `AttributeTargets` 签名反推数据块基址；
+`tools/gi_string_decrypt.py` 是同一算法的独立实现，可对照。
 
-### 5.2 逐索引 key（8 个）
+### 5.2 逐索引 key（8 个）→ `keyFormulas`
 
-| key（`keyFormulas`）| 表达式（当前版本） | 行(废弃) | 出现次数 | 验收 |
-|---|---|---|---|---|
-| `methodKey` | `((860405619*i) ^ 0x73758947) + 1547935323` | L574,584,589,602,608,656,661 | **7 ⚠️** | 方法名 + flags 分布合理 |
-| `fieldKey` | `((1824013172*((34782*i)^0x59B1DB19))>>16)+1410079245` | L695 | 1 | `fields[].typeIndex` 100% 合法 |
-| `propertyKey` | `((976451930*((0x17A5419F8A28*i)>>9))>>12)^0x70BE4B04` | L681 | 1 | 属性名可读 |
-| `eventKey` | `((-1599256506*i+1725894951)^0x1B23E40F)` | L703 | 1 | 事件名 628/628 |
-| `paramKey` | `((1457992407*((41617*i+1219887025)^0x19E1D47A))>>21)+2068375556` | L667 | 2 | `parameters[].typeIndex` 100% 合法 |
-| `genericContainerKey` | `(1714760523*((1015151837*((10661*c+1371718001)^0x146D2C3D))^0x5D7F95E0))>>19` | L532 | 1 | argc == 名字里的 `N` |
-| `genericParameterKey` | `(((1845531077*((12124*p+1969070457)^0x423B2C8D))>>10)+1212570291)^0x62A3A8F4` | L544 | 1 | 参数名 = `T`/`T1`/`TKey` |
-| `ImageIndexKey` | `(1368137530*((667674736*((13029*i)^0x43E2DEB7)+0xCB287082F0)>>8)+1505552983)` | L470 | 2 | 程序集名 75/75 |
+| `version.json` 键 | 表达式 | 验收 |
+|---|---|---|
+| `keyFormulas.methodKey` | `((A*i) ^ xor) + add` | 方法名 + flags 分布合理 |
+| `keyFormulas.fieldKey` | `((A*((B*i) ^ xor)) >> shift) + add` | `fields[].typeIndex` 100% 合法 |
+| `keyFormulas.propertyKey` | `((A*((B*i) >> shift1)) >> shift2) ^ xor` | 属性名可读 |
+| `keyFormulas.eventKey` | `((A*i + add) ^ xor)` | 事件名 628/628 |
+| `keyFormulas.paramKey` | `((A*((B*i + add1) ^ xor1)) >> shift) + add2` | `parameters[].typeIndex` 100% 合法 |
+| `keyFormulas.imageKey` | `(A*((B*((innerMul*i) ^ innerXor) + innerAdd) >> shift1)) + add` | 程序集名 75/75 |
+| `keyFormulas.containerKey` | `(A*((B*((innerMul*c + innerAdd) ^ innerXor)) ^ xor)) >> shift` | `argc` == 名字里的 `N` |
+| `keyFormulas.genericParamKey` | `(((A*((innerMul*p + innerAdd) ^ innerXor)) >> shift) + add) ^ xor` | 参数名 = `T`/`T1`/`TKey` |
 
-> ⚠️ **`methodKey` 在 7 个地方各抄了一份**（`methodNameIndex` / `methodFlags` / `methodIFlags` /
-> `methodReturnType` / `methodDeclaringType` / `methodParamStart` / `methodParamCount`）。
-> 这 7 处**必须同步换**。
+**换版本就改这些子键**（⚠️ **全部 64 位不回绕** —— 用 32 位乘法会"低 24 位对、高 8 位错"，见陷阱 3）：
 
-### 5.3 各字段的解码常量（⚠️ 多处重复）
+| key | 子键 → 值 |
+|---|---|
+| `methodKey` | `A=860405619` `xor=0x73758947` `add=1547935323` |
+| `fieldKey` | `B=34782` `xor=0x59B1DB19` `A=1824013172` `shift=16` `add=1410079245` |
+| `propertyKey` | `B=0x17A5419F8A28` `shift1=9` `A=976451930` `shift2=12` `xor=0x70BE4B04` |
+| `eventKey` | `A=-1599256506` `add=1725894951` `xor=0x1B23E40F` |
+| `paramKey` | `B=41617` `add1=1219887025` `xor1=0x19E1D47A` `A=1457992407` `shift=21` `add2=2068375556` |
+| `imageKey` | `B=667674736` `innerMul=13029` `innerXor=0x43E2DEB7` `innerAdd=0xCB287082F0` `shift1=8` `A=1368137530` `add=1505552983` |
+| `containerKey` | `B=1015151837` `innerMul=10661` `innerAdd=1371718001` `innerXor=0x146D2C3D` `xor=0x5D7F95E0` `A=1714760523` `shift=19` |
+| `genericParamKey` | `B=1845531077` `innerMul=12124` `innerAdd=1969070457` `innerXor=0x423B2C8D` `shift=10` `add=1212570291` `xor=0x62A3A8F4` |
 
-| 常量（`fieldDecode`）| 含义 | 行(废弃) | 次数 |
-|---|---|---|---|
-| `0x4159BB8E` | typeDef `+0x28` flags | L558 | **2 ⚠️**（另有注释 1 处）|
-| `0x3D74901F` | typeDef `+0x18` parentIndex | L525 | 1 |
-| `26230` / `26229` | typeDef `+0x3E` genericContainerIndex + 哨兵 | L529 | 3 ⚠️ |
-| `452544412` | 事件 `+0x00` typeIndex | L1608 | **2 ⚠️** |
-| `1037298109` | 事件 `+0x04` nameIndex | L709 | **2 ⚠️** |
-| `0xBEA7` / `0xEE66` / `30703` | 事件 add / remove / raise | L1556–1558 | 各 1 |
-| `23324` | 属性 `+0x08` set | L1554 | **3 ⚠️**（另有注释 2 处）|
-| `0xE5A2` | 属性 `+0x06` get | L1553 | **3 ⚠️** |
-| `1953953095` | 属性 `+0x00` nameIndex | L687 | 1 |
-| `0x2D27D873` | 字段 typeIndex | L1086 | 1 |
-| `1475293452` + `0x2D027B84` | 字段 nameIndex | L699 | 1 |
-| `0x31BF59F3` | 参数 typeIndex | L677 | 1 |
-| `1764493660` + `0x4CDBD093` | 参数 nameIndex | L673 | 1 |
-| `257927898` | 方法 `+0x04` parameterStart | L657 | 2 ⚠️ |
-| `0x8F60` | 方法 `+0x16` flags | L585 | 2 ⚠️ |
-| `25344` | 方法 `+0x10` iflags | L590 | 2 ⚠️ |
-| `0x59244785` | 方法 `+0x0C` declaringType | L603 | **3 ⚠️** |
-| `0x3F7BDF39` | 方法 `+0x08` returnType | L597 | **3 ⚠️** |
-| `1524016681` | 方法 `+0x00` nameIndex | L575 | 1 |
-| `0x4D8127F2` | typeDef `+0x0C` methodStart | L521 | 1 |
-| `0x29010897` | typeDef `+0x1C` fieldStart | L522 | 1 |
-| `1995389561` | typeDef `+0x08` propertyStart | L523 | 1 |
-| `1145778368` | typeDef `+0x00` namespaceIndex | L520 | 1 |
-| `72511848` | typeDef `+0x24` nameIndex | L519 | 1 |
-| `0xED3A` / `0x51A8` / `0x43DA` / `0x16` / `0xBA` | 各 width 字段的 count | L551 / L552 / L562 / L564 / L567 | 各 1 |
-| `56` / `113` / `3330` / `6631` | interfaces_count / event_count / eventStart / nestedStart | L565 / L568 / L554 / L566 | 各 1 ⚠️ **必须 8 位截断** |
-| `0x2E8C0EB8` | typeDef `+0x20`（**语义未定**）| L200 | 1 |
-| `0x138FD4C7` / `1053517166` | 容器 `+0x04` parameterStart / `+0x08` argc | L541 / L537 | 1 |
-| `0x664CCEB9` | 泛型参数 `+0x00` nameIndex | L549 | 1 |
-| `0x9B1B5919` | T1`+0x50` → genericInstsCount | L426, L2509 | 2 ⚠️ |
-| `0x558E11EC` | MHY[0x134] → genericClassRange | L427, L2513 | 2 ⚠️ |
+### 5.3 各字段的解码常量 → `fieldDecode`（结构体 → 字段 → `op:key`）
 
-### 5.4 decryptHeader 的槽位表（40 张表）
+**格式**：`fieldDecode.<结构体>.<字段> = "<op>:<key>"`，`op ∈ {sub, xor, add}`。
+解码时**按字段位宽截断**（`+N` 型必须 8/16 位截断，否则越界 —— 见陷阱 6）。
 
-见 `status.md` §3.2（那份表与代码逐条一致）。**换版本时逐行复核**：
-每行都有「槽位 / 运算 / 密钥 / 步长」，改完用 `verify.py` 与 §6.5 的实测计数交叉核对。
+**`typeDef`（70 字节）**
+
+| 偏移 | 字段（JSON 键名）| `op:key` |
+|---|---|---|
+| `+0x00` | `namespaceIndex` | `sub:1145778368` |
+| `+0x08` | `propertyStart` | `sub:1995389561` |
+| `+0x0C` | `methodStart` | `xor:0x4D8127F2` |
+| `+0x18` | `parentIndex` | `sub:0x3D74901F`（Il2CppType 索引，-1=无父类）|
+| `+0x1C` | `fieldStart` | `xor:0x29010897` |
+| `+0x20` | `unknown20` | `xor:0x2E8C0EB8`（= `fieldOffset` 表的每类型索引基）|
+| `+0x24` | `nameIndex` | `sub:72511848` |
+| `+0x28` | `flags` | `sub:0x4159BB8E` |
+| `+0x30` | `method_count` | `sub:0xED3A` |
+| `+0x34` | `eventStart` | `add:3330` |
+| `+0x36` | `nestedTypesStart` | `add:6631` |
+| `+0x38` | `field_count` | `xor:0x51A8` |
+| `+0x3C` | `interfacesStart` | `xor:0x43DA` |
+| `+0x3E` | `genericContainerIndex` | `sub:26230`（哨兵 26229 = 无泛型）|
+| `+0x40` | `interfaces_count` | `add:56`（`0xC8` 编码 0）|
+| `+0x43` | `property_count` | `xor:0x16` |
+| `+0x44` | `event_count` | `add:113`（`0x8F` 编码 0）|
+| `+0x45` | `nestedTypesCount` | `xor:0xBA` |
+
+**其它结构体**
+
+| 结构体 | 字段（偏移）| `op:key` |
+|---|---|---|
+| `method` | `nameIndex(+0)` | `sub:1524016681` |
+| `method` | `parameterStart(+4)` | `sub:257927898` |
+| `method` | `returnType(+8)` | `xor:0x3F7BDF39` |
+| `method` | `declaringType(+0xC)` | `xor:0x59244785` |
+| `method` | `iflags(+0x10)` | `sub:25344` |
+| `method` | `flags(+0x16)` | `xor:0x8F60` |
+| `method` | `parameterCount(+0x18)` | `sub:31`（**字节运算**，见下注）|
+| `field` | `typeIndex(+0)` | `xor:0x2D27D873` |
+| `field` | `nameIndexBase(+4)` / `nameIndexXor` | `sub:1475293452` / `xor:0x2D027B84` |
+| `property` | `nameIndex(+0)` | `sub:1953953095` |
+| `property` | `get(+6)` / `set(+8)` | `xor:0xE5A2` / `sub:23324` |
+| `event` | `typeIndex(+0)` | `sub:452544412` |
+| `event` | `nameIndex(+4)` | `sub:1037298109` |
+| `event` | `add(+8)` / `remove(+0xA)` / `raise(+0xC)` | `xor:0xBEA7` / `xor:0xEE66` / `sub:30703` |
+| `parameter` | `typeIndex(+0)` | `xor:0x31BF59F3` |
+| `parameter` | `nameIndexBase(+4)` / `nameIndexXor` | `sub:1764493660` / `xor:0x4CDBD093` |
+| `genericContainer` | `parameterStart(+4)` / `argc(+8)` | `xor:0x138FD4C7` / `sub:1053517166` |
+| `genericParameter` | `nameIndex(+0)` | `xor:0x664CCEB9` |
+
+> **两个易错点**：
+> - `parameterCount`（method `+0x18`）是**字节**运算：`((raw - 31) & 0xFF) ^ (key & 0xFF)`，不是 16/32 位
+> - `field` / `parameter` 的 `nameIndex` 是**两段**：`(raw - nameIndexBase) ^ nameIndexXor`
+
+**计数公式（不在 `fieldDecode`，单独三项；`version.json` 顶层）**
+
+| `version.json` 键 | 表达式 | 本版本值 |
+|---|---|---|
+| `genericInstsCountFormula` | `*(u32*)(T1+0x50) + 0x9B1B5919` | 69146 |
+| `genericClassRangeCountFormula` | `*(u32*)(T0+0x80) ^ 0x4E013BBD` | 13671 |
+| `typesCountFormula` | `*(u32*)(T1+0x54) ^ 0x6622B34E` | 683574 |
+
+> 另有 `fieldDefaultValuesCount` / `methodSpecsCount`：**没有公式**，运行时从数据推导
+> （见 `src/il2cpp_image.hpp`）—— `version.json` 里**故意不存**这两个数。
+
+### 5.4 槽位表（`version.json` 的 `tables`，共 **34** 项）
+
+每项形如 `{slot, op, key, stride, side, role, …}`。**这才是换版本的主战场**。
+
+- **逐条清单**：`docs/status.md` §3.2（与 `version.json` 逐条对应）
+- **能自动重定位的**：先跑 `python3 tools/relocate.py version/<新版本>` ——
+  ⑥ 会逐表告诉你「slot 唯一确定 / 多候选 / 无候选」，✅ 的直接采用（见 §8.5/§8.6）
+- 改完用 `verify.py` 交叉核对；`relocate.py` ⑤ 会打印「探测值一致」的表
+
+**`side` 字段**：`global`（`global-metadata.dat` 侧，偏移要 **+0x210**）/ `startup`（另一块数据）。
 
 ### 5.5 计数：优先找**公式**，实在没有才实测
 
-本版本 40 张表的计数**全部**有来源，分三类：
+本版本 34 张表的计数**全部**有来源，分三类：
 
 | 来源 | 例子 |
 |---|---|
