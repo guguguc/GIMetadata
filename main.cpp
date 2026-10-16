@@ -864,10 +864,11 @@ namespace il2cpp
 
             if (type->type == il2cpp::Il2CppTypeEnum::IL2CPP_TYPE_VAR || type->type == il2cpp::Il2CppTypeEnum::IL2CPP_TYPE_MVAR)
             {
-                uint32_t genericParameterIndex = type->data.genericParameterIndex;
-                const Il2CppGenericParameter* parameter = GetGenericParameter(genericParameterIndex, 0);
-                uint32_t nameKey = (uint32_t)(((0x65DE21D74280ull * genericParameterIndex) ^ 0x154AA920) + 1912316114);
-                result = GetStringFromIndex((parameter->nameIndex ^ 0x2DD1C9C6u) - nameKey);
+                // ⚠️ 必须用**本版本**的泛型参数名公式。旧版（6.7）的
+                //    `(nameIndex ^ 0x2DD1C9C6) - ((0x65DE21D74280*p) ^ 0x154AA920) + 1912316114`
+                //    在本版本会解出**乱码**（实测 2787 个方法签名被污染）。
+                uint32_t gp = (uint32_t)type->data.genericParameterIndex;
+                result = GetStringFromIndex(genericParameterNameIndex(gp));
                 return typeNameCache.emplace(type, std::move(result)).first->second;
             }
 
