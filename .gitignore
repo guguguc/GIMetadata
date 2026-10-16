@@ -22,3 +22,4 @@ __pycache__/
 gi.exe.id* 
 gi.exe.nam
 gi.exe.til
+slots_cache.json

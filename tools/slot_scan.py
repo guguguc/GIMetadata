@@ -52,42 +52,85 @@ def va2off(secs, va):
     raise ValueError("VA 不在任何段: 0x%X" % va)
 
 
+# 寄存器族：32/64/8 位同名寄存器归一（eax/rax/ax/al → 'a'）
+_GP = {}
+for _names, _f in ((('rax','eax','ax','al','ah'),'a'), (('rbx','ebx','bx','bl','bh'),'b'),
+                   (('rcx','ecx','cx','cl','ch'),'c'), (('rdx','edx','dx','dl','dh'),'d'),
+                   (('rsi','esi','si','sil'),'si'), (('rdi','edi','di','dil'),'di'),
+                   (('rbp','ebp','bp','bpl'),'bp'), (('rsp','esp','sp','spl'),'sp')):
+    for _n in _names: _GP[_n] = _f
+for _k in range(8, 16): _GP['r%d' % _k] = 'r%d' % _k
+_GP.update({'r8d':'r8','r8w':'r8','r8b':'r8','r9d':'r9','r9w':'r9','r9b':'r9',
+            'r10d':'r10','r10w':'r10','r10b':'r10','r11d':'r11','r11w':'r11','r11b':'r11',
+            'r12d':'r12','r12w':'r12','r12b':'r12','r13d':'r13','r13w':'r13','r13b':'r13',
+            'r14d':'r14','r14w':'r14','r14b':'r14','r15d':'r15','r15w':'r15','r15b':'r15'})
+
+
 def scan_text(D, secs):
-    """返回 [(slot, op, key, 出现次数, 首个VA)]"""
+    """返回 [(slot, op, key, 出现次数, 首个VA)]
+
+    匹配**两种**形态（第二种是实测的主要形态，v1 漏了它）：
+      A) mov reg,[mhy+slot]   ...  op reg,imm            槽位在前
+      B) mov reg,imm          ...  op reg,[mhy+slot]     密钥在前 ← 漏报根源
+    寄存器按族归一（eax/rax 视为同一），窗口 8 条指令。
+    """
     tname, tva, tvsz, toff, trsz = secs[0]
     text = D[toff:toff + trsz]
     md = Cs(CS_ARCH_X86, CS_MODE_64)
     md.detail = True
-    md.skipdata = True                       # ★ 必须
-    last_load, records, idx = {}, [], 0
+    md.skipdata = True
+    last_load, last_imm, records, idx = {}, {}, [], 0
+    OPS = ('xor', 'sub', 'add', 'imul', 'or', 'and')
     for insn in md.disasm(text, tva):
         idx += 1
-        if insn.id == 0:                     # skipdata 占位
-            last_load.clear()
-            continue
+        if insn.id == 0:
+            last_load.clear(); last_imm.clear(); continue
         try:
             ops = insn.operands
         except Exception:
-            last_load.clear()
-            continue
+            last_load.clear(); last_imm.clear(); continue
         m = insn.mnemonic
+        def fam(r): return _GP.get(md.reg_name(r), md.reg_name(r))
+
+        # A) mov reg, [base+disp]
         if m in ('mov', 'movsxd', 'movsx', 'movzx') and len(ops) == 2 \
            and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_MEM:
             mem = ops[1].mem
             if mem.index == 0 and 0 <= mem.disp < NSLOT and mem.base != 0:
-                last_load[ops[0].reg] = (mem.disp, idx)
+                last_load[fam(ops[0].reg)] = (mem.disp, idx)
             else:
-                last_load.pop(ops[0].reg, None)
+                last_load.pop(fam(ops[0].reg), None)
+            last_imm.pop(fam(ops[0].reg), None)
             continue
-        if m in ('xor', 'sub', 'add', 'imul', 'or', 'and') and len(ops) == 2 \
-           and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_IMM:
-            r = ops[0].reg
-            if r in last_load and idx - last_load[r][1] <= 8:
-                records.append((last_load[r][0], m, ops[1].imm & M32, insn.address))
-            last_load.pop(r, None)
+
+        # B) mov reg, imm   （把密钥装进寄存器）
+        if m == 'mov' and len(ops) == 2 and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_IMM:
+            last_imm[fam(ops[0].reg)] = (ops[1].imm & M32, idx)
+            last_load.pop(fam(ops[0].reg), None)
             continue
+
+        # D) op reg, imm      （槽位已在 reg 里）
+        if m in OPS and len(ops) == 2 and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_IMM:
+            k = fam(ops[0].reg)
+            if k in last_load and idx - last_load[k][1] <= 8:
+                records.append((last_load[k][0], m, ops[1].imm & M32, insn.address))
+            last_load.pop(k, None); last_imm.pop(k, None)
+            continue
+
+        # C) op reg, [base+disp]   （密钥已在 reg 里）★ v1 漏掉的形态
+        if m in OPS and len(ops) == 2 and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_MEM:
+            k = fam(ops[0].reg)
+            mem = ops[1].mem
+            if k in last_imm and idx - last_imm[k][1] <= 8 \
+               and mem.index == 0 and 0 <= mem.disp < NSLOT and mem.base != 0:
+                records.append((mem.disp, m, last_imm[k][0], insn.address))
+            last_load.pop(k, None); last_imm.pop(k, None)
+            continue
+
         if ops and ops[0].type == X86_OP_REG:
-            last_load.pop(ops[0].reg, None)
+            k = fam(ops[0].reg)
+            last_load.pop(k, None); last_imm.pop(k, None)
+
     uniq = {}
     for d, op, imm, va in records:
         uniq.setdefault((d, op, imm), []).append(va)
@@ -115,6 +158,15 @@ def main():
     print("\n扫描 .text ...")
     rows = scan_text(D, secs)
     print("唯一 (slot,op,key) 组合: %d" % len(rows))
+    # 写缓存，供 tools/relocate.py 复用（省几分钟重扫）
+    try:
+        cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'slots_cache.json')
+        json.dump({'svals': {str(k): v for k, v in svals.items()},
+                   'uniq': [[d, op, imm, n, va] for d, op, imm, n, va in rows]},
+                  open(cache_path, 'w'))
+        print("缓存已写 %s" % cache_path)
+    except Exception as e:
+        print("写缓存失败:", e)
 
     cand = []
     for d, op, imm, n, va in rows:
