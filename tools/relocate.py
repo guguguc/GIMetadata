@@ -591,6 +591,23 @@ def main():
         print("   合计: slot 唯一确定 %d 张, 多候选 %d 张, 无候选 %d 张" % (uniq_n, multi, none_n))
         print("   （前提：slot 跨版本稳定 —— 尚未用第二个样本验证；见 docs/UPDATE.md §8.6）")
 
+    print("\n== ⑦ 反查 slot：结构自证得到的值 → 唯一 (slot,op,key)（换版本可全自动）==")
+    byval = {}
+    for val, s, op, key in cands:
+        byval.setdefault(val, []).append((s, op, key))
+    auto = 0
+    for k in sorted(found):
+        v0 = found[k][0]
+        hits = byval.get(v0, [])
+        if len(hits) == 1:
+            s, op, key = hits[0]
+            print("   %-28s 0x%-9X -> slot 0x%-4X %-4s 0x%X   ✅ 唯一" % (k, v0, s, op, key))
+            auto += 1
+        else:
+            print("   %-28s 0x%-9X -> %d 个候选 ⚠（需人工/二次证据）" % (k, v0, len(hits)))
+    if auto:
+        print("   ★ 这 %d 张表换版本可全自动：结构自证出值 → 反查唯一 (slot,op,key)，不需要旧 JSON" % auto)
+
     print("\n总耗时 %.1fs" % (time.time() - t0))
     return 0
 

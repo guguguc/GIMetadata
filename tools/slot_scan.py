@@ -20,7 +20,7 @@ MHY 槽位扫描器 —— 自动找出「MHY[slot] OP key => 元数据偏移」
 """
 import struct, sys, json, os
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
-from capstone.x86 import X86_OP_MEM, X86_OP_IMM, X86_OP_REG
+from capstone.x86 import X86_OP_MEM, X86_OP_IMM, X86_OP_REG, X86_REG_RIP
 
 MHY_VA = 0x1427D4BD0
 NSLOT = 0x300
@@ -145,6 +145,21 @@ def scan_text(D, secs):
             elif lds and immd:
                 records.append((lds[0], m, immd[0], insn.address))
             last_load.pop(kd, None); last_imm.pop(kd, None)
+            continue
+
+        # C2) op reg, [rip+const]  （槽位在 reg 里，密钥在**数据段常量池**）★ v3 漏掉的形态
+        #    实测：typeDef+0x18(parentIndex)/+0x24(nameIndex)/+0x28(flags) 的密钥
+        #          既不在 .text 立即数里，也不在寄存器里，而是 rip 相对的数据段常量
+        if m in OPS and len(ops) == 2 and ops[0].type == X86_OP_REG \
+           and ops[1].type == X86_OP_MEM and ops[1].mem.base == X86_REG_RIP:
+            k = fam(ops[0].reg)
+            if k in last_load:
+                tgt = insn.address + insn.size + ops[1].mem.disp
+                o = va2off(secs, tgt)
+                if o is not None and 0 <= o + 4 <= len(D):
+                    keyv = struct.unpack_from('<I', D, o)[0]
+                    records.append((last_load[k][0], m, keyv, insn.address))
+            last_load.pop(k, None); last_imm.pop(k, None)
             continue
 
         if ops and ops[0].type == X86_OP_REG:

@@ -501,6 +501,57 @@ fields=440172  methods=733442  properties=115596  events=628  nested=25981  inte
 - `fieldOffset`：**不是**按 `fieldStart` 索引，而是按 `typeDef+0x20`(`unknown20`) + k；
   且实测"类型内偏移非递减"只有 57%（用 unknown20 当基）/ 45%（用 fieldStart）→ 判据不足
 
+**结构体偏移能不能定位？—— 分两类，答案不同**
+
+| 类别 | 例子 | 能否自动定位 |
+|---|---|---|
+| **A. 全局表槽位** | `MHY[0xB4]` / `T0+0x88` / `T1+0x48` | ✅ **能（反查）** |
+| **B. 被解码结构体内部的字段** | `typeDef+0x18`(parentIndex) / `+0x24`(nameIndex) / `+0x28`(flags) | ❌ **不能**（候选太多 + 部分没被枚举） |
+
+**A 类——反查法（本版本实测）**
+
+先结构自证求出**值 V**，再问候选表：**哪些 `(slot,op,key)` 解出 V**？
+
+```
+typeDefinitions   0x92140   → 唯一 → slot 0xB4  add 0xEC48AB9F
+nestedTypesTable  0x22800F8 → 唯一 → slot 0x5C  add 0xE93D6D0D
+interfacesTable   0x4D5AB04 → 唯一 → slot 0x1C4 add 0xA584BD79
+fieldDefaultValues 0x3D00478→ 唯一 → slot 0x13C xor 0x593DE464
+blob              0xF1754C  → 唯一 → slot 0xA0  xor 0x3F525210
+methodPointerIndex 0xC48E6C → 唯一 → slot 0x94  xor 0x4A4C0A71
+```
+
+整体判别力：4730 个三元组产生 3715 个不同值，其中 **3334 个值（90%）只被唯一一个三元组产生**。
+→ **只要表的值能结构自证，它的 `(slot, op, key)` 就能唯一反查出来**：
+
+```
+结构自证（值 V） --反查--> 唯一 (slot,op,key) --写入--> 新 version.json
+```
+
+这条闭环**不依赖旧 JSON、也不依赖"slot 跨版本稳定"** ✓✓ —— 是 6 张表换版本的**全自动**通道。
+
+**B 类——为什么不能**
+
+同一位移有大量 `(op,key)` 候选（实测）：
+
+```
+typeDef+0x0C  55 种     typeDef+0x18  103 种     typeDef+0x1C  37 种
+typeDef+0x20  117 种    typeDef+0x28  88 种      typeDef+0x38  86 种
+```
+
+而且**有些真值压根没进候选**：`(0x24,sub,72511848)` / `(0x18,sub,0x3D74901F)` /
+`(0x28,sub,0x4159BB8E)` 全都不在缓存里 —— 因为它们的密钥**不在 `.text` 立即数**里，
+而在**数据段常量池**（`op reg,[rip+const]`，**第 4 种读取形态**，已补扫）。
+
+要定位 B 类，只能靠**语义/二次证据**（例：`nameIndex` 用"解出的名字可打印"当判据、
+count 用"÷70 == 类型数"当判据），或 IDA 单点确认 —— **没有通用结构探针**。
+
+> **补充**：B 类的**偏移本身**（0x0C/0x18/0x1C…）是**结构体布局**，由目标 C 结构体定义决定，
+> 跨版本大概率不变（变的是**密钥**，已在 JSON 里 ✓）。
+> 但目前这些偏移**硬编码在 `src/*.hpp`**，不在"单一事实来源" —— 可考虑移进 JSON 的 `structSizes` 旁边。
+
+
+
 **⚠️ 反直觉实测：长度约束对"定位"几乎没用**
 
 本以为"表长一致"能大幅筛候选，实测（435 个去重候选）：
