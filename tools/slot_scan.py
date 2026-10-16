@@ -69,9 +69,10 @@ _GP.update({'r8d':'r8','r8w':'r8','r8b':'r8','r9d':'r9','r9w':'r9','r9b':'r9',
 def scan_text(D, secs):
     """返回 [(slot, op, key, 出现次数, 首个VA)]
 
-    匹配**两种**形态（第二种是实测的主要形态，v1 漏了它）：
+    匹配**三种**形态：
       A) mov reg,[mhy+slot]   ...  op reg,imm            槽位在前
-      B) mov reg,imm          ...  op reg,[mhy+slot]     密钥在前 ← 漏报根源
+      B) mov reg,imm          ...  op reg,[mhy+slot]     密钥在前 ← v1 漏掉
+      C) mov reg,[mhy+slot] / mov reg2,imm / op reg,reg2 寄存器对寄存器 ← v2 漏掉
     寄存器按族归一（eax/rax 视为同一），窗口 8 条指令。
     """
     tname, tva, tvsz, toff, trsz = secs[0]
@@ -91,6 +92,12 @@ def scan_text(D, secs):
             last_load.clear(); last_imm.clear(); continue
         m = insn.mnemonic
         def fam(r): return _GP.get(md.reg_name(r), md.reg_name(r))
+
+        # call/ret 会破坏调用者保存寄存器 → 清掉它们的追踪，避免跨调用误判
+        if m in ('call', 'ret', 'retn', 'jmp', 'syscall', 'int3'):
+            for _c in ('a', 'c', 'd', 'si', 'di', 'r8', 'r9', 'r10', 'r11'):
+                last_load.pop(_c, None); last_imm.pop(_c, None)
+            continue
 
         # A) mov reg, [base+disp]
         if m in ('mov', 'movsxd', 'movsx', 'movzx') and len(ops) == 2 \
@@ -112,7 +119,7 @@ def scan_text(D, secs):
         # D) op reg, imm      （槽位已在 reg 里）
         if m in OPS and len(ops) == 2 and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_IMM:
             k = fam(ops[0].reg)
-            if k in last_load and idx - last_load[k][1] <= 8:
+            if k in last_load:
                 records.append((last_load[k][0], m, ops[1].imm & M32, insn.address))
             last_load.pop(k, None); last_imm.pop(k, None)
             continue
@@ -121,10 +128,23 @@ def scan_text(D, secs):
         if m in OPS and len(ops) == 2 and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_MEM:
             k = fam(ops[0].reg)
             mem = ops[1].mem
-            if k in last_imm and idx - last_imm[k][1] <= 8 \
-               and mem.index == 0 and 0 <= mem.disp < NSLOT and mem.base != 0:
+            if k in last_imm and mem.index == 0 and 0 <= mem.disp < NSLOT and mem.base != 0:
                 records.append((mem.disp, m, last_imm[k][0], insn.address))
             last_load.pop(k, None); last_imm.pop(k, None)
+            continue
+
+        # E) op reg, reg   （槽位在一个寄存器、密钥在另一个寄存器）★ v2 漏掉的形态
+        #    实测：mov ecx,[rcx+0x5c] / mov edx,0xe93d6d0d / add ecx,edx
+        #    只失效**目的**寄存器；密钥寄存器常被后续多个槽位复用
+        if m in OPS and len(ops) == 2 and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_REG:
+            kd, ks = fam(ops[0].reg), fam(ops[1].reg)
+            ldd, immd = last_load.get(kd), last_imm.get(kd)
+            lds, imms = last_load.get(ks), last_imm.get(ks)
+            if ldd and imms:
+                records.append((ldd[0], m, imms[0], insn.address))
+            elif lds and immd:
+                records.append((lds[0], m, immd[0], insn.address))
+            last_load.pop(kd, None); last_imm.pop(kd, None)
             continue
 
         if ops and ops[0].type == X86_OP_REG:

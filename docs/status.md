@@ -202,7 +202,7 @@ qword_145AD52B8 = 0x1427D4BD0   (MHY 表)
 | 6 | ~~`parameterDefaultValues`~~ | ✅ **已解决**（槽位 `0x104`^`0x094C42AB`；count 槽位 `0x9C`；线性查找）|
 | 7 | `customAttributeGenerators` | ❌ 旧地址实测是函数尾部。**本轮查明：CodeRegistration 在文件镜像里不存在（运行时构造）** → 静态拿不到 → 属性**值**输出不了。详见 §6 附 5 |
 | 8 | 3 个 helper：`String::NewLen`/`typeof`/`bool` | ❌ 未定位，**且从未验证旧值是否失效**（线索：`sub_1404B6A50`）|
-| 9 | `typeDef +0x20` 语义 | ❌ 未定（索引带 tag 的 4 字节表）|
+| 9 | `typeDef +0x20` 语义 | 🟡 **已定性一半**：它是 **`fieldOffset` 表的每类型索引基** —— 反编译 `sub_140512DB0` 里 `fieldOffset[ (typeData+0x20 ^ 0x2E8C0EB8) + k ]`（k=类型内字段序号）。所以 fieldOffset **不是**按 `fieldStart` 索引。但"类型内偏移非递减"实测仅 ~57% → 尚不能当结构判据 |
 | 10 | `methodSpecsCount` | 🟡 用实测 **610109**（表里无此计数；安全下界 563653）|
 | 11 | 槽位 `0x030`/`0x0A4`/`0x1F8`/`0x174` | ⚠️ 未定性/已废弃，代码里已逐行标注「❌ 读错表」|
 | 12 | ~~dump 实跑~~ | ✅ **已跑通**：`exit=0`，`dump.cs` **174.6 MB**，耗时 **1.4s**；详见 §6 附 6（共 13 个修复）|
@@ -215,6 +215,7 @@ qword_145AD52B8 = 0x1427D4BD0   (MHY 表)
 | 21 | ~~`genericClassRangeCount` 的判据~~ | ✅ **已解决**：也是**公式** —— `*(u32*)(T0+0x80) ^ 0x4E013BBD = 13671`。消费者是 `RuntimeInit` 的泛型注册循环（`init_534B80.c:2064`）。**`version.json` 的 `measuredCounts` 现已整块删除**（另两个改成运行时从数据推导）|
 | 20 | 字符串常量默认值**截断**（中文/韩文少 1 字节）| 🟡 仅 **29 行**（3 个方法 + 26 个字段），如 `const string CJKYearSuff = "年"`。字符串常量路径的长度问题 |
 | 19 | ~~嵌套类前缀 `Outer.Inner`~~ | ✅ **已解决**：用 `nestedTypes` 表反推「子→父」映射（绕开未定位的 `declaringTypeIndex`）。已验收：25481 表项铺满整表、**25980/25981 个嵌套类型都出了前缀**，且命名空间继承最外层父类 |
+| 22 | ~~自动重定位表常量（换版本工具链）~~ | ✅ **`tools/relocate.py` 已能自动定位 5 张表 + 1 个 blob**（`typeDefinitions` / `nestedTypesTable` / `interfacesTable` / `fieldDefaultValues` / `methodPointerIndex` + `fieldAndParameterDefaultValueData`），全部**结构自证**、3~4 秒。详见 `docs/UPDATE.md` §8.5/§8.6 |
 
 ## 6. `parentIndex` 的失败记录（避免重复）
 

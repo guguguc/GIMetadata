@@ -432,32 +432,80 @@ python3 tools/relocate.py version/7.1          # 自测：应能复原已知值
 ```
 ① "MHY\0" 魔数                                     -> MHY 表              ✅ 已实现
 ② 已知的 75 个程序集名                               -> 字符串解密(5 密钥+数据块)
-③ 用「名字可打印」当二次证据 -> typeDefinitions(70B)   ✅ 探针已实现且**自证正确**
-④ typeDefs 的 methodStart/fieldStart/propertyStart/  -> 各表的 start/count 范围
+③ 用「名字可打印」当二次证据 -> typeDefinitions(70B)   ✅ 已实现且**自证 100%**
+④ 用 typeDefs 的 methodStart/fieldStart/propertyStart/ ✅ 已实现（解出各表预期长度）
   eventStart/interfacesStart/nestedTypesStart
-⑤ 表长必须与 ④ 的累计一致                             -> methods/fields/properties/
-                                                       events/interfaces/nestedTypes
-⑥ fields 表长度 == fieldOffset 表长度                 -> fieldOffset
-⑦ attributesInfo(+0 严格递增) 的 range 覆盖           -> attributeTypes
-⑧ genericContainers 的 argc/parameterStart            -> genericParameters
-⑨ startup 侧 type args 是合法 Il2CppType 索引         -> genericClassRange/genericTypeArg
+⑤ 用「长度 + 结构自证」钉住可自证的表                  ✅ nestedTypes / interfaces 已钉住
+⑥ fields 表长度 == fieldOffset 表长度                 ⏳ 长度有了，但 fieldOffset 索引基是
+                                                       typeDef+0x20（不是 fieldStart）→ 暂缓
+⑦ attributesInfo(+0 严格递增) 的 range 覆盖           ⏳ 待做 -> attributeTypes
+⑧ genericContainers 的 argc/parameterStart            ⏳ 待做 -> genericParameters
+⑨ startup 侧 type args 是合法 Il2CppType 索引         ⏳ 待做 -> genericClassRange/genericTypeArg
 ```
 
 三段式：**旧 version.json 当提示 -> 用另一张表/字符串解码做二次证据 -> 任何一步不过就 FAIL（不静默接受）**。
 这样即使指纹不独特，也**不会误报**。
 
-**⚠️ 已知薄弱环节：候选生成，不是证据**
+**⚠️ 已验证：候选生成曾是薄弱环节（已修）**
 
-实测（本版本）：`typeDefinitions` 的二次证据**完全成立** —— 用旧 JSON 的提示解出
-`<Module>` / `Locale` / `SR` / `WIN32_FIND_DATA` / `HMACSHA1`，**可打印率 100%**。
-**但 `slot_scan.py` 根本没产出它的候选** ✗：
+阶梯刚搭好时，`typeDefinitions` 的二次证据**完全成立**，**但 `slot_scan.py` 根本没产出它的候选** ✗
+—— 因为真实读取点走了**别的指令形态**。修法是让 `slot_scan.py` 覆盖**三种形态 + 数据流追踪**：
 
 ```
-缓存里有 (slot 0xB4, sub, 0x13B75461) 吗: False
+A) mov reg,[mhy+slot]   ...  op reg,imm               槽位在前
+B) mov reg,imm          ...  op reg,[mhy+slot]        密钥在前
+C) mov reg,[mhy+slot]   ...  op reg,reg2              寄存器对寄存器（槽位+密钥各占一个寄存器）
 ```
 
-说明 `mov reg,[mhy+slot]` + `op reg,imm` 这个模式**漏了真实读取点**（该处走了别的指令形态）。
-**下一步优先级：先修 `slot_scan.py` 的漏报**（比再加探测器更有价值）—— 否则阶梯第③级拿不到输入。
+**关键教训：密钥不一定紧邻读取点** —— 实测它常被提到**函数入口**装载：
+
+```asm
+; 函数入口:  mov r15d, 0xA584BD79        ; = -1518027399 (interfaces 的密钥)
+; ...
+; 读取点:    mov ecx, [rcx+0x1c4]        ; 槽位
+;            add ecx, r15d                ; ← 中间隔了上百条指令 ✗ 8 条窗口挡掉了
+```
+
+所以**不能**用"距离 N 条指令以内"来配对，必须做**数据流追踪**：
+寄存器被写就失效、`call/ret` 清掉调用者保存寄存器（rax/rcx/rdx/rsi/rdi/r8-r11），
+只要没被写就一直有效。
+
+实测效果（本版本）：唯一 `(slot,op,key)` 组合 **3028 → 4153（形态B）→ 4353（形态C）→ 4730（去窗口）**，
+两处关键漏报被补上：`interfacesTable`、`nestedTypesTable`。
+`slot_scan.py` 现在把缓存固定写到 `tools/slots_cache.json`（`relocate.py` 就在这儿找）。
+
+**阶梯 ④⑤ 的落地（本版本已实现）**
+
+`ladder_expected_lengths()` 用旧 JSON 的 `fieldDecode.typeDef` 键解码 typeDefs 各字段 → 得到各表预期长度：
+
+```
+fields=440172  methods=733442  properties=115596  events=628  nested=25981  interfaces=37562
+```
+
+再用「长度 + 结构自证」钉候选。**只有自测能推出已知正确值的探针才启用**（宁可漏报不可误报）：
+
+| 表 | 判据 | 结果 |
+|---|---|---|
+| `typeDefinitions` | 70B + flags 种类 + nameIndex 解出可打印名字 | ✅ 0x92140 |
+| `nestedTypesTable` | 4B，typeDefs 的 nested 区间**恰好铺满** [0,25981) **且条目两两不同** | ✅ 0x22800F8 |
+| `interfacesTable` | 6B，+0 **全**为合法 Il2CppType 索引（-1=null），含 36667 个大索引 | ✅ 0x4D5AB04 |
+| `fieldDefaultValues` | 12B，+0 严格递增，+8 全为合法 Il2CppType 索引 | ✅ 0x3D00478 |
+| `methodPointerIndex` | 4B，值域 [-1, 79765)，-1 占 4.3% | ✅ 0xC48E6C（仅参考） |
+
+**"条目两两不同"是杀误报的关键**：只要求"98% 条目 < typeDefCount"时，
+`0xD576F0` 会**误命中**（唯一值只有 1163/25981）；加上去重后只剩真值（25981/25981 唯一）。
+
+**仍未启用（判据不足）**：
+- `fields` / `methods` / `properties` / `events`：内容逐索引混淆，**无原始指纹**；
+  长度只能当**范围约束**，不能唯一定位（见 §9 陷阱）
+- `fieldOffset`：**不是**按 `fieldStart` 索引，而是按 `typeDef+0x20`(`unknown20`) + k；
+  且实测"类型内偏移非递减"只有 57%（用 unknown20 当基）/ 45%（用 fieldStart）→ 判据不足
+
+**其它实测结论**：
+- `interfaces` 的每类型区间**不铺满**（有重叠）：`sum(count)=37562` 但 `max(start+count)=65542`
+  → 长度必须用 **sum**（真窗口 100% 合法），不能用 max
+- 所有从 MHY 槽位解出来的偏移都是 **global 相对**的，读文件要 **+0x210**（`d.hdr`）
+  —— 诊断脚本漏这个会看到一堆"越界"假象（本版本踩过）
 
 ## §10 验收标准（`verify.py` 的 28 项）
 
