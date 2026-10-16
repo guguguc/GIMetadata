@@ -131,7 +131,7 @@ def probe_fdv(d, off, typeCount, maxn=80000):
     return None
 
 
-def probe_methods(d, off):
+def probe_methods_DISABLED(d, off):
     pc = d.u8(off, 26, 733500, 0x18)
     if pc is None: return None
     # 严格 tail 会有垃圾，只看前 500000 项的 distinct
@@ -143,23 +143,23 @@ def probe_methods(d, off):
     return None
 
 
-def probe_typedefs(d, off):
-    fl = d.f32(off, 70, 88902, 0x28)
+def probe_typedefs_DISABLED(d, off, n=88902):
+    """70B 步长，+0x28(flags) 的**不同取值数**只有 ~106（实测；"递增"是错误的判据）"""
+    fl = d.f32(off, 70, n, 0x28)
     if fl is None: return None
     import numpy as np
-    n_dis = int(np.unique(fl).size)
-    if 40 <= n_dis <= 400:
-        return ('typeDefinitionsOffset', 88902, "70B stride, +0x28(flags) 只有 %d 种取值" % n_dis)
+    nd = int(np.unique(fl).size)
+    if 40 <= nd <= 400:
+        return ('typeDefinitionsOffset', n, "70B stride, +0x28(flags) 只有 %d 种取值" % nd)
     return None
 
 
-def probe_attributes_info(d, off):
-    v = d.f32(off, 8, 1200, 4)
+def probe_attributes_info_DISABLED(d, off):
+    """实测：+0(start) 严格递增 1114/1114；+4(token) **不**递增。所以判据用 +0。"""
+    v = d.f32(off, 8, 1200, 0)
     if v is None: return None
     import numpy as np
-    inc = int((np.diff(v) > 0).sum())
-    if inc < 900: return None
-    if inc < 1199: return None                      # 必须严格升序（无重复）
+    if int((np.diff(v) > 0).sum()) < 1199: return None
     hb = set(d.ub[off + 7 + d.np.arange(1200) * 8].tolist())
     if not (4 <= len(hb) <= 64): return None
     # 真正长度
@@ -173,19 +173,21 @@ def probe_attributes_info(d, off):
     return ('attributesInfoOffset', n, "8B, +4 严格升序 %d 项, 高字节 %d 种（token 形态）" % (n, len(hb)))
 
 
-def probe_field_offsets(d, off):
+def probe_field_offsets_DISABLED(d, off):
     """fieldOffset 表：4B；高 3 位只有两种（0x00000000=实例 / 0xC0000000=static）→ 指纹极强。"""
     import numpy as np
     n = 440172
     v = d.f32(off, 4, n, 0)
     if v is None: return None
     hi = v & 0xE0000000
-    u = np.unique(hi)
-    if u.size != 2 or set(u.tolist()) != {0, 0xC0000000}: return None
-    return ('fieldOffset', n, "4B, 高3位只有 {0x00000000, 0xC0000000} 两种（实例/static）")
+    u, cnt = np.unique(hi, return_counts=True)
+    # 实测：{0x60000000:429110, 0xC0000000:9277, 0:1785} → 种类 ≤4 且某个占绝大多数
+    if u.size > 4 or cnt.max() < n * 0.8: return None
+    return ('fieldOffset', n, "4B, 高3位只有 %d 种（%s），最大值域占 %d%%"
+            % (u.size, "/".join(hex(x) for x in u.tolist()), 100 * cnt.max() // n))
 
 
-def probe_interfaces(d, off, typeCount=683574):
+def probe_interfaces_DISABLED(d, off, typeCount=683574):
     """interfaces 表：6B 步长，+0 是合法 Il2CppType 索引。"""
     import numpy as np
     n = 30000
@@ -193,6 +195,33 @@ def probe_interfaces(d, off, typeCount=683574):
     if v is None: return None
     if int((v < typeCount).sum()) < n * 0.98: return None
     return ('interfacesTable', n, "6B stride, +0 全为合法 Il2CppType 索引")
+
+
+def probe_method_slot_table_DISABLED(d, off, methodsCount=733442):
+    """methodSlotTable：6B 步长 {methodIndex(int32), slot(uint16)}，由代码**二分查找** →
+    必然满足：+0 严格递增 且 +4 == 索引（slot 就是行号）。指纹极强。"""
+    import numpy as np
+    n = 20000
+    a = d.f32(off, 6, n, 0)
+    b = d.u16(off, 6, n, 4)
+    if a is None or b is None: return None
+    if int((np.diff(a) > 0).sum()) < n - 2: return None
+    if int(a.max()) >= methodsCount: return None
+    if not np.array_equal(b, np.arange(n)): return None
+    return ('methodSlotTableOffset', n, "6B, +0 严格递增且 <methodsCount, +4 == 索引（slot==行号）")
+
+
+def probe_method_pointer_index(d, off, ptrCount=79765):
+    """methodPointerIndex：4B，值只有 -1（无实现）或 < 泛型方法指针数组长度。"""
+    import numpy as np
+    n = 200000
+    v = d.f32s(off, 4, n, 0)
+    if v is None: return None
+    if int(v.min()) < -1: return None
+    if int(v.max()) >= ptrCount: return None
+    nm1 = int((v == -1).sum())
+    if nm1 < n * 0.005: return None           # 实测有 8548/200000 个 -1
+    return ('methodPointerIndexOffset', n, "4B, 值域 [-1, %d), -1 占 %.1f%%" % (ptrCount, 100.0 * nm1 / n))
 
 
 def find_blob(d, sig_pos, fdv_off, fdv_n, cands):
@@ -271,12 +300,17 @@ def main():
 
     print("\n== ④ 数据侧结构自证（numpy 向量化）==")
     found = {}
+    # ⚠️ 只保留**自测能推出已知正确值**的探测器（宁可漏报，不可误报）：
+    #    fieldDefaultValues / methodPointerIndex / blob
+    # 其余探测器判据不够独特，会在**其他表**上误命中（实测过）：
+    #    typeDefinitions  : 有别的偏移也满足「+0x28 只有 40~400 种取值」
+    #    attributesInfo   : fDV 表的尾巴也满足「8B + +0 严格递增」
+    #    fieldOffset      : methodPointerIndex 表也满足「高 3 位种类少」
+    #    methodSlotTable  : 需要「+4 == 行号」之外的二次证据才不与别的表混淆
+    #    methods          : +0x18 有 256 种（逐方法 key 打散）→ 无可用指纹
+    #  要启用它们，得先加**二次证据**（字符串解码 / 跨表一致性），见 §12 末
     probes = [lambda o: probe_fdv(d, o, args.typeCount),
-              lambda o: probe_methods(d, o),
-              lambda o: probe_typedefs(d, o),
-              lambda o: probe_attributes_info(d, o),
-              lambda o: probe_field_offsets(d, o),
-              lambda o: probe_interfaces(d, o, args.typeCount)]
+              lambda o: probe_method_pointer_index(d, o)]
     t1 = time.time()
     for val in vals:
         if not (0x1000 <= val < len(raw) - 0x210): continue
