@@ -422,6 +422,43 @@ python3 tools/relocate.py version/7.1          # 自测：应能复原已知值
 
 ---
 
+## §8.6 「引导阶梯」—— 让另外 38 张表也能自动定位
+
+**问题**：那些表的**内容都是逐索引混淆的**（`raw op key(i)`），所以**没有干净的原始指纹** ——
+靠"独特结构"最多只能认出 2~3 张。
+
+**办法**：不再要求"这张表自己有独特结构"，改成**每级借用上一级当证据**：
+
+```
+① "MHY\0" 魔数                                     -> MHY 表              ✅ 已实现
+② 已知的 75 个程序集名                               -> 字符串解密(5 密钥+数据块)
+③ 用「名字可打印」当二次证据 -> typeDefinitions(70B)   ✅ 探针已实现且**自证正确**
+④ typeDefs 的 methodStart/fieldStart/propertyStart/  -> 各表的 start/count 范围
+  eventStart/interfacesStart/nestedTypesStart
+⑤ 表长必须与 ④ 的累计一致                             -> methods/fields/properties/
+                                                       events/interfaces/nestedTypes
+⑥ fields 表长度 == fieldOffset 表长度                 -> fieldOffset
+⑦ attributesInfo(+0 严格递增) 的 range 覆盖           -> attributeTypes
+⑧ genericContainers 的 argc/parameterStart            -> genericParameters
+⑨ startup 侧 type args 是合法 Il2CppType 索引         -> genericClassRange/genericTypeArg
+```
+
+三段式：**旧 version.json 当提示 -> 用另一张表/字符串解码做二次证据 -> 任何一步不过就 FAIL（不静默接受）**。
+这样即使指纹不独特，也**不会误报**。
+
+**⚠️ 已知薄弱环节：候选生成，不是证据**
+
+实测（本版本）：`typeDefinitions` 的二次证据**完全成立** —— 用旧 JSON 的提示解出
+`<Module>` / `Locale` / `SR` / `WIN32_FIND_DATA` / `HMACSHA1`，**可打印率 100%**。
+**但 `slot_scan.py` 根本没产出它的候选** ✗：
+
+```
+缓存里有 (slot 0xB4, sub, 0x13B75461) 吗: False
+```
+
+说明 `mov reg,[mhy+slot]` + `op reg,imm` 这个模式**漏了真实读取点**（该处走了别的指令形态）。
+**下一步优先级：先修 `slot_scan.py` 的漏报**（比再加探测器更有价值）—— 否则阶梯第③级拿不到输入。
+
 ## §10 验收标准（`verify.py` 的 28 项）
 
 ```bash
