@@ -86,6 +86,13 @@ ida/                    IDA 数据库（~10GB，gitignore）
 
 `version/7.1/` 已按此布置（`gi/Managed` 是指向 `../Managed` 的软链），所以可以直接 `./gi-dump version/7.1`。
 
+> **在仓库根目录跑**（`gi-dump` 只生成在根目录；`make clean` 也只删根目录那份）。
+> 别把二进制拷进样本目录 —— 拷过去后 `make` 不会更新它，会跑到旧版本。
+>
+> **stderr 里若看到 `Failed to parse PKCS9 TSTInfo`**：那是 LIEF 在解析 `gi.exe` 内嵌的
+> Authenticode 时间戳签名 —— **不是错误**（`exit=0`、`out/dump.cs` 正常）。
+> 新版已通过 `ParserConfig::parse_signature = false` 关掉，不再出现。
+
 ## 5. 输出
 
 ### `out/dump.cs`
