@@ -1,0 +1,24 @@
+# 构建产物
+gi-dump
+build/
+*.o
+
+# 输出
+out/
+
+# IDA 数据库（~10GB，本地保留）
+ida/
+
+# 样本（体积大，不入库）
+version/*/gi.exe
+version/*/Managed/
+version/*/gi
+
+# python 缓存
+__pycache__/
+*.pyc
+
+# IDA 临时文件（可能落回根目录）
+gi.exe.id* 
+gi.exe.nam
+gi.exe.til

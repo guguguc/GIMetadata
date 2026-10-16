@@ -1,0 +1,177 @@
+// ============================================================================
+//  Genshin Impact / gi.exe 版本常量（唯一事实来源）
+//
+//  换游戏版本时：**只改这个文件**，然后 `make`（会自动重新生成 src/version.hpp）
+//  最后 `python3 verify.py` 逐项验收（28 项）。
+//
+//  每项都标了它在 main.cpp/src 里的用途；不确定怎么重定位 → 看 UPDATE.md 对应小节。
+//  支持 // 行注释（生成器会剥掉，标准 JSON 不允许注释）。
+// ============================================================================
+{
+  "version": "7.1 (sample)",
+
+  // ---------------- 三个全局表地址（UPDATE.md §3）----------------
+  "addresses": {
+    "mhyTableVA": "0x1427D4BD0",          // .rdata，开头 "MHY\0"（用字节搜确认）
+    "table0VA":   "0x1422DE370",          // 运行时数组总表 0（qword_145AD5298）
+    "table1VA":   "0x142870A88",          // 运行时数组总表 1 == Il2CppMetadataRegistration（qword_145AD52A0）
+    "codeRegistrationVA": "0x141F88938",  // 旧地址，未使用（本版本 CR 是运行时构造）
+    "globalMetadataHeaderOffset": 528     // 0x210：s_GlobalMetadataHeader = global.data() + 0x210
+  },
+
+  // ---------------- 字符串解密（UPDATE.md §5.1）----------------
+  "stringDecrypt": {
+    "entryXor":  "0x772FA51E",
+    "keyMulA":   "0x5C2B4E660E2D0544",
+    "keyMulB":   "0x694418957C890198",
+    "keySeed":   "0x55A357D81EF0E48B",
+    "keyStep":   "0x6B0B40C349AE61E5",
+    "offsetMask": "0xFFFFFF",             // entry & offsetMask  = 数据块内偏移
+    "lengthShift": 24                     // entry >> lengthShift = 字节长度
+  },
+
+  // ---------------- 元数据表（UPDATE.md §5.4）----------------
+  //  slot     : MHY 表字节偏移
+  //  op       : "-" 减 / "^" 异或 / "+" 加
+  //  key      : 该运算的常数
+  //  stride   : 元素步长（0 = 不是数组，是单个值/字节数）
+  //  side     : "global" 或 "startup"
+  //  role     : "offset"(元数据偏移) / "count_div"(字节数，再除 stride -> 条目数) / "bytes"(字节数，读取处再除)
+  "tables": {
+    "imagesCount":            { "slot": "0x02C", "op": "-", "key": "0x2465B023", "stride": 40, "side": "global", "role": "bytes" },
+    "imagesOffset":           { "slot": "0x20C", "op": "-", "key": "0x0ECB27F5", "stride": 40, "side": "startup", "role": "offset" },
+    "stringLiteralDataOffset":{ "slot": "0x184", "op": "+", "key": "0xBF9D4735", "stride": 0, "side": "global", "role": "offset" },
+    "typeDefinitionsOffset":  { "slot": "0x0B4", "op": "-", "key": "0x13B75461", "stride": 70, "side": "global", "role": "offset" },
+    "typeDefinitionsCount":   { "slot": "0x0E0", "op": "-", "key": "0x1D064F83", "stride": 70, "side": "global", "role": "count_div", "countBias": -2 },
+    "methodsOffset":          { "slot": "0x16C", "op": "-", "key": "0x1CCA7654", "stride": 26, "side": "global", "role": "offset" },
+    "methodsCount":           { "slot": "0x188", "op": "^", "key": "0x1B58E334", "stride": 26, "side": "global", "role": "count_div" },
+    "methodPointerIndexOffset":{ "slot": "0x94", "op": "^", "key": "0x4A4C0A71", "stride": 4, "side": "global", "role": "offset" },
+    "methodSlotTableOffset":  { "slot": "0x140", "op": "-", "key": "1832561230", "stride": 6, "side": "global", "role": "offset" },
+    "methodSlotCount":        { "slot": "0x1FC", "op": "-", "key": "127184164", "stride": 6, "side": "global", "role": "count_div" },
+    "parametersOffset":       { "slot": "0x114", "op": "^", "key": "0x3E5D33E6", "stride": 8, "side": "global", "role": "offset" },
+    "propertiesOffset":       { "slot": "0x150", "op": "-", "key": "0x1C3D5389", "stride": 10, "side": "global", "role": "offset" },
+    "fieldsOffset":           { "slot": "0x18C", "op": "-", "key": "336578260", "stride": 8, "side": "global", "role": "offset" },
+    "eventsOffset":           { "slot": "0x1E8", "op": "^", "key": "0x100547B1", "stride": 14, "side": "global", "role": "offset" },
+    "fieldOffset":            { "slot": "0x204", "op": "-", "key": "450622139", "stride": 4, "side": "global", "role": "offset" },
+    "interfacesTable":        { "slot": "0x1C4", "op": "-", "key": "1518027399", "stride": 6, "side": "global", "role": "offset" },
+    "nestedTypesTable":       { "slot": "0x05C", "op": "-", "key": "381850355", "stride": 4, "side": "global", "role": "offset" },
+    "genericContainers":      { "slot": "0x028", "op": "^", "key": "0x774A3BA6", "stride": 16, "side": "global", "role": "offset" },
+    "genericParameters":      { "slot": "0x170", "op": "^", "key": "0x7B3B96A2", "stride": 14, "side": "global", "role": "offset" },
+    "fieldDefaultValuesOffset":{ "slot": "0x13C", "op": "^", "key": "0x593DE464", "stride": 12, "side": "global", "role": "offset" },
+    "fieldAndParameterDefaultValueDataOffset": { "slot": "0x0A0", "op": "^", "key": "0x3F525210", "stride": 0, "side": "global", "role": "offset" },
+    "parameterDefaultValuesOffset": { "slot": "0x104", "op": "^", "key": "0x094C42AB", "stride": 12, "side": "global", "role": "offset" },
+    "parameterDefaultValuesCount":  { "slot": "0x09C", "op": "-", "key": "259975212", "stride": 12, "side": "global", "role": "bytes" },
+    "attributesInfoOffset":   { "slot": "0x024", "op": "-", "key": "1545100391", "stride": 8, "side": "global", "role": "offset" },
+    "attributesInfoCount":    { "slot": "0x198", "op": "-", "key": "1137860102", "stride": 8, "side": "global", "role": "count_div" },
+    "attributeTypesOffset":   { "slot": "0x0D8", "op": "-", "key": "1927885444", "stride": 4, "side": "global", "role": "offset" },
+    "methodSpecs":            { "slot": "0x1D8", "op": "^", "key": "0x1F85ABE5", "stride": 12, "side": "global", "role": "offset" },
+    "genericClassRangeOffset":{ "slot": "0x134", "op": "^", "key": "0x558E11EC", "stride": 8, "side": "startup", "role": "offset" },
+    "genericTypeArgOffset":   { "slot": "0x180", "op": "-", "key": "898198093", "stride": 4, "side": "startup", "role": "offset" },
+    "genericMethodTable":     { "slot": "0x0C0", "op": "-", "key": "1630172749", "stride": 14, "side": "global", "role": "offset" },
+    "genericMethodTableCount":{ "slot": "0x130", "op": "-", "key": "565220529", "stride": 14, "side": "global", "role": "count_div" },
+
+    // ↓ 这三个在本版本无调用者/已被取代，仅保留（UPDATE.md §11）
+    "interfacesOffset_deprecated":   { "slot": "0x1F8", "op": "-", "key": "0x7A409361", "stride": 0, "side": "global", "role": "offset" },
+    "fieldTableOffset_deprecated":   { "slot": "0x30",  "op": "^", "key": "0x72BDC288", "stride": 0, "side": "global", "role": "offset" },
+    "fieldIndexTableOffset_deprecated": { "slot": "0xA4", "op": "-", "key": "0x0F6CD032", "stride": 0, "side": "global", "role": "offset" }
+  },
+
+  // ---------------- 表里**确实没有**计数槽位，只能实测（UPDATE.md §5.5）----------------
+  //  只有这三项放这里。它们没有公式，必须每次重新测；测法见 UPDATE.md §5.5。
+  //  ⚠️ 本版本**没有**「只能实测」的表长度了 —— 全部有公式或可数据自证：
+  //     fieldDefaultValuesCount / methodSpecsCount -> 运行时从数据推导（见 src/il2cpp_image.hpp）
+  //     下面这个由 T0 侧算出（消费者：RuntimeInit 的泛型注册循环 init_534B80.c:2064）
+  "genericClassRangeCountFormula": { "table0Field": "0x80", "op": "^", "key": "0x4E013BBD" },
+
+
+
+  // ---------------- 有公式的计数：**不要**再写一份常数（两处真相会漂移）----------------
+  //  typesCount / genericInstsCount 都由 T1 侧算出，运行时读取；见 src/il2cpp_utils.hpp 的 regRaw()
+  "genericInstsCountFormula": { "table1Field": "0x50", "op": "+", "key": "0x9B1B5919" },
+  "typesCountFormula":        { "table1Field": "0x54", "op": "^", "key": "0x6622B34E" },
+
+  // ---------------- T0 / T1 字段偏移（UPDATE.md §3.3）----------------
+  "registrationFields": {
+    "t0_methodPointerIndexArray": "0x88", // 每方法地址表（按 methodIndex 直接索引）
+    "t0_invokerArray":            "0x48", // 虚方法 invoker 数组（按 slot）
+    "t0_genericMethodPointers":   "0x60", // !!! 泛型方法指针，不是方法地址表
+    "t1_genericInsts":            "0x08",
+    "t1_il2CppTypes":             "0x48"   // 注: Il2CppArrayType 数组本版本不用（ARRAY 分支直接 va_to_offset）
+  },
+
+  // ---------------- 逐索引 key 公式参数（UPDATE.md §5.2）----------------
+  //  形式固定，改参数即可。见 src/il2cpp_utils.hpp 里对应的实现。
+  "keyFormulas": {
+    "methodKey":  { "A": 860405619,   "xor": "0x73758947", "add": 1547935323 },
+    "fieldKey":   { "B": 34782, "xor": "0x59B1DB19", "A": 1824013172, "shift": 16, "add": 1410079245 },
+    "propertyKey":{ "B": "0x17A5419F8A28", "shift1": 9, "A": 976451930, "shift2": 12, "xor": "0x70BE4B04" },
+    "eventKey":   { "A": -1599256506, "add": 1725894951, "xor": "0x1B23E40F" },
+    "paramKey":   { "B": 41617, "add1": 1219887025, "xor1": "0x19E1D47A", "A": 1457992407, "shift": 21, "add2": 2068375556 },
+    "imageKey":   { "B": 667674736, "innerMul": 13029, "innerXor": "0x43E2DEB7", "innerAdd": "0xCB287082F0", "shift1": 8, "A": 1368137530, "add": 1505552983 },
+    "containerKey":{ "B": 1015151837, "innerMul": 10661, "innerAdd": 1371718001, "innerXor": "0x146D2C3D", "xor": "0x5D7F95E0", "A": 1714760523, "shift": 19 },
+    "genericParamKey":{ "B": 1845531077, "innerMul": 12124, "innerAdd": 1969070457, "innerXor": "0x423B2C8D", "shift": 10, "add": 1212570291, "xor": "0x62A3A8F4" }
+  },
+
+  // ---------------- 字段解码常数（UPDATE.md §5.3）----------------
+  //  格式 "op:key"，op ∈ { sub(减), xor(异或), add(加) }
+  "fieldDecode": {
+    "typeDef": {
+      "namespaceIndex":   "sub:1145778368",     // +0x00
+      "propertyStart":    "sub:1995389561",     // +0x08
+      "methodStart":      "xor:0x4D8127F2",     // +0x0C
+      "parentIndex":      "sub:0x3D74901F",     // +0x18（Il2CppType 索引）
+      "fieldStart":       "xor:0x29010897",     // +0x1C
+      "unknown20":        "xor:0x2E8C0EB8",     // +0x20 语义未定
+      "nameIndex":        "sub:72511848",       // +0x24
+      "flags":            "sub:0x4159BB8E",     // +0x28
+      "method_count":     "sub:0xED3A",         // +0x30
+      "eventStart":       "add:3330",           // +0x34
+      "nestedTypesStart": "add:6631",           // +0x36
+      "field_count":      "xor:0x51A8",         // +0x38
+      "interfacesStart":  "xor:0x43DA",         // +0x3C
+      "genericContainerIndex": "sub:26230",     // +0x3E（哨兵 26229）
+      "interfaces_count": "add:56",             // +0x40（必须 uint8 截断）
+      "property_count":   "xor:0x16",           // +0x43
+      "event_count":      "add:113",            // +0x44（必须 uint8 截断）
+      "nestedTypesCount": "xor:0xBA"            // +0x45
+    },
+    "method": {
+      "nameIndex":      "sub:1524016681",       // +0x00（再与 methodKey 异或）
+      "parameterStart": "sub:257927898",        // +0x04
+      "returnType":     "xor:0x3F7BDF39",       // +0x08（再与 methodKey 异或）
+      "declaringType":  "xor:0x59244785",       // +0x0C
+      "iflags":         "sub:25344",            // +0x10
+      "flags":          "xor:0x8F60",           // +0x16
+      "parameterCount": "sub:31"                // +0x18（字节运算）
+    },
+    "field":    { "typeIndex": "xor:0x2D27D873", "nameIndexBase": "sub:1475293452", "nameIndexXor": "xor:0x2D027B84" },
+    "property": { "nameIndex": "sub:1953953095", "get": "xor:0xE5A2", "set": "sub:23324" },
+    "event":    { "typeIndex": "sub:452544412", "nameIndex": "sub:1037298109",
+                  "add": "xor:0xBEA7", "remove": "xor:0xEE66", "raise": "sub:30703" },
+    "parameter":{ "typeIndex": "xor:0x31BF59F3", "nameIndexBase": "sub:1764493660", "nameIndexXor": "xor:0x4CDBD093" },
+    "genericContainer": { "parameterStart": "xor:0x138FD4C7", "argc": "sub:1053517166" },
+    "genericParameter": { "nameIndex": "xor:0x664CCEB9" }
+  },
+
+  // ---------------- 结构体尺寸（生成 static_assert）----------------
+  "structSizes": {
+    "Il2CppImageDefinition":            "0x28",
+    "Il2CppTypeDefinition":             "0x46",
+    "Il2CppType":                       "0x10",
+    "Il2CppFieldDefinition":            "0x08",
+    "Il2CppFieldDefaultValue":          "0xC",
+    "Il2CppMethodDefinition":           "0x1A",
+    "Il2CppParameterDefinition":        "0x08",
+    "Il2CppParameterDefaultValue":      "0xC",
+    "Il2CppPropertyDefinition":         "0xA",
+    "Il2CppEventDefinition":            "0xE",
+    "Il2CppStringLiteral":              "0x08",
+    "Il2CppCustomAttributeTypeRange":   "0x08",
+    "Il2CppGenericContainer":           "0x10",
+    "Il2CppGenericParameter":           "0xE",
+    "Il2CppGenericInst":                "0x10",
+    "Il2CppMethodSpec":                 "0xC",
+    "Il2CppGenericMethodIndices":       "0x08",
+    "Il2CppGenericMethodFunctionsDefinitions": "0x0E"
+  }
+}
