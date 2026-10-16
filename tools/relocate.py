@@ -224,6 +224,49 @@ def probe_method_pointer_index(d, off, ptrCount=79765):
     return ('methodPointerIndexOffset', n, "4B, 值域 [-1, %d), -1 占 %.1f%%" % (ptrCount, 100.0 * nm1 / n))
 
 
+# ============================================================================
+#  「引导阶梯」第二级：用**旧 version.json 当提示** + **字符串解码当二次证据**
+#  思路：这些表的内容是逐索引混淆的，没有干净指纹；但只要"解码出来的名字可打印"，
+#       就能把候选钉死 —— 不独特 ⇒ 不会误报。
+# ============================================================================
+def make_str_decoder(raw, str_data_off, keys):
+    """keys = (entryXor, mulA, mulB, seed, step)"""
+    ex, ma, mb, sd, st = keys
+    def dec(name_index):
+        name_index &= M32
+        off = name_index & 0xFFFFFF
+        ln = name_index >> 24
+        base = str_data_off + off
+        if ln == 0 or base + ln + 8 > len(raw): return None
+        k = (ma * ((mb * off) ^ sd)) & ((1 << 64) - 1)
+        out = bytearray()
+        for j in range((ln + 7) // 8):
+            c = struct.unpack_from('<Q', raw, base + 8 * j)[0]
+            out += struct.pack('<Q', c ^ ((k + j * st) & ((1 << 64) - 1)))
+        try: return out[:ln].decode('ascii')
+        except Exception: return None
+    return dec
+
+
+def probe_typedefs_verified(d, off, hint):
+    """typeDefinitions：70B + flags 种类 40~400（弱指纹）→ **必须再通过名字可打印**（二次证据）。
+    hint: dict(str_data_off=..., str_keys=..., type_name_key=...) —— 来自旧 version.json"""
+    if not hint or not hint.get('dec'): return None
+    fl = d.f32(off, 70, 88902, 0x28)
+    if fl is None: return None
+    import numpy as np
+    nd = int(np.unique(fl).size)
+    if not (40 <= nd <= 400): return None
+    dec = hint['dec']; tk = hint['type_name_key']
+    ok = 0; n = 200
+    for i in range(0, 88902, max(1, 88902 // n)):
+        raw = struct.unpack_from('<I', d.raw, off + 70 * i + 0x24)[0]
+        nm = dec((raw - tk) & M32)
+        if nm and nm and all(32 <= ord(c) < 127 for c in nm): ok += 1
+    if ok < n * 0.95: return None
+    return ('typeDefinitionsOffset', 88902, "70B, flags %d 种, 且 %d/%d 个 nameIndex 解出可打印名字" % (nd, ok, n))
+
+
 def find_blob(d, sig_pos, fdv_off, fdv_n, cands):
     """blob 基址：让 `sig_pos` 落在某个 fieldDefaultValues 的 dataIndex 上"""
     idxs = set()
@@ -298,6 +341,24 @@ def main():
         hits.append(j); i = j + 1
     print("   签名命中:", [hex(h) for h in hits])
 
+    # ---- 读旧 version.json 当「提示」（阶梯用；任何一步都要过二次证据才接受）----
+    hint = {}
+    vj0 = os.path.join(ROOTDIR, 'version.json')
+    if os.path.exists(vj0):
+        try:
+            J0 = load_json_with_comments(vj0)
+            sd = J0['tables']['stringLiteralDataOffset']
+            sdo = (slot(int(sd['slot'], 0)) + int(sd['key'], 0)) & M32 if sd['op'] == '+' else 0
+            sk = J0['stringDecrypt']
+            def K(x): return int(x, 0) if isinstance(x, str) else int(x)
+            dec = make_str_decoder(raw, d.hdr + sdo,
+                                   (K(sk['entryXor']), K(sk['keyMulA']), K(sk['keyMulB']), K(sk['keySeed']), K(sk['keyStep'])))
+            # fieldDecode.typeDef.nameIndex 的 key 就是 72511848（sub）
+            hint = {'dec': dec, 'type_name_key': K(J0['fieldDecode']['typeDef']['nameIndex'].split(':')[1])}
+            print("   提示(旧 version.json): 字符串数据块 0x%X, typeNameKey=%d" % (sdo, hint['type_name_key']))
+        except Exception as e:
+            print("   提示读取失败:", e)
+
     print("\n== ④ 数据侧结构自证（numpy 向量化）==")
     found = {}
     # ⚠️ 只保留**自测能推出已知正确值**的探测器（宁可漏报，不可误报）：
@@ -310,7 +371,9 @@ def main():
     #    methods          : +0x18 有 256 种（逐方法 key 打散）→ 无可用指纹
     #  要启用它们，得先加**二次证据**（字符串解码 / 跨表一致性），见 §12 末
     probes = [lambda o: probe_fdv(d, o, args.typeCount),
-              lambda o: probe_method_pointer_index(d, o)]
+              lambda o: probe_method_pointer_index(d, o),
+              # 阶梯第二级：弱指纹 + 二次证据（名字可打印）→ 可安全启用
+              lambda o: probe_typedefs_verified(d, o, hint)]
     t1 = time.time()
     for val in vals:
         if not (0x1000 <= val < len(raw) - 0x210): continue
