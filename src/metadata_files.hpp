@@ -31,7 +31,11 @@ public:
         global_  = readFile(meta + "global-metadata.dat");
         startup_ = readFile(meta + "startup-metadata.dat");
         exe_     = readFile(root + kSep + "gi.exe");
-        pe_      = LIEF::PE::Parser::parse(root + kSep + "gi.exe");
+        // 关闭 Authenticode 签名解析：我们不需要它，而 gi.exe 内嵌的 RFC3161 时间戳令牌
+        // 会让 LIEF 往 stderr 打 "Failed to parse PKCS9 TSTInfo" —— 看着像报错，其实是噪声
+        LIEF::PE::ParserConfig cfg = LIEF::PE::ParserConfig::default_conf();
+        cfg.parse_signature = false;
+        pe_      = LIEF::PE::Parser::parse(root + kSep + "gi.exe", cfg);
         if (!pe_) {
             std::cerr << "error: cannot parse PE: " << root << kSep << "gi.exe" << std::endl;
             std::exit(1);
