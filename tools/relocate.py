@@ -535,13 +535,6 @@ def main():
         print("   阶梯④ 由 typeDefs 解出预期长度: fields=%d methods=%d properties=%d events=%d nested=%d interfaces=%d"
               % (exp['fieldsLen'], exp['methodsLen'], exp['propertiesLen'], exp['eventsLen'], exp['nestedLen'], exp['interfacesLen']))
 
-        for val in vals:
-            if not (0x1000 <= val < len(raw) - 0x210): continue
-            r = probe_nestedtypes_verified(d, d.hdr + val, hint, exp)
-            if r:
-                found['nestedTypesTable'] = (val, r[1], r[2], r[1])
-                break
-
     if 'fieldDefaultValuesOffset' in found:
         fv, fn = found['fieldDefaultValuesOffset'][0], found['fieldDefaultValuesOffset'][1]
         for h in hits:
@@ -569,6 +562,35 @@ def main():
                 bad += 0 if det[0] == val else 1
             print("   %-42s slot 0x%03X %s 0x%-10X -> 0x%-9X%s" % (k, s, op, key, val, mark))
         print("\n   可被结构探测交叉验证的表：一致 %d, 不一致 %d" % (ok, bad))
+
+    print("\n== ⑥ 旧 JSON slot 提示：逐表重新解值（检验「slot 跨版本稳定」假设）==")
+    if os.path.exists(vj):
+        J = load_json_with_comments(vj)
+        byslot = {}
+        for val, s, op, key in cands:
+            byslot.setdefault(s, []).append((val, op, key))
+        uniq_n = multi = none_n = 0
+        details = []
+        for k, cfg in J.get('tables', {}).items():
+            if 'slot' not in cfg: continue
+            s = int(cfg['slot'], 0)
+            lst = byslot.get(s, [])
+            ok_c = [(v, op, key) for v, op, key in lst if 0x1000 <= v < len(raw) - 0x210]
+            if not lst:
+                ver, none_n = '✗ 该 slot 无候选（需重扫 slot_scan）', none_n + 1
+            elif not ok_c:
+                ver, none_n = '✗ 无落入元数据范围的候选', none_n + 1
+            elif len(ok_c) == 1:
+                ver, uniq_n = '✅ 唯一', uniq_n + 1
+            else:
+                ver, multi = '⚠ %d 个候选，需结构/人工判定' % len(ok_c), multi + 1
+            if not ver.startswith('✅'):
+                details.append("   %-38s slot 0x%-4X %s" % (k, s, ver))
+        for line in details:
+            print(line)
+        print("   合计: slot 唯一确定 %d 张, 多候选 %d 张, 无候选 %d 张" % (uniq_n, multi, none_n))
+        print("   （前提：slot 跨版本稳定 —— 尚未用第二个样本验证；见 docs/UPDATE.md §8.6）")
+
     print("\n总耗时 %.1fs" % (time.time() - t0))
     return 0
 
