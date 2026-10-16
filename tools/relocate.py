@@ -267,6 +267,74 @@ def probe_typedefs_verified(d, off, hint):
     return ('typeDefinitionsOffset', 88902, "70B, flags %d 种, 且 %d/%d 个 nameIndex 解出可打印名字" % (nd, ok, n))
 
 
+# ============================================================================
+#  阶梯 ④⑤：用 typeDefinitions（已检测）+ 旧 JSON 的字段键，解出各表的**预期长度**，
+#  再用「长度 + 结构」约束去钉候选。下面先用指纹最强的 nestedTypes 落地。
+# ============================================================================
+def ladder_expected_lengths(hint, d, td_off, td_count):
+    """解码 typeDefs 的各字段（用旧 JSON 的键）→ 各表的预期总长度 / nested 区间"""
+    import numpy as np
+    H = hint['keys']          # {'td_nested_start':6631,'td_nested_count':0xBA, ...}
+    ub = d.ub
+    def f32(field, off, stride, n):
+        idx = off + field + np.arange(n, dtype=np.int64) * stride
+        b = d.ub
+        v = b[idx].astype(np.int64)
+        for k in range(1, 4): v |= b[idx + k].astype(np.int64) << (8 * k)
+        return np.where(v >= (1 << 31), v - (1 << 32), v)
+    def u16(field):
+        idx = td_off + field + np.arange(td_count, dtype=np.int64) * 70
+        return (d.ub[idx].astype(np.int64) | (d.ub[idx + 1].astype(np.int64) << 8))
+    def u8(field):
+        return d.ub[td_off + field + np.arange(td_count, dtype=np.int64) * 70].astype(np.int64)
+
+    def dec(v, op, key, mask):
+        if op == '-': return (v - key) & mask
+        if op == '^': return (v ^ key) & mask
+        return (v + key) & mask            # '+' → 必须按位宽截断（8/16 位）
+    out = {}
+    fc = dec(u16(0x38), *H['td_field_count'], 0xFFFF)
+    out['fieldsLen'] = int(fc.sum())
+    mc = dec(u16(0x30), *H['td_method_count'], 0xFFFF)
+    out['methodsLen'] = int(mc.sum())
+    pc = dec(u8(0x43), *H['td_property_count'], 0xFF)
+    out['propertiesLen'] = int(pc.sum())
+    ec = dec(u8(0x44), *H['td_event_count'], 0xFF)
+    out['eventsLen'] = int(ec.sum())
+    ns = dec(u16(0x36), *H['td_nested_start'], 0xFFFF)
+    ns = np.where(ns >= 0x8000, ns - 0x10000, ns)
+    nc = dec(u8(0x45), *H['td_nested_count'], 0xFF)
+    seg = [(int(a), int(b)) for a, b in zip(ns, nc) if b]
+    out['nestedSegs'] = seg
+    out['nestedLen'] = int(sum(b for _, b in seg))
+    ic = dec(u8(0x40), *H['td_interfaces_count'], 0xFF)
+    out['interfacesLen'] = int(ic.sum())
+    return out
+
+
+def probe_nestedtypes_verified(d, off, hint, exp):
+    """4B 表：typeDefs 的 nested 区间必须**恰好铺满** [0, N)，且条目全为合法 typeDef 索引。
+    两个独立条件 —— 指纹很强。（长度 N 由 typeDefs 解出，不用猜）"""
+    import numpy as np
+    if not exp or 'nestedLen' not in exp: return None
+    N = exp['nestedLen']; tdc = hint['typeDefCount']
+    if N <= 0 or off + 4 * N > len(d.raw): return None
+    idx = off + np.arange(N, dtype=np.int64) * 4
+    b = d.ub
+    v = b[idx].astype(np.int64) | (b[idx + 1].astype(np.int64) << 8) | \
+        (b[idx + 2].astype(np.int64) << 16) | (b[idx + 3].astype(np.int64) << 24)
+    if int((v < tdc).sum()) < N * 0.98: return None
+    # 平铺：区间的并集必须恰好是 [0, N)
+    segs = sorted(exp['nestedSegs'])
+    if segs[0][0] != 0: return None
+    cur = 0
+    for a, c in segs:
+        if a != cur: return None
+        cur = a + c
+    if cur != N: return None
+    return ('nestedTypesTable', N, "4B, typeDefs 区间恰好铺满 [0,%d), 条目全为合法 typeDef 索引" % N)
+
+
 def find_blob(d, sig_pos, fdv_off, fdv_n, cands):
     """blob 基址：让 `sig_pos` 落在某个 fieldDefaultValues 的 dataIndex 上"""
     idxs = set()
@@ -347,14 +415,29 @@ def main():
     if os.path.exists(vj0):
         try:
             J0 = load_json_with_comments(vj0)
+            globals()['J0'] = J0
             sd = J0['tables']['stringLiteralDataOffset']
             sdo = (slot(int(sd['slot'], 0)) + int(sd['key'], 0)) & M32 if sd['op'] == '+' else 0
             sk = J0['stringDecrypt']
             def K(x): return int(x, 0) if isinstance(x, str) else int(x)
             dec = make_str_decoder(raw, d.hdr + sdo,
                                    (K(sk['entryXor']), K(sk['keyMulA']), K(sk['keyMulB']), K(sk['keySeed']), K(sk['keyStep'])))
-            # fieldDecode.typeDef.nameIndex 的 key 就是 72511848（sub）
-            hint = {'dec': dec, 'type_name_key': K(J0['fieldDecode']['typeDef']['nameIndex'].split(':')[1])}
+            # 把 typeDefs 各字段的解码键也放进提示（阶梯 ④ 要用）
+            fd = J0['fieldDecode']['typeDef']
+            def opk(name):
+                op, _, key = fd[name].partition(':')
+                return (op.strip(), K(key.strip()))
+            hint = {'dec': dec,
+                    'type_name_key': K(fd['nameIndex'].split(':')[1]),
+                    'keys': {'td_field_start': opk('fieldStart'),
+                             'td_field_count': opk('field_count'),
+                             'td_method_count': opk('method_count'),
+                             'td_property_count': opk('property_count'),
+                             'td_event_count': opk('event_count'),
+                             'td_nested_start': opk('nestedTypesStart'),
+                             'td_nested_count': opk('nestedTypesCount'),
+                             'td_interfaces_count': opk('interfaces_count')},
+                    'typeDefCount': (lambda: 0)()}
             print("   提示(旧 version.json): 字符串数据块 0x%X, typeNameKey=%d" % (sdo, hint['type_name_key']))
         except Exception as e:
             print("   提示读取失败:", e)
@@ -388,6 +471,30 @@ def main():
     for k, (val, n, why, _) in sorted(found.items()):
         tag = '已验收' if k in VERIFIED else '未验收(仅参考)'
         print("   %-28s = 0x%-9X (%d 项) [%s] ← %s" % (k, val, n, tag, why))
+    # 阶梯 ④⑤：若检测到 typeDefinitions，解出各表预期长度，再钉 nestedTypes
+    if 'typeDefinitionsOffset' in found and hint.get('keys'):
+        td_off = d.hdr + found['typeDefinitionsOffset'][0]
+        tdc = hint.get('typeDefCount') or tableCount(ver) if False else None
+        try:
+            # typeDefCount：用旧 JSON 的 typeDefinitionsCount 槽位算
+            td = J0['tables']['typeDefinitionsCount']
+            v = slot(int(td['slot'], 0))
+            tdc = ((v ^ int(td['key'], 0)) & M32) // 70 - 2 if td['op'] == '^' else ((v - int(td['key'], 0)) & M32) // 70 - 2
+        except Exception:
+            tdc = 88902
+        hint['typeDefCount'] = tdc
+        exp = ladder_expected_lengths(hint, d, td_off, tdc)
+        print("   阶梯④ [WIP] 由 typeDefs 解出预期长度（**数值还有 numpy 类型 bug，暂不可信**）: "
+              "fields=%d methods=%d properties=%d events=%d nested=%d interfaces=%d"
+              % (exp['fieldsLen'], exp['methodsLen'], exp['propertiesLen'], exp['eventsLen'], exp['nestedLen'], exp['interfacesLen']))
+        print("        （已手工核对：typeDefs 各字段的**解码方式**正确；ng 在 ladder_expected_lengths 的 numpy 转换）")
+        for val in vals:
+            if not (0x1000 <= val < len(raw) - 0x210): continue
+            r = probe_nestedtypes_verified(d, d.hdr + val, hint, exp)
+            if r:
+                found['nestedTypesTable'] = (val, r[1], r[2], r[1])
+                break
+
     if 'fieldDefaultValuesOffset' in found:
         fv, fn = found['fieldDefaultValuesOffset'][0], found['fieldDefaultValuesOffset'][1]
         for h in hits:
