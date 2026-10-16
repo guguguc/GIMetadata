@@ -28,26 +28,46 @@ src/main.cpp               入口：MetadataFiles -> Il2CppImage -> Dumper
 
 ```bash
 # 0) 先看现状（用旧常量跑，会 FAIL 一堆 —— 这就是待办清单）
-python3 verify.py
+python3 verify.py version/<新版本>          # 也可先 make && ./gi-dump version/<新版本>
 
-# 1) 反编译静态构造器 → 更新 3 个全局地址（main.cpp: MHY_VA / T0_VA / T1_VA 一带）
-#    见 §3
+# 1) 找 3 个全局地址 MHY / T0 / T1 → 填进 version.json 的 addresses
+#    反编译静态构造器；MHY 也可直接搜魔数 "MHY\0"      →  §3
 
-# 2) 重扫槽位+密钥（脚本自带 3 条锚点自检）
-python3 tools/slot_scan.py gi.exe Managed/Metadata/global-metadata.dat
-#    把结果填进 decryptHeader()  →  §4 + §5
+# 2) 重扫槽位+密钥（4 种指令形态 + 数据流追踪，几分钟）
+python3 tools/slot_scan.py <gi.exe> <Managed/Metadata/global-metadata.dat>
+#    → 生成 tools/slots_cache.json
 
-# 3) 逐索引 key / 结构体字段：到反编译里抄表达式  →  §5 + §6 + §7
+# 3) 自动重定位表常量（秒级；结构自证 + ⓪ slot 提示 + ⑦ 反查）
+python3 tools/relocate.py version/<新版本>
+#    ✅ 唯一确定 / ⚠ 多候选 / ✗ 无候选 会逐张打印 —— 有 ⚠/✗ 的才需要人工
+#    → 把结果填进 version.json 的 tables / fieldDecode / keyFormulas
 
-# 4) 无计数表实测（3 个）                        →  §6.5
+# 4) 逐索引 key / 结构体字段：到反编译里抄表达式（或用 §8 锚点法反解）
+#    → version.json 的 keyFormulas / fieldDecode      →  §5 + §6 + §8
 
 # 5) 构建 + 跑 + 逐项验收
-make && ./gi-dump version/7.1
-python3 verify.py            # 必须 28/28 PASS
+make && ./gi-dump version/<新版本>
+python3 verify.py version/<新版本>          # 必须 28/28 PASS
 ```
 
-**做完任何一步都跑一次 `verify.py`。** 本项目最危险的 bug 都是「不崩、只静默产出垃圾」，
+**分工（关键）**：
+
+| 步骤 | 谁做 | 输出 |
+|---|---|---|
+| 全局地址 / 表常量 / key / 字段解码 | **工具 + 人工** | `version.json` |
+| 生成 C++ 常量 | `make` 自动 | `src/version.hpp` |
+| 验收 | `verify.py` | 28 项 PASS/FAIL |
+
+> **不要手改 `src/version.hpp`**（生成物）。换版本**只改 `version.json`**；
+> 只有 §8 那种「字段本身要重新定位」的情况才动 C++（把新 offset/key 填回 JSON 对应字段）。
+
+**做完任何一步都跑一次 `verify.py version/<新版本>`。** 本项目最危险的 bug 都是「不崩、只静默产出垃圾」，
 只有统计量能发现（见 §9 陷阱 7 与 10）。
+
+**自动化能覆盖多少**（本版本实测，详见 §8.6）：
+- **6 张表 + blob** 可**完全独立**定位（结构自证值 → 反查唯一 slot），不依赖旧 JSON
+- **其余在用的表（30 张）**：靠旧 JSON 的 **slot 提示**（前提：slot 跨版本稳定，**尚未用第二个样本验证**）
+- **做不到**：内容逐索引混淆 + 无结构指纹的表、以及"结构体内部字段偏移"（见 §8.6 末）
 
 ---
 
@@ -123,10 +143,44 @@ def va2off(v):                       # VA -> 文件偏移，**必须逐段**
 python3 tools/slot_scan.py gi.exe Managed/Metadata/global-metadata.dat
 ```
 
-脚本做的三件事（细节见脚本注释）：
+### 4.1 脚本做的四件事（细节见脚本注释）
+
 1. 按 **PE 段表**逐段做 VA→file offset（**不能拿 `.rdata` 线性外推 `.text`**，陷阱 1）
 2. capstone 线性反汇编全 `.text`（**必须 `md.skipdata=True`**，陷阱 2）
-3. 匹配 `mov reg,[base+disp]`（`disp < 0x300`）后 8 条指令内的 `op reg,imm` → `(slot, op, key)`
+3. 匹配下面**四种**「槽位 + 密钥」指令形态 → `(slot, op, key)`
+4. 结果写 `tools/slots_cache.json`（`relocate.py` 就在这儿读；已进 `.gitignore`）
+
+**四种形态**（实测都要覆盖，缺一种就会漏报真表）：
+
+```
+A) mov reg,[base+slot]  ...  op reg,imm         槽位在前
+B) mov reg,imm          ...  op reg,[base+slot]  密钥在前
+C) mov reg,[base+slot]  ...  op reg,reg2         寄存器对寄存器
+D) op reg,[rip+const]                            密钥在**数据段常量池**（不在 .text 立即数）
+```
+
+**必须是数据流追踪，不能用"距离 N 条指令以内"**：
+
+> 实测：密钥常被提到**函数入口**装载，读取点隔了上百条指令 ——
+> `mov r15d,0xA584BD79` …（上百条）… `mov ecx,[rcx+0x1c4]` / `add ecx,r15d`。
+> 用 8 条窗口会**全部漏掉**。
+> 正确做法：寄存器**被写才失效**；`call/ret` 清掉调用者保存寄存器（rax/rcx/rdx/rsi/rdi/r8-r11）；
+> 只要没被写就一直有效。
+
+**判定 `disp < 0x300`** 只用于区分"结构体槽位"和"其它内存访问"；`D)` 形态靠 `rip` 目标解析单独处理。
+
+### 4.2 怎么从 4000+ 个候选里认出真表
+
+**不要靠"表长一致"**（实测 435 个去重候选里 432 个都通过长度约束，见 §8.6）。
+
+按这个顺序：
+
+1. **`relocate.py` 先跑** —— 它会做结构自证 + ⓪ slot 提示 + ⑦ 反查，并打印
+   `✅ 唯一 / ⚠ 多候选 / ✗ 无候选`（见 §8.5、§8.6）
+2. 对**结构可自证**的表（12B 严格递增 / 4B 合法索引 / 70B flags …）→ 用 §8 的锚点
+3. 对**内容逐索引混淆**的表 → **反查**：先由别的表推出**值**，再问"哪个 `(slot,op,key)` 解出它"
+   （实测 90% 的值只对应唯一三元组）
+4. 剩下人工：拿**语义**当判据（如 `MHY[slot] / 26 == methodsCount`）或 IDA 单点确认
 
 **自检**（脚本会打印；换版本后这 3 个值会变，但都必须落在结构化数据上）：
 
@@ -136,21 +190,25 @@ MHY[0x0A0] ^ 0x3F525210 = 0xF1754C      本版本常量值 blob
 MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 ```
 
-**怎么从 3000+ 个候选里认出真表**：
-- 12 字节表 → 看 `{index, dataIndex, typeIndex}` 结构（index 严格递增、typeIndex < typesCount）
-- 4 字节表 → 看值域（如 `classIndices` 全 < typeDefCount）
-- 8 字节表 → 看 `{index, ...}` 是否平铺/递增
+**其它结构快查**（§4.2 第 2 步的展开）：
+- 12 字节表 → `{index, dataIndex, typeIndex}`（index 严格递增、typeIndex < typesCount）
+- 4 字节表 → 值域（如全 < typeDefCount）；6 字节表 → `+0` 是合法 Il2CppType 索引
+- 70 字节表 → flags 只有 ~106 种、nameIndex 解出可打印名字
 - **任何表都要有一个语义锚点**，见 §8
 
 ---
 
 ## §5 常量清单（**全量**；标 ⚠️ 的是多处重复，最容易漏换）
 
-> 「出现次数」= `grep -c` 的结果。**⚠️ 的必须全部换掉**（本项目就漏换过一处 → 2787 行乱码）。
+> **常量现在都在 `version.json`**（`make` 生成 `src/version.hpp`）——
+> 下表的「行」列是历史遗留（当年还在 `main.cpp`），**已失效**，看**常量值/含义**即可。
+> 换版本时按 **键名** 改 `version.json`：`stringDecrypt` / `keyFormulas` / `fieldDecode` / `structSizes`。
+> **⚠️ 的表示"同一个常量在语义上出现在多处"** —— 在 JSON 里它们可能已经是"一个值被多处引用"，
+> 改了自然全部生效；但若发现某处仍硬编码，必须全部换掉（本项目漏换过一处 → 2787 行乱码）。
 
 ### 5.1 字符串解密（`il2cpp::utils` 顶部）
 
-| 常量 | main.cpp:行 | 含义 |
+| 常量（`stringDecrypt`）| 行(废弃) | 含义 |
 |---|---|---|
 | `kStringEntryXor = 0x772FA51E` | L448 | 字符串条目解码 XOR |
 | `kKeyMulA = 0x5C2B4E660E2D0544` | L449 | 解密密钥派生 |
@@ -163,7 +221,7 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 
 ### 5.2 逐索引 key（8 个）
 
-| key | 表达式（当前版本） | 行 | 出现次数 | 验收 |
+| key（`keyFormulas`）| 表达式（当前版本） | 行(废弃) | 出现次数 | 验收 |
 |---|---|---|---|---|
 | `methodKey` | `((860405619*i) ^ 0x73758947) + 1547935323` | L574,584,589,602,608,656,661 | **7 ⚠️** | 方法名 + flags 分布合理 |
 | `fieldKey` | `((1824013172*((34782*i)^0x59B1DB19))>>16)+1410079245` | L695 | 1 | `fields[].typeIndex` 100% 合法 |
@@ -180,7 +238,7 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 
 ### 5.3 各字段的解码常量（⚠️ 多处重复）
 
-| 常量 | 含义 | 行 | 次数 |
+| 常量（`fieldDecode`）| 含义 | 行(废弃) | 次数 |
 |---|---|---|---|
 | `0x4159BB8E` | typeDef `+0x28` flags | L558 | **2 ⚠️**（另有注释 1 处）|
 | `0x3D74901F` | typeDef `+0x18` parentIndex | L525 | 1 |
@@ -232,22 +290,28 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 **教训**：先找消费者（`RuntimeInit` 里谁给循环定界、谁给数组分配）—— 那里一定有**公式或推导**，别急着「实测」。
 `genericClassRangeCount` 我一开始当它是"只能实测"，结果 `init_534B80.c:2064` 里明摆着 `T0+128 ^ 0x4E013BBD`。
 
-### 5.5b 实测法（仅当真的找不到公式时）
+### 5.5b 实测法（**已基本废弃** —— 优先找公式）
 
-| 字段 | 值 | 行 | 重测方法 |
-|---|---|---|---|
-| `fieldDefaultValuesCount` | 75548 | L2469 | 从表起点往后扫到 `fieldIndex` 不再严格递增 |
-| `methodSpecsCount` | 610109 | L2507 | `methodSpecs` 12 字节项按 `methodDefinitionIndex` 递增扫到底；**安全下界 563653** |
-| `genericClassRangeCount` | 13671 | L2515 | 8 字节项，`argStart` 从 0 重新开始处即表尾 |
+本版本已把"实测计数"**全部**换成公式或运行时推导，`version.json` 里的 `measuredCounts` **整块删除**。
+历史上做过实测的三个，现在的正确来源：
 
-### 5.6 三个全局地址（`main()` 内）
+| 字段 | 旧实测值 | 现在的来源 |
+|---|---|---|
+| `fieldDefaultValuesCount` | 75548 | 运行时按 `fieldIndex` 严格递增扫到断点（数据推导）|
+| `methodSpecsCount` | ~~610109~~ | 运行时 `max(genericMethodTable[].genericMethodIndex)+1` = **563653** |
+| `genericClassRangeCount` | 13671 | **公式** `*(u32*)(T0+0x80) ^ 0x4E013BBD` |
 
-| 变量 | 值 | 验收 |
+**教训**：先找**消费者**（`RuntimeInit` 里谁给循环定界/谁给数组分配）—— 那里一定有**公式或推导**。
+`genericClassRangeCount` 当初被我当成"只能实测"，其实 `init_534B80.c:2064` 里明摆着。
+
+### 5.6 三个全局地址（`version.json` 的 `addresses`）
+
+| 键 | 值 | 验收 |
 |---|---|---|
 | `s_MHYTable` | `0x1427D4BD0` | 开头是 `"MHY\0"` |
 | `s_Table1` | `0x142870A88` | `*(T1+0x48)` 指向的表抽样 `type` 字节 100% 合法 |
 | `s_Table0` | `0x1422DE370` | `*(T0+0x88)` 非零项 ≈ 方法数 |
-| `s_GlobalMetadataHeader` | `global.data() + 0x210` | **所有 global 侧偏移都要 +0x210** |
+| （`s_GlobalMetadataHeader`）| `global.data() + 0x210` | **所有 global 侧偏移都要 +0x210**（陷阱 16）|
 
 ---
 
@@ -255,10 +319,12 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
 
-见 `UPDATE.md` 上一版 §5.2（`status.md` §3.1 也有）。**重点**：
-- 已知字段的 offset/解码 → §5.3
-- `+0x18 parentIndex`、`+0x3E genericContainerIndex` 是**后来才找到的隐藏字段**，
-  用的是 §8 的**锚点法**（不是扫数据猜）
+字段的 offset 与解码常量 → §5.3（JSON 的 `fieldDecode.typeDef`）+ §6.3。
+`status.md` §3.3 有完整 17 字段表。
+
+> **重点**：`+0x18 parentIndex`、`+0x3E genericContainerIndex` 是**后来才找到的隐藏字段**，
+> 用的是 §8 的**锚点法**（不是扫数据猜）。
+> `+0x20` 已定性为 **`fieldOffset` 表的每类型索引基**（`fieldOffset[(typeDef+0x20 ^ 0x2E8C0EB8) + k]`）。
 
 ### 6.2 方法（26 字节）
 
@@ -371,7 +437,7 @@ python3 tools/sig.py scan version/7.2/gi.exe --sigs tools/sigs.json     # → �
 
 **速度**：scan 走**字节模式优先** —— 取签名里最长的「全固定子串」做 `bytes.find`，
 只在候选地址处反汇编核对 token。**不反汇编整个 `.text`**（那是几分钟）。
-本机自测：36 条签名 **36/36 命中、函数起点全部精确复原、0.6 秒**。
+本机自测：**55 条签名 55/55 命中、函数起点全部精确复原、0.8 秒**。
 
 **掩码精度**：用 capstone 的 `insn.encoding.imm_offset/imm_size`、`disp_offset/disp_size`
 **精确**通配 imm/disp，而不是"尾部 4 字节全 ?? "——固定前缀更长 → 又快又准。
@@ -381,48 +447,45 @@ python3 tools/sig.py scan version/7.2/gi.exe --sigs tools/sigs.json     # → �
 
 ### `tools/relocate.py` —— 自动重定位表常量（numpy 秒级）
 
-只用跨版本稳定的三层锚，**不给字节签名当判据**：
+只用跨版本稳定的锚，**不给字节签名当判据**。六级，逐级向上借证据：
 
 ```
-① 魔数 "MHY\0"                          → MHY_Table
-② slot_scan 的 (slot,op,key) 候选          → 常量只存在于指令里
-③ 数据侧结构自证（numpy 向量化）            → 判真伪
-     · 12B + 第 0 字段严格递增 + 第 8 字段是合法 Il2CppType 索引 → fieldDefaultValues
-     · 12B + 严格递增 + 第 4 字段有 -1 哨兵                    → parameterDefaultValues
-     · AttributeTargets 的 16 个 [Flags] 值做字节签名           → 常量值 blob
-       （再靠「让签名正好落在某条 dataIndex 上」反推 blob 基址）
-     · 70B flags 只有 ~106 种 / 26B parameterCount 只有 ~33 种 …
+① 魔数 "MHY\0"                              → MHY 表
+② slot_scan 的 (slot,op,key) 候选（tools/slots_cache.json）
+③ 常量值 blob（AttributeTargets 的 [Flags] 值做字节签名 → 再反推基址）
+④ 数据侧结构自证（numpy 向量化）→ 可独立定位 6 项：
+     typeDefinitions(70B+flags+名字可打印) / nestedTypesTable(铺满+条目两两不同)
+     interfacesTable(+0 全为合法 Il2CppType 索引) / fieldDefaultValues(12B 严格递增)
+     / methodPointerIndex(弱) / blob
+⑤ 与现有 version.json 对照（自测：应全部一致）
+⑥ 旧 JSON slot 提示 → 逐表重新解值（落进元数据范围的候选是否唯一）
+⑦ 反查 slot：结构自证的值 → 唯一 (slot,op,key)（换版本可**全自动**，不依赖旧 JSON）
 ```
 
 ```bash
-python3 tools/relocate.py version/7.1          # 自测：应能复原已知值
+# 无缓存时自动跑 slot_scan
+python3 tools/relocate.py version/7.1
+python3 tools/relocate.py version/7.2 --scan
 ```
 
-**自测意义**：拿 7.1 跑，它**不需要知道旧的 slot/key** 就能推出
-`fieldDefaultValues=0x3D00478`、`blob=0xF1754C` —— 证明这套锚是有效的。
-
-
-
-| # | 症状 | 根因 / 修法 |
-|---|---|---|
-| 1 | 读到的数据整体错位 | 拿 `.rdata` 的 VA→file 线性关系外推 `.text`（差 `0x400`）。**必须逐段换算** |
-| 2 | slot_scan「什么都没找到」 | `capstone.md.disasm` 遇非法字节即停。**必须 `md.skipdata=True`** |
-| 3 | 名字正确但带垃圾尾巴 | 逐索引 key 用了 32 位乘法（`41617*i` i≈73891、`34782*i` i≈123482 处超 2³²）→ **低 24 位对、高 8 位错**。**一律 64 位** |
-| 4 | SIGSEGV 在解引用 | 把镜像 **VA** 当宿主指针。必须 `exe.data()+va_to_offset(VA)` |
-| 5 | 字段类型大量只剩 `[]` 或 `*` | VA 与宿主指针**混用**（算索引要减**镜像 VA**，不是宿主指针）|
-| 6 | SIGSEGV 在读 count 之后 | `+N` 型 count 未按 **8 位**截断（`0xC8+56=256` 应为 0）→ 读 256 个元素越界 |
-| 7 | **方法 RVA 大量重复**（不同值只有一两万，单个地址被几十万方法共用）| 把 `*(T0+0x60)`（genericMethodPointers）当方法地址表。改用 `*(T0+0x88)[methodIndex]` |
-| 8 | 穷举扫描全败（零命中）| **锚点单位搞错**（`parentIndex` 是 Il2CppType 索引，用 typeDef 索引当锚 → 必然全败）|
-| 9 | 「部分命中」 | `152/711` 看着像对的。**必须接近 100%**，例外要能解释 |
-| 10 | 某功能整块失效但不崩 | 活路径里残留旧版常量（VAR/MVAR 用了 6.7 公式→2787 行乱码）；或赋值语句还在 `#if 0` 里（`methods[]` 永远为空→访问器名全丢）|
-| 11 | 事件 628→0 / 属性访问器全空 | 结构体**字段顺序**抄错（Event 的 `typeIndex/nameIndex`、Property 的 `get/set`）|
-| 12 | 表长度不对 | 把「能排到文件尾」当长度（parameters 真实 548400，按 `(len-起点)/8` 会估成 2915543）。**长度要语义交叉验证** |
-| 13 | 泛型参数名解出乱码 | VAR/MVAR 分支还在用旧版 `(nameIndex ^ 0x2DD1C9C6) - …` 公式；应用 `genericParameterNameIndex` |
-| 14 | C 里 `key ^ *(WORD*)` | 结果是 **32 位**（16 位零扩展）；`parameterCount` 是**字节** XOR |
+**自测意义**：拿 7.1 跑，④ 能**不需要知道旧 slot/key** 就推出
+`typeDefinitions=0x92140`、`nestedTypesTable=0x22800F8`、`interfacesTable=0x4D5AB04`、
+`fieldDefaultValues=0x3D00478`、`blob=0xF1754C`；⑦ 再把这些**值反查回 `(slot,op,key)`**（5/5 唯一）。
+⑥ 给出"其余表靠旧 slot 是否唯一确定"（本版本 30/30 唯一）。
+**⚠️ 未知数：slot 跨版本是否稳定 —— 尚未用第二个样本验证。**
 
 ---
 
-## §8.6 「引导阶梯」—— 让另外 38 张表也能自动定位
+## §8.6 「引导阶梯」—— 让其余表也能自动定位（现状与边界）
+
+**覆盖度总览（本版本实测）**
+
+| 能自动定位到什么 | 数量 | 机制 | 依赖旧 JSON？ |
+|---|---|---|---|
+| **表常量（完全独立）** | **6 + blob** | 结构自证值 → ⑦ 反查唯一 slot | ❌ 不依赖 |
+| **表常量（slot 提示）** | **30 / 30 在用的表** | ⓪ 该 slot 的候选是否唯一 | ✅ 依赖（前提：slot 稳定）|
+| **全局地址** | 3（MHY/T0/T1） | ⓪ 魔数 + 构造器 | 部分 |
+| **结构体内部字段偏移+密钥** | ❌ 不能自动定位 | 无通用结构探针（§8.6 末）| — |
 
 **问题**：那些表的**内容都是逐索引混淆的**（`raw op key(i)`），所以**没有干净的原始指纹** ——
 靠"独特结构"最多只能认出 2~3 张。
@@ -608,10 +671,35 @@ methodsOffset           slot 0x16C   唯一 ✅
 **⓪ 级做不到的**：如果同一个 slot 被多个读取点用不同 key 读（本版本 slot 0x5C 有 23 种候选），
 就必须靠结构自证（⑤）或人工确认 —— 本版本这种情况**没有发生**（0 张多候选）。
 
+## §9 版本更新时最容易踩的 16 个坑
+
+| # | 症状 | 根因 / 修法 |
+|---|---|---|
+| 1 | 读到的数据整体错位 | 拿 `.rdata` 的 VA→file 线性关系外推 `.text`（差 `0x400`）。**必须逐段换算** |
+| 2 | slot_scan「什么都没找到」 | `capstone.md.disasm` 遇非法字节即停。**必须 `md.skipdata=True`** |
+| 3 | 名字正确但带垃圾尾巴 | 逐索引 key 用了 32 位乘法（`41617*i` i≈73891、`34782*i` i≈123482 处超 2³²）→ **低 24 位对、高 8 位错**。**一律 64 位** |
+| 4 | SIGSEGV 在解引用 | 把镜像 **VA** 当宿主指针。必须 `exe.data()+va_to_offset(VA)` |
+| 5 | 字段类型大量只剩 `[]` 或 `*` | VA 与宿主指针**混用**（算索引要减**镜像 VA**，不是宿主指针）|
+| 6 | SIGSEGV 在读 count 之后 | `+N` 型 count 未按 **8 位**截断（`0xC8+56=256` 应为 0）→ 读 256 个元素越界 |
+| 7 | **方法 RVA 大量重复**（不同值只有一两万，单个地址被几十万方法共用）| 把 `*(T0+0x60)`（genericMethodPointers）当方法地址表。改用 `*(T0+0x88)[methodIndex]` |
+| 8 | 穷举扫描全败（零命中）| **锚点单位搞错**（`parentIndex` 是 Il2CppType 索引，用 typeDef 索引当锚 → 必然全败）|
+| 9 | 「部分命中」 | `152/711` 看着像对的。**必须接近 100%**，例外要能解释 |
+| 10 | 某功能整块失效但不崩 | 活路径里残留旧版常量（VAR/MVAR 用了 6.7 公式→2787 行乱码）；或赋值语句还在 `#if 0` 里（`methods[]` 永远为空→访问器名全丢）|
+| 11 | 事件 628→0 / 属性访问器全空 | 结构体**字段顺序**抄错（Event 的 `typeIndex/nameIndex`、Property 的 `get/set`）|
+| 12 | 表长度不对 | 把「能排到文件尾」当长度（parameters 真实 548400，按 `(len-起点)/8` 会估成 2915543）。**长度要语义交叉验证** |
+| 13 | 泛型参数名解出乱码 | VAR/MVAR 分支还在用旧版 `(nameIndex ^ 0x2DD1C9C6) - …` 公式；应用 `genericParameterNameIndex` |
+| 14 | C 里 `key ^ *(WORD*)` | 结果是 **32 位**（16 位零扩展）；`parameterCount` 是**字节** XOR |
+| 15 | `slot_scan` 漏报某个槽位（候选里查不到真值）| 只匹配了一种指令形态。真实有**四种**（见 §4.1），且**密钥可能被提到函数入口** → 必须数据流追踪，不能用"距离 N 条内" |
+| 16 | 偏移读出"越界"假象 | 从 MHY 槽位解出的偏移都是 **global 相对**的，读 `global-metadata.dat` 要 **+0x210** |
+
+---
+
 ## §10 验收标准（`verify.py` 的 28 项）
 
 ```bash
-python3 verify.py     # 必须 28/28 PASS
+python3 verify.py                    # 默认 version/7.1
+python3 verify.py version/<新版本>   # 换版本后指向新样本目录
+# 另：python3 tools/relocate.py version/<新版本>   会打印 ⑤「探测值一致」交叉核对
 ```
 
 覆盖：
@@ -645,7 +733,8 @@ python3 verify.py     # 必须 28/28 PASS
 | `attributesInfo` 的 `token` | 非标准 ECMA token（高字节 1..0x54、低 24 位单调）|
 | 泛型**实例**的类型名 | `type->data.generic_class` 指向的表未定位（值域 0..406568 连续，疑似 8 字节项）|
 | 泛型参数的 `in`/`out` | 14 字节参数项整体加密，`+8` 实测是 ownerIndex |
-| `typeDef +0x20` | 语义未定（已排除 genericContainerIndex）|
+| ~~`typeDef +0x20` 语义~~ | ✅ **已定性**：它是 **`fieldOffset` 表的每类型索引基**（`fieldOffset[(typeDef+0x20 ^ 0x2E8C0EB8) + k]`，k=类型内字段序号）|
+| 结构体**内部字段偏移**的自动定位 | 无通用结构探针；只能靠**反解**（§8 锚点法）/ 语义 / IDA。**但偏移跨版本大概率不变**（变的是密钥，已在 JSON）|
 
 ---
 
