@@ -173,6 +173,28 @@ def probe_attributes_info(d, off):
     return ('attributesInfoOffset', n, "8B, +4 严格升序 %d 项, 高字节 %d 种（token 形态）" % (n, len(hb)))
 
 
+def probe_field_offsets(d, off):
+    """fieldOffset 表：4B；高 3 位只有两种（0x00000000=实例 / 0xC0000000=static）→ 指纹极强。"""
+    import numpy as np
+    n = 440172
+    v = d.f32(off, 4, n, 0)
+    if v is None: return None
+    hi = v & 0xE0000000
+    u = np.unique(hi)
+    if u.size != 2 or set(u.tolist()) != {0, 0xC0000000}: return None
+    return ('fieldOffset', n, "4B, 高3位只有 {0x00000000, 0xC0000000} 两种（实例/static）")
+
+
+def probe_interfaces(d, off, typeCount=683574):
+    """interfaces 表：6B 步长，+0 是合法 Il2CppType 索引。"""
+    import numpy as np
+    n = 30000
+    v = d.f32(off, 6, n, 0)
+    if v is None: return None
+    if int((v < typeCount).sum()) < n * 0.98: return None
+    return ('interfacesTable', n, "6B stride, +0 全为合法 Il2CppType 索引")
+
+
 def find_blob(d, sig_pos, fdv_off, fdv_n, cands):
     """blob 基址：让 `sig_pos` 落在某个 fieldDefaultValues 的 dataIndex 上"""
     idxs = set()
@@ -252,7 +274,9 @@ def main():
     probes = [lambda o: probe_fdv(d, o, args.typeCount),
               lambda o: probe_methods(d, o),
               lambda o: probe_typedefs(d, o),
-              lambda o: probe_attributes_info(d, o)]
+              lambda o: probe_attributes_info(d, o),
+              lambda o: probe_field_offsets(d, o),
+              lambda o: probe_interfaces(d, o, args.typeCount)]
     t1 = time.time()
     for val in vals:
         if not (0x1000 <= val < len(raw) - 0x210): continue
@@ -262,8 +286,11 @@ def main():
                 name, n, why = r
                 if name not in found or n > found[name][3]:
                     found[name] = (val, n, why, n)
+    VERIFIED = {'fieldDefaultValuesOffset', 'blob(fieldAndParameterDefaultValueData)',
+                'methodsOffset', 'typeDefinitionsOffset'}
     for k, (val, n, why, _) in sorted(found.items()):
-        print("   %-28s = 0x%-9X (%d 项)  ← %s" % (k, val, n, why))
+        tag = '已验收' if k in VERIFIED else '未验收(仅参考)'
+        print("   %-28s = 0x%-9X (%d 项) [%s] ← %s" % (k, val, n, tag, why))
     if 'fieldDefaultValuesOffset' in found:
         fv, fn = found['fieldDefaultValuesOffset'][0], found['fieldDefaultValuesOffset'][1]
         for h in hits:

@@ -1,20 +1,25 @@
-# VA              name                          # 当前版本（7.1）的地址；换版本后由 sig scan 重新定位
+# VA            name                                  # 当前版本(7.1)的函数起点；换版本后用 sig scan 重新定位
 0x1402F2910 GIMeta_RegisterTables
 0x140534B80 GIMeta_RuntimeInit
 0x14050F280 GIMeta_DecryptString
 0x14050D9C0 GIMeta_TypeInfoDispatcher
+0x14050DCD0 GIMeta_GetMethodByIndex
 0x14050E030 GIMeta_GetGenericParameterInfo
+0x140511AC0 GIMeta_SetupNestedLocked
+0x140512510 GIMeta_IsAssignableFrom
 0x140512870 GIMeta_SetupFieldsLocked
 0x140512DB0 GIMeta_SetupTypeInfoLocked
 0x140514630 GIMeta_SetupMethodsLocked
 0x140514A70 GIMeta_GetMethodNameFromIndex
 0x140514CF0 GIMeta_SetupEventsLocked
 0x1405151D0 GIMeta_SetupPropertiesLocked
+0x1405155C0 GIMeta_SetupTypeLocked2
 0x140517260 GIMeta_CreateTypeInfo
 0x14051CB80 GIMeta_GetFieldName
 0x14051CD50 GIMeta_GetTypeInfoByIndex
 0x14051D330 GIMeta_GetMethodInfoFromIndex
 0x14051D5D0 GIMeta_IterNestedTypes
+0x14051D850 GIMeta_GetMethodInfo2
 0x140523120 GIMeta_LoadMetadataFile
 0x140523400 GIMeta_GetDefaultValue
 0x1405238F0 GIMeta_DecodeDefaultValue
@@ -35,3 +40,17 @@
 0x1404B6A50 GIMeta_FindTypeByName
 0x1404E0140 GIMeta_AllocTypeInfoArray
 0x140547370 GIMeta_DecodeAttributeArg
+0x1405256F0 GIMeta_TypePredicateA
+0x1405259C0 GIMeta_TypeAttrGetter
+0x1405468C0 GIMeta_TypePredicateB
+0x140546950 GIMeta_TypePredicateC
+0x1405469E0 GIMeta_TypePredicateD
+0x140510CE0 GIMeta_Helper_510CE0
+0x140510D90 GIMeta_FindMethodByNameA
+0x140511630 GIMeta_FindTypeByName2
+0x1405158B0 GIMeta_Helper_5158B0
+0x1405282B0 GIMeta_GetMethodDeclClass
+0x1404B97F0 MetaStr_AppendObject
+0x1404B98C0 MetaStr_Reserve
+0x1404B9A70 MetaStr_AppendChar
+0x1404B2730 MetaStr_AppendN

@@ -204,6 +204,57 @@
   "size": 31
  },
  {
+  "name": "GIMeta_GetMethodByIndex",
+  "va": "0x14050DCD0",
+  "skip": 7,
+  "skip_bytes": 12,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "mov|R,Md",
+   "test|R,R",
+   "je|I",
+   "mov|R,R",
+   "add|R,I",
+   "pop|R"
+  ],
+  "strict": [
+   "lea|R,Md20",
+   "mov|Md0,i-2",
+   "mov|R,Md18",
+   "test|R,R",
+   "je|I",
+   "mov|R,R",
+   "add|R,i28",
+   "pop|R"
+  ],
+  "bytes": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "488b7918",
+   "4885ff",
+   "7410",
+   "4889f8",
+   "4883c428",
+   "5b"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff00",
+   "ffffff",
+   "ff00",
+   "ffffff",
+   "ffffff00",
+   "ff"
+  ],
+  "pat": "488d6c242048c74500feffffff488b79184885ff74104889f84883c4285b",
+  "pmask": "ffffffff00ffffff0000000000ffffff00ffffffff00ffffffffffff00ff",
+  "distinct": 8,
+  "size": 30
+ },
+ {
   "name": "GIMeta_GetGenericParameterInfo",
   "va": "0x14050E030",
   "skip": 9,
@@ -253,6 +304,108 @@
   "pmask": "ffffffff00000000ffffff00000000ffffff00000000ffffff0000000000ffffffffffff00000000ffff00000000ffffff00",
   "distinct": 6,
   "size": 50
+ },
+ {
+  "name": "GIMeta_SetupNestedLocked",
+  "va": "0x140511AC0",
+  "skip": 9,
+  "skip_bytes": 16,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "cmp|R,R",
+   "je|I",
+   "mov|R,R",
+   "mov|R,R",
+   "test|Md,I",
+   "jne|I"
+  ],
+  "strict": [
+   "lea|R,Md70",
+   "mov|Md0,i-2",
+   "cmp|R,R",
+   "je|I",
+   "mov|R,R",
+   "mov|R,R",
+   "test|Mdc9,i10",
+   "jne|I"
+  ],
+  "bytes": [
+   "488d6c2470",
+   "48c74500feffffff",
+   "4839d1",
+   "0f84ba060000",
+   "4989d7",
+   "4889cf",
+   "f681c900000010",
+   "7531"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff",
+   "ffff00000000",
+   "ffffff",
+   "ffffff",
+   "ffff0000000000",
+   "ff00"
+  ],
+  "pat": "488d6c247048c74500feffffff4839d10f84ba0600004989d74889cff681c9000000107531",
+  "pmask": "ffffffff00ffffff0000000000ffffffffff00000000ffffffffffffffff0000000000ff00",
+  "distinct": 7,
+  "size": 37
+ },
+ {
+  "name": "GIMeta_IsAssignableFrom",
+  "va": "0x140512510",
+  "skip": 6,
+  "skip_bytes": 10,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,R",
+   "cmp|Md,I",
+   "jne|I",
+   "mov|R,Md"
+  ],
+  "strict": [
+   "lea|R,Md30",
+   "mov|Md-8,i-2",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,R",
+   "cmp|Md30,i0",
+   "jne|I",
+   "mov|R,Md"
+  ],
+  "bytes": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "4489c3",
+   "4889d6",
+   "4889cf",
+   "4883793000",
+   "7522",
+   "488b0d2a345c05"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff0000",
+   "ff00",
+   "ffffff00000000"
+  ],
+  "pat": "488d6c243048c745f8feffffff4489c34889d64889cf48837930007522488b0d2a345c05",
+  "pmask": "ffffffff00ffffff0000000000ffffffffffffffffffffffff0000ff00ffffff00000000",
+  "distinct": 6,
+  "size": 36
  },
  {
   "name": "GIMeta_SetupFieldsLocked",
@@ -561,6 +714,57 @@
   "size": 32
  },
  {
+  "name": "GIMeta_SetupTypeLocked2",
+  "va": "0x1405155C0",
+  "skip": 5,
+  "skip_bytes": 9,
+  "n": 8,
+  "loose": [
+   "cmp|Md,I",
+   "jne|I",
+   "mov|R,R",
+   "mov|R,Md",
+   "mov|R,I",
+   "test|R,R",
+   "je|I",
+   "mov|R,Md"
+  ],
+  "strict": [
+   "cmp|Md30,i0",
+   "jne|I",
+   "mov|R,R",
+   "mov|R,Mdac",
+   "mov|R,i1",
+   "test|R,R",
+   "je|I",
+   "mov|R,Md"
+  ],
+  "bytes": [
+   "4883793000",
+   "0f85d1000000",
+   "4889ce",
+   "8b81ac000000",
+   "b301",
+   "4885c0",
+   "743a",
+   "488b0da5f85b05"
+  ],
+  "mask": [
+   "ffffff0000",
+   "ffff00000000",
+   "ffffff",
+   "ffff00000000",
+   "ff00",
+   "ffffff",
+   "ff00",
+   "ffffff00000000"
+  ],
+  "pat": "48837930000f85d10000004889ce8b81ac000000b3014885c0743a488b0da5f85b05",
+  "pmask": "ffffff0000ffff00000000ffffffffff00000000ff00ffffffff00ffffff00000000",
+  "distinct": 7,
+  "size": 34
+ },
+ {
   "name": "GIMeta_CreateTypeInfo",
   "va": "0x140517260",
   "skip": 9,
@@ -814,6 +1018,57 @@
   "pmask": "ffffffff00ffffff00ffffff0000000000ffff0000ff00ffffff00ffffff00ff",
   "distinct": 8,
   "size": 32
+ },
+ {
+  "name": "GIMeta_GetMethodInfo2",
+  "va": "0x14051D850",
+  "skip": 9,
+  "skip_bytes": 16,
+  "n": 8,
+  "loose": [
+   "mov|Md,R",
+   "mov|R,R",
+   "mov|R,Md",
+   "cmp|Md,I",
+   "mov|R,R",
+   "jb|I",
+   "mov|R,Md",
+   "cmp|R,I"
+  ],
+  "strict": [
+   "mov|Md27,R",
+   "mov|R,R",
+   "mov|R,Md38",
+   "cmp|Md18,i10",
+   "mov|R,R",
+   "jb|I",
+   "mov|R,Md0",
+   "cmp|R,i10"
+  ],
+  "bytes": [
+   "4488442427",
+   "4889cf",
+   "488b4238",
+   "48837a1810",
+   "4889d6",
+   "7203",
+   "488b32",
+   "4883f810"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff",
+   "ffffff00",
+   "ffffff0000",
+   "ffffff",
+   "ff00",
+   "ffffff",
+   "ffffff00"
+  ],
+  "pat": "44884424274889cf488b423848837a18104889d67203488b324883f810",
+  "pmask": "ffffffff00ffffffffffff00ffffff0000ffffffff00ffffffffffff00",
+  "distinct": 6,
+  "size": 29
  },
  {
   "name": "GIMeta_LoadMetadataFile",
@@ -1834,5 +2089,719 @@
   "pmask": "ffffffff00ffffff0000000000ffffffffffffffffff00ff00ffffffffffffff",
   "distinct": 6,
   "size": 32
+ },
+ {
+  "name": "GIMeta_TypePredicateA",
+  "va": "0x1405256F0",
+  "skip": 10,
+  "skip_bytes": 19,
+  "n": 8,
+  "loose": [
+   "mov|R,Md",
+   "call|I",
+   "mov|R,R",
+   "cmp|R,Md",
+   "je|I",
+   "mov|R,Md",
+   "mov|R,R",
+   "call|I"
+  ],
+  "strict": [
+   "mov|R,Md8",
+   "call|I",
+   "mov|R,R",
+   "cmp|R,Md8",
+   "je|I",
+   "mov|R,Md0",
+   "mov|R,R",
+   "call|I"
+  ],
+  "bytes": [
+   "488b4908",
+   "e844ecffff",
+   "4989f1",
+   "483b4608",
+   "7412",
+   "418b09",
+   "4889c2",
+   "e850ebfbff"
+  ],
+  "mask": [
+   "ffffff00",
+   "ff00000000",
+   "ffffff",
+   "ffffff00",
+   "ff00",
+   "ffffff",
+   "ffffff",
+   "ff00000000"
+  ],
+  "pat": "488b4908e844ecffff4989f1483b46087412418b094889c2e850ebfbff",
+  "pmask": "ffffff00ff00000000ffffffffffff00ff00ffffffffffffff00000000",
+  "distinct": 5,
+  "size": 29
+ },
+ {
+  "name": "GIMeta_TypeAttrGetter",
+  "va": "0x1405259C0",
+  "skip": 8,
+  "skip_bytes": 14,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "cmp|R,I",
+   "je|I",
+   "mov|R,R",
+   "xor|R,R",
+   "xor|R,R",
+   "lock cmpxchg|Md,R"
+  ],
+  "strict": [
+   "lea|R,Md30",
+   "mov|Md-8,i-2",
+   "cmp|R,i-1",
+   "je|I",
+   "mov|R,R",
+   "xor|R,R",
+   "xor|R,R",
+   "lock cmpxchg|Md,R"
+  ],
+  "bytes": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "83f9ff",
+   "0f84a3010000",
+   "89ce",
+   "31c9",
+   "31c0",
+   "f0480fb10d2df95a05"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffff00",
+   "ffff00000000",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffffffffff00000000"
+  ],
+  "pat": "488d6c243048c745f8feffffff83f9ff0f84a301000089ce31c931c0f0480fb10d2df95a05",
+  "pmask": "ffffffff00ffffff0000000000ffff00ffff00000000ffffffffffffffffffffff00000000",
+  "distinct": 7,
+  "size": 37
+ },
+ {
+  "name": "GIMeta_TypePredicateB",
+  "va": "0x1405468C0",
+  "skip": 2,
+  "skip_bytes": 5,
+  "n": 8,
+  "loose": [
+   "mov|R,Md",
+   "call|I",
+   "mov|R,R",
+   "mov|R,Md",
+   "cmp|R,Md",
+   "jne|I",
+   "test|Md,I",
+   "jne|I"
+  ],
+  "strict": [
+   "mov|R,Md0",
+   "call|I",
+   "mov|R,R",
+   "mov|R,Md0",
+   "cmp|R,Md",
+   "jne|I",
+   "test|Mdc8,ie",
+   "jne|I"
+  ],
+  "bytes": [
+   "8b09",
+   "e88464fdff",
+   "4889c6",
+   "488b00",
+   "483b050ff15805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask": [
+   "ffff",
+   "ff00000000",
+   "ffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ff00",
+   "ffff0000000000",
+   "ff00"
+  ],
+  "pat": "8b09e88464fdff4889c6488b00483b050ff158057551f686c80000000e7512",
+  "pmask": "ffffff00000000ffffffffffffffffff00000000ff00ffff0000000000ff00",
+  "distinct": 6,
+  "size": 31
+ },
+ {
+  "name": "GIMeta_TypePredicateC",
+  "va": "0x140546950",
+  "skip": 2,
+  "skip_bytes": 5,
+  "n": 8,
+  "loose": [
+   "mov|R,Md",
+   "call|I",
+   "mov|R,R",
+   "mov|R,Md",
+   "cmp|R,Md",
+   "jne|I",
+   "test|Md,I",
+   "jne|I"
+  ],
+  "strict": [
+   "mov|R,Md0",
+   "call|I",
+   "mov|R,R",
+   "mov|R,Md0",
+   "cmp|R,Md",
+   "jne|I",
+   "test|Mdc8,ie",
+   "jne|I"
+  ],
+  "bytes": [
+   "8b09",
+   "e8f463fdff",
+   "4889c6",
+   "488b00",
+   "483b057ff05805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask": [
+   "ffff",
+   "ff00000000",
+   "ffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ff00",
+   "ffff0000000000",
+   "ff00"
+  ],
+  "pat": "8b09e8f463fdff4889c6488b00483b057ff058057551f686c80000000e7512",
+  "pmask": "ffffff00000000ffffffffffffffffff00000000ff00ffff0000000000ff00",
+  "distinct": 6,
+  "size": 31
+ },
+ {
+  "name": "GIMeta_TypePredicateD",
+  "va": "0x1405469E0",
+  "skip": 2,
+  "skip_bytes": 5,
+  "n": 8,
+  "loose": [
+   "mov|R,Md",
+   "call|I",
+   "mov|R,R",
+   "mov|R,Md",
+   "cmp|R,Md",
+   "jne|I",
+   "test|Md,I",
+   "jne|I"
+  ],
+  "strict": [
+   "mov|R,Md0",
+   "call|I",
+   "mov|R,R",
+   "mov|R,Md0",
+   "cmp|R,Md",
+   "jne|I",
+   "test|Mdc8,ie",
+   "jne|I"
+  ],
+  "bytes": [
+   "8b09",
+   "e86463fdff",
+   "4889c6",
+   "488b00",
+   "483b05efef5805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask": [
+   "ffff",
+   "ff00000000",
+   "ffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ff00",
+   "ffff0000000000",
+   "ff00"
+  ],
+  "pat": "8b09e86463fdff4889c6488b00483b05efef58057551f686c80000000e7512",
+  "pmask": "ffffff00000000ffffffffffffffffff00000000ff00ffff0000000000ff00",
+  "distinct": 6,
+  "size": 31
+ },
+ {
+  "name": "GIMeta_Helper_510CE0",
+  "va": "0x140510CE0",
+  "skip": 3,
+  "skip_bytes": 6,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "mov|R,R",
+   "cmp|Md,I",
+   "jne|I",
+   "test|Md,I",
+   "je|I",
+   "cmp|Md,I"
+  ],
+  "strict": [
+   "lea|R,Md30",
+   "mov|Md0,i-2",
+   "mov|R,R",
+   "cmp|Mdc2,i0",
+   "jne|I",
+   "test|Mdc8,ie",
+   "je|I",
+   "cmp|Md20,i0"
+  ],
+  "bytes": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4889ce",
+   "6683b9c200000000",
+   "7509",
+   "f686c80000000e",
+   "742d",
+   "48837e2000"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff",
+   "ffffff0000ffff00",
+   "ff00",
+   "ffff0000000000",
+   "ff00",
+   "ffffff0000"
+  ],
+  "pat": "488d6c243048c74500feffffff4889ce6683b9c2000000007509f686c80000000e742d48837e2000",
+  "pmask": "ffffffff00ffffff0000000000ffffffffffff0000ffff00ff00ffff0000000000ff00ffffff0000",
+  "distinct": 7,
+  "size": 40
+ },
+ {
+  "name": "GIMeta_FindMethodByNameA",
+  "va": "0x140510D90",
+  "skip": 9,
+  "skip_bytes": 16,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "test|R,R",
+   "je|I",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,R"
+  ],
+  "strict": [
+   "lea|R,Md30",
+   "mov|Md0,i-2",
+   "test|R,R",
+   "je|I",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,R"
+  ],
+  "bytes": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4885c9",
+   "0f8445010000",
+   "4589cc",
+   "4489c7",
+   "4989d6",
+   "4889cb"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff",
+   "ffff00000000",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff"
+  ],
+  "pat": "488d6c243048c74500feffffff4885c90f84450100004589cc4489c74989d64889cb",
+  "pmask": "ffffffff00ffffff0000000000ffffffffff00000000ffffffffffffffffffffffff",
+  "distinct": 5,
+  "size": 34
+ },
+ {
+  "name": "GIMeta_FindTypeByName2",
+  "va": "0x140511630",
+  "skip": 8,
+  "skip_bytes": 14,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "mov|R,R",
+   "mov|R,R",
+   "xorps|R,R",
+   "movaps|Md,R",
+   "mov|Md,I",
+   "mov|Md,I"
+  ],
+  "strict": [
+   "lea|R,Md60",
+   "mov|Md-8,i-2",
+   "mov|R,R",
+   "mov|R,R",
+   "xorps|R,R",
+   "movaps|Md-30,R",
+   "mov|Md-20,i0",
+   "mov|Md-18,if"
+  ],
+  "bytes": [
+   "488d6c2460",
+   "48c745f8feffffff",
+   "4989d6",
+   "4989cc",
+   "0f57c0",
+   "0f2945d0",
+   "48c745e000000000",
+   "48c745e80f000000"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff0000000000",
+   "ffffff0000000000"
+  ],
+  "pat": "488d6c246048c745f8feffffff4989d64989cc0f57c00f2945d048c745e00000000048c745e80f000000",
+  "pmask": "ffffffff00ffffff0000000000ffffffffffffffffffffffff00ffffff0000000000ffffff0000000000",
+  "distinct": 5,
+  "size": 42
+ },
+ {
+  "name": "GIMeta_Helper_5158B0",
+  "va": "0x1405158B0",
+  "skip": 9,
+  "skip_bytes": 19,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "movaps|Md,R",
+   "mov|Md,I",
+   "mov|R,R",
+   "mov|Md,R",
+   "mov|R,Md",
+   "movabs|R,I",
+   "cmp|R,R"
+  ],
+  "strict": [
+   "lea|R,Md80",
+   "movaps|Md-10,R",
+   "mov|Md-18,i-2",
+   "mov|R,R",
+   "mov|Md-28,R",
+   "mov|R,Md18",
+   "movabs|R,I",
+   "cmp|R,R"
+  ],
+  "bytes": [
+   "488dac2480000000",
+   "0f2975f0",
+   "48c745e8feffffff",
+   "4d89c6",
+   "488955d8",
+   "4c8b4118",
+   "48be5b05067efc58b514",
+   "4939f0"
+  ],
+  "mask": [
+   "ffffffff00000000",
+   "ffffff00",
+   "ffffff0000000000",
+   "ffffff",
+   "ffffff00",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffff"
+  ],
+  "pat": "488dac24800000000f2975f048c745e8feffffff4d89c6488955d84c8b411848be5b05067efc58b5144939f0",
+  "pmask": "ffffffff00000000ffffff00ffffff0000000000ffffffffffff00ffffff00ffff0000000000000000ffffff",
+  "distinct": 8,
+  "size": 44
+ },
+ {
+  "name": "GIMeta_GetMethodDeclClass",
+  "va": "0x1405282B0",
+  "skip": 7,
+  "skip_bytes": 12,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "mov|R,R",
+   "mov|R,Md",
+   "call|Md",
+   "mov|R,Md",
+   "movabs|R,I",
+   "test|R,R"
+  ],
+  "strict": [
+   "lea|R,Md20",
+   "mov|Md0,i-2",
+   "mov|R,R",
+   "mov|R,Md",
+   "call|Md",
+   "mov|R,Md30",
+   "movabs|R,I",
+   "test|R,R"
+  ],
+  "bytes": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4989cf",
+   "488b0d95d65a05",
+   "ff156f1f6203",
+   "498b4730",
+   "49be0a963bccd0038385",
+   "4885c0"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffff"
+  ],
+  "pat": "488d6c242048c74500feffffff4989cf488b0d95d65a05ff156f1f6203498b473049be0a963bccd00383854885c0",
+  "pmask": "ffffffff00ffffff0000000000ffffffffffff00000000ffff00000000ffffff00ffff0000000000000000ffffff",
+  "distinct": 7,
+  "size": 46
+ },
+ {
+  "name": "MetaStr_AppendObject",
+  "va": "0x1404B97F0",
+  "skip": 8,
+  "skip_bytes": 17,
+  "n": 8,
+  "loose": [
+   "mov|R,I",
+   "call|I",
+   "mov|R,Md",
+   "mov|R,R",
+   "call|I",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,Md"
+  ],
+  "strict": [
+   "mov|R,i1",
+   "call|I",
+   "mov|R,Md18",
+   "mov|R,R",
+   "call|I",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,Md10"
+  ],
+  "bytes": [
+   "b201",
+   "e8b8410500",
+   "488b5818",
+   "4889d9",
+   "e8cc4a7e01",
+   "4889c7",
+   "4989c0",
+   "488b4e10"
+  ],
+  "mask": [
+   "ff00",
+   "ff00000000",
+   "ffffff00",
+   "ffffff",
+   "ff00000000",
+   "ffffff",
+   "ffffff",
+   "ffffff00"
+  ],
+  "pat": "b201e8b8410500488b58184889d9e8cc4a7e014889c74989c0488b4e10",
+  "pmask": "ff00ff00000000ffffff00ffffffff00000000ffffffffffffffffff00",
+  "distinct": 4,
+  "size": 29
+ },
+ {
+  "name": "MetaStr_Reserve",
+  "va": "0x1404B98C0",
+  "skip": 8,
+  "skip_bytes": 14,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "mov|R,Md",
+   "movabs|R,I",
+   "mov|R,R",
+   "xor|R,R",
+   "cmp|R,R",
+   "jb|I"
+  ],
+  "strict": [
+   "lea|R,Md30",
+   "mov|Md-8,i-2",
+   "mov|R,Md10",
+   "movabs|R,I",
+   "mov|R,R",
+   "xor|R,R",
+   "cmp|R,R",
+   "jb|I"
+  ],
+  "bytes": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "4c8b6110",
+   "48beffffffffffffff7f",
+   "4c89e0",
+   "4831f0",
+   "4839d0",
+   "0f8204010000"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffff00000000"
+  ],
+  "pat": "488d6c243048c745f8feffffff4c8b611048beffffffffffffff7f4c89e04831f04839d00f8204010000",
+  "pmask": "ffffffff00ffffff0000000000ffffff00ffff0000000000000000ffffffffffffffffffffff00000000",
+  "distinct": 8,
+  "size": 42
+ },
+ {
+  "name": "MetaStr_AppendChar",
+  "va": "0x1404B9A70",
+  "skip": 9,
+  "skip_bytes": 16,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "mov|R,Md",
+   "movabs|R,I",
+   "mov|R,R",
+   "xor|R,R",
+   "cmp|R,R",
+   "jb|I"
+  ],
+  "strict": [
+   "lea|R,Md20",
+   "mov|Md0,i-2",
+   "mov|R,Md10",
+   "movabs|R,I",
+   "mov|R,R",
+   "xor|R,R",
+   "cmp|R,R",
+   "jb|I"
+  ],
+  "bytes": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4c8b7910",
+   "49beffffffffffffff7f",
+   "4c89f8",
+   "4c31f0",
+   "4839d0",
+   "0f821d010000"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffff00000000"
+  ],
+  "pat": "488d6c242048c74500feffffff4c8b791049beffffffffffffff7f4c89f84c31f04839d00f821d010000",
+  "pmask": "ffffffff00ffffff0000000000ffffff00ffff0000000000000000ffffffffffffffffffffff00000000",
+  "distinct": 8,
+  "size": 42
+ },
+ {
+  "name": "MetaStr_AppendN",
+  "va": "0x1404B2730",
+  "skip": 9,
+  "skip_bytes": 16,
+  "n": 8,
+  "loose": [
+   "lea|R,Md",
+   "mov|Md,I",
+   "mov|R,Md",
+   "movabs|R,I",
+   "mov|R,R",
+   "xor|R,R",
+   "cmp|R,R",
+   "jb|I"
+  ],
+  "strict": [
+   "lea|R,Md20",
+   "mov|Md0,i-2",
+   "mov|R,Md10",
+   "movabs|R,I",
+   "mov|R,R",
+   "xor|R,R",
+   "cmp|R,R",
+   "jb|I"
+  ],
+  "bytes": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "488b7910",
+   "49beffffffffffffff7f",
+   "4889f8",
+   "4c31f0",
+   "4839d0",
+   "0f823e010000"
+  ],
+  "mask": [
+   "ffffffff00",
+   "ffffff0000000000",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffff00000000"
+  ],
+  "pat": "488d6c242048c74500feffffff488b791049beffffffffffffff7f4889f84c31f04839d00f823e010000",
+  "pmask": "ffffffff00ffffff0000000000ffffff00ffff0000000000000000ffffffffffffffffffffff00000000",
+  "distinct": 8,
+  "size": 42
  }
 ]
