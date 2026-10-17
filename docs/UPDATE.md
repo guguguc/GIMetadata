@@ -169,6 +169,31 @@ D) op reg,[rip+const]                            密钥在**数据段常量池**
 
 **判定 `disp < 0x300`** 只用于区分"结构体槽位"和"其它内存访问"；`D)` 形态靠 `rip` 目标解析单独处理。
 
+### 4.1b 槽位读取点的**真实长相**（已用 capstone 逐条复核）
+
+这是文章 §3.2 说的"偏移 + 解混淆密钥成对出现"。`typeDefinitionsOffset` 在 7.1 的现场：
+
+```asm
+1404B157A  mov   rax, [rip + 0x5623D3F]     ; 元数据基址
+1404B1581  mov   rdx, [rip + 0x5623D30]     ; ← 从全局变量读出 MHY 基址
+1404B1588  mov   esi, 0xEC48AB9F            ; 密钥装进寄存器（形态 B）
+1404B158D  add   esi, dword ptr [rdx + 0xB4]  ; ← **槽位 + 密钥**，结果就是 typeDefsOffset
+1404B1593  movsxd rsi, esi
+1404B1596  add   rsi, rax                    ; 加上元数据基址 → 绝对偏移
+1404B15B5  movsxd rsi, dword ptr [rdx + 0x19C]   ; 紧接着下一个槽位
+1404B15BC  xor   rsi, 0x30F4D28E                  ; （= ANALYSIS.md 记的 0x19C ^ 0x30F4D28E）
+```
+
+**三个由此推出的自动化要点**（都是踩过坑的）：
+
+| 要点 | 说明 |
+|---|---|
+| **MHY 基址是从 `.data` 全局读出来的，不能在文件里搜** | 文章判据 1 是 `lea rax, <MHY>` + `mov cs:s_MHYTable, rax`。那个全局在 `.data` 里，**运行时才填**，文件里是未初始化随机值（7.1 实测 `@0x145AD52B8 = 0x68F324628C8E3354`）。所以必须靠**指令形态**去找，不能搜字节。 |
+| **函数边界从 PE 异常表取，不要线性反汇编** | `Data Directory[3]`（不是 `.pdata` **段**）给出 1177406 条 `RUNTIME_FUNCTION`，逐函数从入口反汇编。⚠️ 本二进制里 `.pdata` 段（off `0x562D400`）与真正的异常目录（rva `0x19EBDFB0` → off `0x19672FB0`）**不是同一块**，按段读全是垃圾。 |
+| **默认不锚定会同时误报和漏报** | 脚本默认把任何 `[base+disp]`（`disp<0x300`）当槽位读。`--anchor` 会先按文章判据 1 定位「存 MHY 地址的全局」，之后**只认基址寄存器确实装着 MHY 的那些访问**。 |
+
+> 本二进制是 **UPX 打包**的（段表里有 `.upx0`，还有个 **320MB 的 `il2cpp` 段**），段布局和常规 PE 不同，做 VA→file offset 时别想当然。
+
 ### 4.2 怎么从 4000+ 个候选里认出真表
 
 **不要靠"表长一致"**（实测 435 个去重候选里 432 个都通过长度约束，见 §8.6）。
@@ -203,6 +228,7 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 > **换版本 = 改 `version.json` 的值**（`make` 生成 `src/version.hpp`）。
 > 下表给出**「JSON 键 → 当前值 → 含义」**，直接照键名改即可。
 > JSON 里是**一个键被多处引用**，所以历史上的"同一个常量抄了 7 份、必须同步换"的风险**已经消除**。
+> **每个数是怎么找到、怎么复核的 → §5.7（溯源表）**。
 
 ### 5.1 字符串解密 → `stringDecrypt`
 
@@ -359,6 +385,88 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 | （`s_GlobalMetadataHeader`）| `global.data() + 0x210` | **所有 global 侧偏移都要 +0x210**（陷阱 16）|
 
 ---
+
+## §5.7 每个常量是怎么找到的（溯源表）
+
+> 目标：让下一个人能**独立复核** `version.json` 里的每个数，而不是"信我"。
+> 全部遵循**三步法**：**① 从代码读 → ② 从数据证 → ③ 用语义锚**。
+> 只做 ① 不做 ② 的叫"抄了个数"，本项目禁止（§8 的教训）。
+
+### 5.7.1 三步法
+
+```
+① 代码读：在反编译里找到"这个数被用在哪"的表达式
+        （Hex-Rays 会把 obfuscation 摊开成 `global + *(MHY+K) op key + stride*idx`）
+② 数据证：用**独立结构**证明这个值是表基址/正确 key
+        （严格递增 / 区间铺满 / 值域 / 名字可打印 / 条目两两不同 …）
+③ 语义锚：用"自带答案"的语义交叉验证
+        （枚举父类=System.Enum、`Foo\`N` 的参数个数、已知继承链、count 与表长一致）
+```
+
+**三个数最容易搞错，各有专门检查**：
+
+| 易错点 | 检查 |
+|---|---|
+| 偏移单位（global vs 文件） | 读文件要 **+0x210**（陷阱 16）|
+| **计数修正量**（如 typeDef 要 `-2`）| 本版本 `(MHY[0xE0] - 0x1D064F83)/70 = 88904`，实际类型数 **88902** → 要 `-2`。换版本**必须复核这个修正量**（不是通用常数）|
+| 16/8 位截断 | `+N` 型 count 必须按位宽截断（陷阱 6）|
+
+### 5.7.2 逐类溯源
+
+| `version.json` 项 | 怎么找到的 | 数据侧自证 | 失败时的退路 |
+|---|---|---|---|
+| `addresses.MHY` | 搜 `.rdata` 魔数 `"MHY\0"` | 表头魔数 | — |
+| `addresses.T0/T1` | 反编译 `GIMeta_RuntimeInit`，末尾对两个全局的赋值 | `*(T1+0x48)` 抽样 `type` 字节 100% ∈[1,0x1D]；`*(T0+0x88)` 非零项 ≈ 方法数 | `tools/sig.py` 按结构签名找函数 |
+| `tables[].slot` | 反编译里"表基址"表达式的 **`*(MHY+K)` 的 K** | 该槽位必须出现在 `slot_scan` 候选里 | 补 §4.1 的四种形态 |
+| `tables[].op/key` | 同一表达式里的**运算与常数** | 用 `slot_scan` 的 `(slot,op,key)` 复算，值落进元数据且过结构自证 | `relocate.py` ⑦ **反查**（值→唯一三元组）|
+| `tables[].stride` | il2cpp 结构体大小（`structSizes`）+ 反编译里的步长 | `count*stride` 不越界；`count = raw/stride [- 常数]` 与实测计数一致 | 用"区间铺满"反推步长 |
+| `tables[].side` | `global`（+0x210）/ `startup`（另一块数据）| 值域落在对应块的尺寸内 | — |
+| `keyFormulas.*` | 反编译里 `xxxKey(i)` 函数体：乘/加/移位/xor | 解出的名字**可打印**、`typeIndex` 100% 合法 | 用"名字可打印"逐项调 |
+| `fieldDecode.*` | 反编译里字段读取表达式（`(raw op key)`）| 输出侧统计（基类/泛型/事件/属性访问器）| **锚点反解**（§8 Worked example A/B）|
+| `structSizes.*` | il2cpp 原始 C 结构体定义 + 实测步长 | 表长/计数互相一致 | 用相邻表平铺反推 |
+| `*CountFormula` | 找**消费者**：`RuntimeInit` 里谁给循环定界 / 谁给数组分配 | 算出的计数 == 实测（如 `13671`）| §5.5 |
+| `registrationFields`（T0/T1 偏移）| 反编译里 `*(T0+K)` / `*(T1+K)` 的用法 + 类型 | 见 §3.3 的验收列 | — |
+| `stringDecrypt` | 文章算法 + `tools/gi_string_decrypt.py` 独立实现 | 程序集名 **75/75** | — |
+
+### 5.7.3 完整示例：`typeDefinitions` 端到端
+
+```
+① 代码读：某类型读取函数里出现
+     *(DWORD*)(MHY + 180) - 330781793 + 70*index
+   → 槽位 0xB4、op '-'、key 0x13B75461、步长 70
+② 数据证（relocate.py ④）：
+     70 字节步长下 flags 只有 106 种；抽样 nameIndex 解出的名字
+     可打印率 100%（<Module>/Locale/SR/WIN32_FIND_DATA…）
+③ 语义锚：typeDefinitionsCount = (MHY[0xE0] - 0x1D064F83)/70 - 2 = 88902
+     → 与 verify.py 的「类型数 88902」一致
+→ 写入 version.json → make → verify.py 28/28
+```
+
+**本版本已复核的公式**（换版本拿这张表当模板）：
+
+| 值 | 公式 | 结果 |
+|---|---|---|
+| `typeDefinitionsOffset` | `MHY[0xB4] - 0x13B75461` | `0x92140` |
+| `typeDefinitionsCount` | `(MHY[0xE0] - 0x1D064F83) / 70 - 2` | 88902 |
+| `methodsOffset` | `MHY[0x16C] - 0x1CCA7654` | `0x2439204` |
+| `methodsCount` | `(MHY[0x188] ^ 0x1B58E334) / 26` | 733442 |
+| `methodPointerIndexOffset` | `MHY[0x94] ^ 0x4A4C0A71` | `0xC48E6C` |
+
+**反查闭环**（换版本可全自动）：
+`relocate.py ⑦` 拿 ② 得到的值 `0x92140` 反查候选表 → 唯一命中
+`slot 0xB4 add 0xEC48AB9F`（补码形式，等价于 `- 0x13B75461`）✓
+
+### 5.7.4 哪些是"反解"出来的（不是从代码直接读）
+
+这三个**代码里没有对应立即数**，是用**已知语义反解**的 —— 换版本时也要用同样方法，别去代码里搜常数：
+
+| 字段 | 反解方法 | 锚 |
+|---|---|---|
+| `typeDef+0x18 parentIndex` | 取 `System.Enum`/`System.ValueType` 的真实 typeDef 索引 → 在 Il2CppType 表里找 `klassIndex==它` 的项 → 要求"单一 op/K 同时映射这两个目标" | 枚举/结构体父类恒定 |
+| `typeDef+0x3E genericContainerIndex` | `Foo\`N` 的名字自带参数个数 → 容器的 `argc` 必须 == N | 名字里的 `` `N `` |
+| `fieldOffset` 的索引基 `+0x20` | 反编译里 `fieldOffset[(typeDef+0x20 ^ 0x2E8C0EB8) + k]` 直接给出 | 反编译 |
+
+> 判别方法：**在 `.text` 里搜不到那个常数** → 基本就是反解的（或密钥在数据段，见 §4.1 形态 D）。
 
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 

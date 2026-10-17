@@ -81,14 +81,116 @@ _GP.update({'r8d':'r8','r8w':'r8','r8b':'r8','r9d':'r9','r9w':'r9','r9b':'r9',
             'r14d':'r14','r14w':'r14','r14b':'r14','r15d':'r15','r15w':'r15','r15b':'r15'})
 
 
-def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT):
+def _pe_imagebase(D):
+    """从 DOS/PE 头直接读 ImageBase（.pdata 里存的是 RVA，要靠它换算成 VA）"""
+    lfanew = struct.unpack_from('<I', D, 0x3C)[0]
+    assert D[lfanew:lfanew + 4] == b'PE\0\0'
+    opt = lfanew + 4 + 20                       # OptionalHeader
+    return struct.unpack_from('<Q', D, opt + 24)[0]
+
+
+def _pe_exception_dir(D):
+    """从 PE 头读 Data Directory[3] (IMAGE_DIRECTORY_ENTRY_EXCEPTION) 的 (rva, size)。
+
+    ⚠️ **不要去读 `.pdata` 段** —— 实测这个二进制里 `.pdata` 段（off 0x562D400）
+    和真正的异常目录（rva 0x19EBDFB0 -> off 0x19672FB0）**不是同一块**，
+    按段读出来全是垃圾（begin 0x14000799d / end 0x1aab00000）。
+    """
+    lfanew = struct.unpack_from('<I', D, 0x3C)[0]
+    if D[lfanew:lfanew + 4] != b'PE\0\0':
+        return None
+    opt = lfanew + 4 + 20
+    magic = struct.unpack_from('<H', D, opt)[0]
+    dd = opt + (112 if magic == 0x20B else 96)          # PE32+ / PE32 的 DataDirectory 起点
+    rva, size = struct.unpack_from('<II', D, dd + 3 * 8)
+    return (rva, size) if rva and size else None
+
+
+def pdata_ranges(D, secs):
+    """从 PE 异常表读出所有函数的 [起 VA, 止 VA]。**不需要 IDA**。
+
+    7.1 有 1177406 条、7.0 有 1145600 条，覆盖 .text 里几乎所有函数。
+    """
+    ed = _pe_exception_dir(D)
+    if not ed:
+        return None
+    rva, size = ed
+    base = _pe_imagebase(D)
+    off = None
+    for t in secs:                       # secs 是 [(name, va, vsize, off, rawsize), ...]
+        lo = t[1] - base                 # ⚠️ t[1] 是 **VA**，rva 是 RVA，要减掉 imagebase
+        if lo <= rva < lo + max(t[2], t[4]):
+            off = t[3] + (rva - lo)
+            break
+    if off is None:
+        return None
+    base = _pe_imagebase(D)
+    out = []
+    for i in range(size // 12):
+        b0, b1 = struct.unpack_from('<II', D, off + i * 12)
+        if b0 and b1 > b0:
+            out.append((base + b0, base + b1))   # ⚠️ 表里存的是 **RVA**
+    return out or None
+
+
+def find_mhy_globals(D, secs, MHY_VA):
+    """文章 §3.1 判据 1 的自动化：找「存放 MHY 地址的那个 .data 全局」。
+
+    文章给的形态：
+        lea rax, unk_142419A40
+        mov cs:s_MHYTable, rax      <- MHY 地址在**运行时**写进一个全局
+    ⚠️ 不能直接在文件里搜 MHY 地址的字节 —— 那个全局在 .data 里，
+       文件里是未初始化的随机值（7.1 实测 @0x145AD52B8 = 0x68F324628C8E3354）。
+
+    做法：逐函数反汇编，找 `lea reg, [rip+d]`（目标正好是 MHY），
+    再看紧随其后是否 `mov [rip+e], reg` —— 那个 [rip+e] 就是全局的地址。
+    """
+    md = Cs(CS_ARCH_X86, CS_MODE_64)
+    md.detail = True
+    md.skipdata = True
+    out = {}
+    for (fs, fe) in (pdata_ranges(D, secs) or ()):
+        try:
+            o = va2off(secs, fs); n = va2off(secs, fe) - o
+        except ValueError:
+            continue
+        if n <= 0 or n > 0x40000:
+            continue
+        ins = list(md.disasm(D[o:o + n], fs))
+        for i, x in enumerate(ins):
+            if x.id == 0 or x.mnemonic != 'lea' or len(x.operands) != 2:
+                continue
+            if x.operands[1].type != X86_OP_MEM or x.operands[1].mem.base != X86_REG_RIP:
+                continue
+            if x.address + x.size + x.operands[1].mem.disp != MHY_VA:
+                continue
+            r = _GP.get(md.reg_name(x.operands[0].reg), md.reg_name(x.operands[0].reg))
+            # 往后 4 条里找把该寄存器写进 rip 相对全局的指令
+            for y in ins[i + 1:i + 5]:
+                if y.id == 0 or len(y.operands) != 2:
+                    continue
+                if y.operands[1].type != X86_OP_MEM or y.operands[1].mem.base != X86_REG_RIP:
+                    continue
+                if _GP.get(md.reg_name(y.operands[0].reg), '') != r:
+                    continue
+                g = y.address + y.size + y.operands[1].mem.disp
+                out.setdefault(g, []).append(y.address)
+    return out
+
+
+def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None):
     """返回 [(slot, op, key, 出现次数, 首个VA)]
 
-    匹配**三种**形态：
+    匹配**四种**形态：
       A) mov reg,[mhy+slot]   ...  op reg,imm            槽位在前
       B) mov reg,imm          ...  op reg,[mhy+slot]     密钥在前 ← v1 漏掉
       C) mov reg,[mhy+slot] / mov reg2,imm / op reg,reg2 寄存器对寄存器 ← v2 漏掉
+      D) op reg,[rip+const]   密钥在数据段常量池            ← v3 漏掉
     寄存器按族归一（eax/rax 视为同一），窗口 8 条指令。
+
+    `anchors` 给定时启用**锚定模式**：只认「基址寄存器是从 MHY 全局变量读出来的」
+    那种 `[reg+slot]`（文章 §3.1 的 `mov cs:s_MHYTable, rax` 那条链）。
+    默认不启用 —— 此时任何 `[base+disp]` 都会被当成槽位读，既误报也漏报。
     """
     if va0 is None:
         tname, tva, tvsz, toff, trsz = secs[0]
@@ -104,17 +206,63 @@ def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT):
     md.detail = True
     md.skipdata = True
     last_load, last_imm, records, idx = {}, {}, [], 0
+    mhy_regs = set()          # 锚定模式：当前哪些寄存器里装的是 MHY 基址
     OPS = ('xor', 'sub', 'add', 'imul', 'or', 'and')
-    for insn in md.disasm(text, tva):
+
+    def stream():
+        """按 PE 异常表逐函数反汇编（每个函数都从自己的入口开始对齐）。
+
+        实测 7.1 上与原来的线性扫描结果**逐条一致**（4730 组三元组，地址一字不差），
+        好处是每条记录的 VA 都能落在真实指令边界上，不用担心跨函数的流错位。
+        """
+        rng = None if va0 is not None else pdata_ranges(D, secs)
+        if not rng:
+            yield from md.disasm(text, tva)
+            return
+        for (fs, fe) in rng:
+            try:
+                o = va2off(secs, fs)
+                n = va2off(secs, fe) - o
+            except ValueError:
+                continue          # .pdata 里混有 chained unwind 的垃圾条目，跳过
+            if n <= 0 or n > 0x40000:
+                continue
+            yield from md.disasm(D[o:o + n], fs)
+            # 函数边界也是数据流边界（与 call/ret 处清空保持一致）
+            last_load.clear(); last_imm.clear(); mhy_regs.clear()
+
+    def is_mhy_base(mem):
+        """锚定模式：基址寄存器是否装的是 MHY 地址"""
+        if anchors is None:
+            return True
+        return _GP.get(md.reg_name(mem.base), md.reg_name(mem.base)) in mhy_regs
+
+    def ok_slot(mem):
+        if mem.index != 0 or mem.base == 0 or not (0 <= mem.disp < maxdisp):
+            return False
+        return is_mhy_base(mem)
+
+    for insn in stream():
         idx += 1
         if insn.id == 0:
-            last_load.clear(); last_imm.clear(); continue
+            last_load.clear(); last_imm.clear(); mhy_regs.clear(); continue
         try:
             ops = insn.operands
         except Exception:
-            last_load.clear(); last_imm.clear(); continue
+            last_load.clear(); last_imm.clear(); mhy_regs.clear(); continue
         m = insn.mnemonic
         def fam(r): return _GP.get(md.reg_name(r), md.reg_name(r))
+
+        # 锚定模式：认出「mov reg, [rip+锚]」—— 这个 reg 从此装着 MHY 基址
+        if anchors and m == 'mov' and len(ops) == 2 \
+           and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_MEM \
+           and ops[1].mem.base == X86_REG_RIP:
+            tgt = insn.address + insn.size + ops[1].mem.disp
+            if tgt in anchors:
+                mhy_regs.add(fam(ops[0].reg))
+                last_load.pop(fam(ops[0].reg), None)
+                last_imm.pop(fam(ops[0].reg), None)
+                continue
 
         # call/ret 会破坏调用者保存寄存器 → 清掉它们的追踪，避免跨调用误判
         if m in ('call', 'ret', 'retn', 'jmp', 'syscall', 'int3'):
@@ -126,7 +274,7 @@ def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT):
         if m in ('mov', 'movsxd', 'movsx', 'movzx') and len(ops) == 2 \
            and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_MEM:
             mem = ops[1].mem
-            if mem.index == 0 and 0 <= mem.disp < maxdisp and mem.base != 0:
+            if ok_slot(mem):
                 last_load[fam(ops[0].reg)] = (mem.disp, idx)
             else:
                 last_load.pop(fam(ops[0].reg), None)
@@ -151,7 +299,7 @@ def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT):
         if m in OPS and len(ops) == 2 and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_MEM:
             k = fam(ops[0].reg)
             mem = ops[1].mem
-            if k in last_imm and mem.index == 0 and 0 <= mem.disp < maxdisp and mem.base != 0:
+            if k in last_imm and ok_slot(mem):
                 records.append((mem.disp, m, last_imm[k][0], insn.address))
             last_load.pop(k, None); last_imm.pop(k, None)
             continue
@@ -359,8 +507,20 @@ def main():
         print("  MHY[0x%03X] %s 0x%08X = 0x%X  期望 0x%X  %s"
               % (slot, op, key, got, tgt, 'OK' if got == tgt else '**不符**'))
 
+    anchors = None
+    if '--anchor' in argv:
+        gl = find_mhy_globals(D, secs, MHY_VA)
+        print("\n=== 文章 §3.1 判据 1：找存放 MHY 地址的全局 ===")
+        if not gl:
+            print("  ✗ 没找到（找不到就退回普通扫描）")
+        else:
+            for g, srcs in sorted(gl.items()):
+                print("  全局 @0x%X   由 %s 写入" % (g, ', '.join('0x%X' % s for s in srcs[:3])))
+            anchors = set(gl)
+            print("  → 启用**锚定模式**：只认基址寄存器确实装着 MHY 的那些 [reg+slot]")
+
     print("\n扫描 .text ...")
-    rows = scan_text(D, secs)
+    rows = scan_text(D, secs, anchors=anchors)
     print("唯一 (slot,op,key) 组合: %d" % len(rows))
     # 写缓存，供 tools/relocate.py 复用（省几分钟重扫）
     try:
