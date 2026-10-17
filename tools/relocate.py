@@ -259,6 +259,71 @@ def probe_attributes_info(d, off, n=1024):
             % len(set((s4 >> 24).tolist())))
 
 
+def probe_attribute_types_DISABLED(d, off, n=4096, typeCount=683574):
+    """attributeTypes（4B）：`v & 0xFFFFFF` 全是合法 Il2CppType 索引，且高字节是少量 tag。
+
+    实测 7.1：+0 的 `&0xFFFFFF` 100% < typesCount，高字节 4 种。
+    （纯结构：不需要逐索引 key）
+    """
+    import numpy as np
+    if off + 4 * n > len(d.raw):
+        return None
+    b = d.ub
+    idx = off + np.arange(n, dtype=np.int64) * 4
+    v = (b[idx].astype(np.int64) | (b[idx + 1].astype(np.int64) << 8)
+         | (b[idx + 2].astype(np.int64) << 16) | (b[idx + 3].astype(np.int64) << 24))
+    lo = v & 0xFFFFFF
+    ok = float((lo < typeCount).mean())
+    kinds = len(set((v >> 24).tolist()))
+    if ok < 0.999 or not (2 <= kinds <= 8):
+        return None
+    if len(set(lo.tolist())) < n // 4:
+        return None
+    return ('attributeTypesOffset', n,
+            "4B, (v & 0xFFFFFF) 全为合法 Il2CppType 索引 比例 %.4f, 高字节 %d 种 tag" % (ok, kinds))
+
+
+def probe_pdv_any_layout_DISABLED(d, off, typeCount, n=12000):
+    """parameterDefaultValues（12B）—— **布局无关**：三种列任一排列都接受。
+
+    要求存在一种排列 (A,B,C) 使得：
+      A 严格递增；B 全为合法 Il2CppType 索引（或含 -1 哨兵）；C 无强约束。
+    （7.0 的 `fieldDefaultValues` 就置换过字段顺序 -> 这里不能写死 +0/+4/+8）
+    """
+    import numpy as np
+    if off + 12 * n > len(d.raw):
+        return None
+    b = d.ub
+    cols = []
+    for c in (0, 4, 8):
+        idx = off + c + np.arange(n, dtype=np.int64) * 12
+        v = (b[idx].astype(np.int64) | (b[idx + 1].astype(np.int64) << 8)
+             | (b[idx + 2].astype(np.int64) << 16) | (b[idx + 3].astype(np.int64) << 24))
+        cols.append(np.where(v >= (1 << 31), v - (1 << 32), v))
+    for ia in range(3):
+        a = cols[ia]
+        if int(np.diff(a).min()) <= 0:
+            continue
+        if len(set(a.tolist())) < n // 2:
+            continue
+        for ib in range(3):
+            if ib == ia:
+                continue
+            bb = cols[ib]
+            good = float((((bb >= 0) & (bb < typeCount)) | (bb == -1)).mean())
+            if good < 0.999:
+                continue
+            ic = 3 - ia - ib
+            cc = cols[ic]
+            # 第三列应是 dataIndex：小、非负
+            if int(cc.min()) < 0 or int(cc.max()) > 0x200000:
+                continue
+            return ('parameterDefaultValuesOffset', n,
+                    "12B, 列[%d] 严格递增, 列[%d] 全为合法类型索引/哨兵, 列[%d] 是 dataIndex(<=2M)"
+                    % (ia, ib, ic))
+    return None
+
+
 def probe_method_pointer_index(d, off, ptrCount=79765):
     """methodPointerIndex：4B，值只有 -1（无实现）或 < 泛型方法指针数组长度。"""
     import numpy as np
@@ -860,6 +925,7 @@ def main():
               # 纯结构不变量（不需要逐索引 key）→ 跨版本可用
               lambda o: probe_method_slot_table(d, o),
               lambda o: probe_attributes_info(d, o),
+
               # 阶梯第二级：弱指纹 + 二次证据（名字可打印）→ 可安全启用（依赖 hint）
               lambda o: probe_typedefs_verified(d, o, hint),
               # **无 hint 兜底**：字符串解码密钥每版都变，这个探针只用结构 → 换版本仍能初筛
