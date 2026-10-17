@@ -25,6 +25,28 @@ import ida_segment
 import idautils
 
 OUT = '/tmp/ida_export.json'
+HITS_JSON = '/tmp/h.json'      # sig.py scan --json 的产物（地址 -> GIMeta_* 名字）
+
+HITS = {}                      # ea -> name
+
+
+def load_hits(path=HITS_JSON):
+    """把 sig.py scan 的结果读进来：{地址: 名字}。
+
+    IDA 自己不知道我们起的 `GIMeta_*` 名字（它只有 `sub_xxx`），
+    所以必须用「地址」当桥：sig 命中表是 (name -> VA)，反过来就是 (VA -> name)。
+    """
+    global HITS
+    try:
+        import json as _j
+        d = _j.load(open(path))
+        for name, va in d.get('hits', {}).items():
+            val = int(va, 16) if isinstance(va, str) else int(va)
+            HITS[val] = name
+        print('已加载 sig 命中表 %s（%d 条）' % (path, len(HITS)))
+    except Exception as e:
+        print('⚠ 没读到 sig 命中表（%s）：%s' % (path, e))
+        print('   -> 先用 sig.py scan --json /tmp/h.json 生成；否则只能输出 sub_xxx')
 
 RE_TABLE = re.compile(
     r'\*\(_DWORD \*\)\((\w+) \+ (0x[0-9A-Fa-f]+|\d+)\)\s*([-+^])\s*(0x[0-9A-Fa-f]+|\d+)')
@@ -62,6 +84,7 @@ def main():
         print('✗ Hex-Rays 不可用（需要 IDA 的 decompiler）')
         return
 
+    load_hits()
     mhy = find_mhy()
     print('MHY 表 = %s' % (hex(mhy) if mhy else '未找到'))
 
@@ -79,7 +102,9 @@ def main():
             continue
         nfunc += 1
         text = str(cf)
-        name = ida_funcs.get_func_name(ea) if hasattr(ida_funcs, 'get_func_name') else hex(ea)
+        f = ida_funcs.get_func(ea)
+        fstart = f.start_ea if f else ea
+        name = HITS.get(fstart) or ida_funcs.get_func_name(ea) or hex(ea)
 
         for m in RE_TABLE.finditer(text):
             g, slot, op, key = m.group(1), K(m.group(2)), m.group(3), K(m.group(4))
@@ -87,7 +112,7 @@ def main():
                 continue
             if key < 0x100:             # 太小的常数多半不是 key
                 continue
-            tables.setdefault((g, slot, op, key), []).append(name)
+            tables.setdefault((g, slot, op, key), []).append((name, hex(fstart)))
 
         for m in RE_FIELD.finditer(text):
             w, loc, disp, op, key = m.group(1), m.group(2), K(m.group(3)), m.group(4), K(m.group(5))
@@ -95,10 +120,10 @@ def main():
                 continue
             if loc.startswith('qword_'):    # 那是全局，归 tables
                 continue
-            fields.setdefault((w, loc, disp, op, key), []).append(name)
+            fields.setdefault((w, loc, disp, op, key), []).append((name, hex(fstart)))
 
         for m in RE_FORMULA.finditer(text):
-            formulas.append({'func': name, 'text': m.group(0)})
+            formulas.append({'func': name, 'func_ea': hex(fstart), 'text': m.group(0)})
 
     # ---- 找出哪个全局是 MHY：按「被当作槽位表的次数」排序 ----
     byglob = {}
@@ -128,13 +153,17 @@ def main():
                     val = (raw ^ key) & 0xFFFFFFFF
             out_tables.append({'slot': '0x%X' % slot, 'op': op, 'key': '0x%X' % key,
                                'value': ('0x%X' % val) if val is not None else None,
-                               'n_funcs': len(fns), 'funcs': fns[:4]})
+                               'n_funcs': len(fns),
+                               'funcs': [n for n, _ in fns[:4]],
+                               'func_eas': [e for _, e in fns[:4]]})
 
     out_fields = []
     for (w, loc, disp, op, key), fns in sorted(fields.items(), key=lambda kv: (kv[0][2], kv[0][0])):
         out_fields.append({'width': w, 'base': loc, 'disp': '0x%X' % disp,
                            'op': op, 'key': '0x%X' % key,
-                           'n_funcs': len(fns), 'funcs': fns[:4]})
+                           'n_funcs': len(fns),
+                           'funcs': [n for n, _ in fns[:4]],
+                           'func_eas': [e for _, e in fns[:4]]})
 
     res = {'mhy': (hex(mhy) if mhy else None), 'mhy_global': mhy_name,
            'tables': out_tables, 'fieldDecode': out_fields, 'formulas': formulas[:400]}

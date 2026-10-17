@@ -908,7 +908,18 @@ GIMeta_SetupTypeInfoLocked 里：
 
 ### 5.12.2 用法
 
+**⚠️ IDA 不认识我们起的名字**：IDA 里只有 `sub_1404E3850` 这种；`GIMeta_*` 是我们用
+`sig.py` 起的标签 ✗。所以两者用**地址**当桥：
+
+```
+sig.py scan --json /tmp/h.json        # (name -> VA)
+ida_export.py                         # 输出 funcs=IDA名 + func_eas=地址
+ida_apply.py --hits /tmp/h.json       # 用 (VA -> name) 把名字补上 -> 再查 table_funcs.json
+```
+
 ```bash
+# 0) 先跑 sig（离线，3 秒）
+python3 tools/sig.py scan <exe> --sigs tools/sigs.json --fuzzy --json /tmp/h.json
 # ① 在新版本的 IDA 数据库里：File → Script file…  选 tools/ida_export.py
 #    产物：/tmp/ida_export.json
 #      tables      : slot / op / key / **value**（已用 MHY 槽位解出来）/ funcs
@@ -916,7 +927,7 @@ GIMeta_SetupTypeInfoLocked 里：
 #      formulas    : 含大常数 + `>>` 的内联表达式原文
 
 # ② 配对到表名（用 §5.10.3 的「函数 -> 表」映射）
-python3 tools/ida_apply.py /tmp/ida_export.json --out /tmp/tables.json
+python3 tools/ida_apply.py /tmp/ida_export.json --hits /tmp/h.json --out /tmp/tables.json
 #    单表函数 -> 直接确定；多表函数 -> 列出候选（带 value，便于按值匹配）
 ```
 

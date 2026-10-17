@@ -29,6 +29,7 @@ def main():
     ap.add_argument('export')
     ap.add_argument('--funcs', default=os.path.join(HERE, 'table_funcs.json'))
     ap.add_argument('--detected', default=None)
+    ap.add_argument('--hits', default=None, help='sig.py scan --json（地址 -> 名字），用于补名字')
     ap.add_argument('--out', default=None)
     a = ap.parse_args()
 
@@ -39,13 +40,30 @@ def main():
         detected = {k: int(v, 0) if isinstance(v, str) else int(v)
                     for k, v in load(a.detected).items()}
 
+    # 地址 -> 名字（IDA 只有 sub_xxx，用 sig 命中表补上我们的名字）
+    ea2name = {}
+    if a.hits and os.path.exists(a.hits):
+        for nm, va in load(a.hits).get('hits', {}).items():
+            ea2name[int(va, 16) if isinstance(va, str) else int(va)] = nm
+
+    def resolve(t):
+        names = list(t.get('funcs', []))
+        for e in t.get('func_eas', []):
+            try:
+                va = int(e, 16)
+            except Exception:
+                continue
+            if va in ea2name:
+                names.append(ea2name[va])
+        return sorted(set(names))
+
     tables = exp.get('tables', [])
     print('IDA 导出：%d 个 (slot,op,key)，MHY 全局 = %s' % (len(tables), exp.get('mhy_global')))
 
     # ---- 1) 按「函数 -> 表」建候选 ----
     by_table = {}
     for t in tables:
-        for fn in t.get('funcs', []):
+        for fn in resolve(t):
             for name in fmap.get(fn, []):
                 by_table.setdefault(name, []).append(t)
 
@@ -69,7 +87,7 @@ def main():
     for name, t in sorted(result.items()):
         print('  %-42s slot %-6s %s %-12s -> %-10s (函数 %s)'
               % (name, t['slot'], t['op'], t['key'], t.get('value'),
-                 ','.join(t.get('funcs', [])[:2])))
+                 ','.join(resolve(t)[:2])))
 
     if unresolved:
         print('\n=== 需要消歧 %d 张（同一函数读了多张表）===' % len(unresolved))
@@ -78,7 +96,7 @@ def main():
             for c in cands[:6]:
                 print('     slot %-6s %s %-12s value=%-10s  (%s)'
                       % (c['slot'], c['op'], c['key'], c.get('value'),
-                         ','.join(c.get('funcs', [])[:2])))
+                         ','.join(resolve(c)[:2])))
 
     frag = {'tables': {k: {'slot': v['slot'], 'op': v['op'], 'key': v['key']}
                        for k, v in result.items()}}
