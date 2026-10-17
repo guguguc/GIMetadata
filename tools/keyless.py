@@ -494,3 +494,111 @@ def ranges_tile(fs, fc, maxn=3_000_000):
         if cur > maxn:
             return None
     return cur if cur > 0 else None
+
+
+# ============================================================================
+#  typeDef 其它字段：每个字段一条语义判据（拿候选 (disp,op,key) 逐个解全表后归类）
+# ============================================================================
+def _crit_nameidx(v):
+    """nameIndex/namespaceIndex：打包成 `offset | len<<24`，len 必须 1..200"""
+    if v is None:
+        return None
+    if int(v.min()) < 0:
+        return None
+    ln = (v >> 24) & 0xFF
+    off = v & 0xFFFFFF
+    ok = float(((ln >= 1) & (ln <= 200)).mean())
+    if ok < 0.98:
+        return None
+    if float((off > 16_000_000).mean()) > 0.02:
+        return None
+    return ok, len(set(off.tolist()))
+
+
+def _crit_flags(v):
+    """flags：bitmask，取值种类很少（几十种），且高位不常出现"""
+    if v is None or int(v.min()) < 0:
+        return None
+    kinds = len(set(v.tolist()))
+    if kinds > 200 or kinds < 4:
+        return None
+    if float((v < (1 << 31)).mean()) < 0.999:
+        return None
+    return 1.0, kinds
+
+
+def _crit_parent(v, typesCount=683574):
+    """parentIndex：Il2CppType 索引（-1=无父类），且应有相当比例非 -1"""
+    if v is None:
+        return None
+    ok = float((((v >= 0) & (v < typesCount)) | (v == -1)).mean())
+    if ok < 0.999:
+        return None
+    neg = float((v == -1).mean())
+    if not (0.05 <= neg <= 0.95):
+        return None
+    return ok, int((v >= 0).sum())
+
+
+def _crit_container(v):
+    """genericContainerIndex：小索引（-1=无泛型）"""
+    if v is None:
+        return None
+    ok = float((((v >= 0) & (v < 200000)) | (v == -1)).mean())
+    if ok < 0.999:
+        return None
+    neg = float((v == -1).mean())
+    if not (0.5 <= neg <= 0.999):
+        return None
+    return ok, int((v >= 0).sum())
+
+
+def _crit_unknown20(v, fieldLen=None):
+    """unknown20：fieldOffset 表的每类型索引基 —— 非负、且随类型递增（累计）"""
+    if v is None or int(v.min()) < 0:
+        return None
+    if int(v.max()) > 2_000_000:
+        return None
+    if int(np.diff(v).min()) < 0:
+        return None
+    if int(v.max()) == int(v.min()):
+        return None
+    return 1.0, int(v.max())
+
+
+CRIT = {
+    'nameIndex': (_crit_nameidx, 4),
+    'flags': (_crit_flags, 4),
+    'parentIndex': (_crit_parent, 4),
+    'genericContainerIndex': (_crit_container, 2),
+    'unknown20': (_crit_unknown20, 4),
+}
+
+
+def derive_other_fields(d, base, cands, n=88902, typesCount=683574):
+    """对候选 (disp,op,key) 逐个解全表并按语义判据归类。
+
+    `cands` 是 [(disp, op, key)]（来自 slot_scan 的缓存）。
+    返回 {field: [(disp, op, key, score, evidence)]}（按分数排序）
+    """
+    off = d.hdr + base
+    out = {}
+    seen = set()
+    for disp, op, K in cands:
+        if disp > 0x60:
+            continue
+        for field, (fn, w) in CRIT.items():
+            if (disp, op, K, field) in seen:
+                continue
+            seen.add((disp, op, K, field))
+            if disp % w:
+                continue
+            v = _decode_full(d, off, disp, w, op, K, n)
+            if v is None:
+                continue
+            r = fn(v)
+            if r:
+                out.setdefault(field, []).append((disp, op, K, round(r[0], 4), r[1]))
+    for f in out:
+        out[f].sort(key=lambda x: -x[3])
+    return out

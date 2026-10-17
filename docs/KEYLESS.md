@@ -178,3 +178,31 @@ fieldStart   (+0x2C) max = 2.1e9   ✗   (应 ~440172)
   需要按各自的语义判据逐个找（nameIndex 用"名字可打印"、flags 用"种数少"）
 - **dumper 本身**仍按 7.1 的位移写死（`src/il2cpp_image.hpp`），
   所以即使工具识别出新布局，也要改 C++ 才能用它
+
+---
+
+## 七、其它 typeDef 字段（nameIndex/flags/parentIndex/…）—— 尝试与负结果
+
+按"每个字段一条语义判据"实现（`keyless.derive_other_fields`）：
+
+| 字段 | 判据 | 7.1 实测候选数 |
+|---|---|---|
+| `nameIndex` | 解出 `offset\|len<<24`，`len∈[1,200]`、`offset<16M` | **736** ✗ |
+| `flags` | bitmask，取值种类 4..200 | **83** ✗ |
+| `parentIndex` | 合法 Il2CppType 索引(-1=无父类)，−1 占 5%~95% | **1**（但是 `fieldStart` 误命中）✗ |
+| `genericContainerIndex` | 小索引，−1 占多数 | **3**（eventStart/nestedStart 混入）✗ |
+| `unknown20` | 非负、≤2M、单调 | **0**（真值不在候选里）✗ |
+
+**结论**：这些判据"能成立"但**不唯一** —— 大量别的列也满足 ✗。
+也就是说：**nameIndex/flags/parentIndex 这类"值域型"字段，光靠数据分布无法定位** ✗，
+必须靠"和字符串表/类型表交叉"的**二次证据**（例如 nameIndex 的解密结果必须能在字符串块里
+命中真实名字），属于下一步工作。
+
+## 八、已完成的自动化（最终状态）
+
+```
+✅ typeDefinitions 基址      （/70 魔数短名单 + 全表校验）
+✅ typeDef.fieldStart/fieldCount （区间铺满 + fDV 覆盖率 + N 刚好覆盖）
+✅ 输出可直接填 version.json 的 JSON（--emit）
+✗ 其它字段（nameIndex/flags/parentIndex/…）：判据不唯一
+```

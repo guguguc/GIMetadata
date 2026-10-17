@@ -516,6 +516,11 @@ def find_string_block(d, win=1 << 16, step=1 << 13):
     return lo, int(hi - lo)
 
 
+# 表长提示（7.1 实测；只用来把 (累计,计数) 对**命名**为 fieldStart/methodStart/…，
+# 判定仍然靠"铺满 + fDV 覆盖率"，不靠这些数）
+LEN_HINT = {'fieldStart': 440172, 'methodStart': 733442, 'propertyStart': 115596,
+            'eventStart': 628, 'nestedTypesStart': 25981, 'interfacesStart': 37562}
+
 MAGIC70 = 0x8AF8AF8B          # 除以 70 的乘法魔数（70 字节表的读取点后面必有）
 _MD = None
 
@@ -801,6 +806,7 @@ def main():
     ap.add_argument('--typeCount', type=int, default=683574)
     ap.add_argument('--keyless', action=argparse.BooleanOptionalAction, default=True,
                     help='无密钥反解 typeDefinitions（哨兵+连续性+全表校验）；默认开，--no-keyless 关')
+    ap.add_argument('--emit', default=None, help='把识别出的布局写成 JSON（可直接填 version.json）')
     ap.add_argument('--typedefs-base', default=None,
                     help='已知 typeDefinitions 基址（hex）；给了就做布局搜索')
     args = ap.parse_args()
@@ -1074,8 +1080,6 @@ def main():
                             print("   ⑧ 布局识别: **fieldStart +0x%02X %s 0x%X / fieldCount +0x%02X %s 0x%X**  "
                                   "N=%d  cov=%.5f  (fDV 列 +%d, max=%d)"
                                   % (dc, oc, kc, dk, ok_, kk, tot, c, idx_disp, maxf))
-                            found['typeDefFieldStartDisp'] = (dc, oc, kc, 0, '', 0)
-                            found['typeDefFieldCountDisp'] = (dk, ok_, kk, 0, '', 0)
                         print("  ⑧ 布局识别: %d 组能铺满（按 N 排序展示前 4）:" % len(allp))
                         seen = set()
                         for (c, tot, dc, wc, oc, kc, dk, wk, ok_, kk), idx_disp in allp[:8]:
@@ -1087,6 +1091,53 @@ def main():
                                   % (c, tot, dc, oc, kc, dk, ok_, kk))
                     else:
                         print("   ⑧ 布局识别: 未找到能铺满的 (累计,计数) 对")
+
+                    # ---- 输出可直接填进 version.json 的片段 ----
+                    if allp:
+                        import struct as _st2
+                        # fDV 覆盖判据先锁 fieldStart，再用表长提示给其它对命名
+                        best_by_name = {}
+                        for (c, tot, dc, wc, oc, kc, dk, wk, ok_, kk), idx_disp in allp:
+                            name = None
+                            # fDV 的 fieldIndex 列最大值的"刚好覆盖" -> fieldStart
+                            m = 0
+                            for _i in range(min(fv[1], 80000)):
+                                _x = _st2.unpack_from('<i', d.raw, fdv_off + 12 * _i + idx_disp)[0]
+                                if _x > m:
+                                    m = _x
+                            if m and tot >= m and tot <= m * 1.05:
+                                name = 'fieldStart'
+                            else:
+                                for nm, ln in LEN_HINT.items():
+                                    if nm == 'fieldStart':
+                                        continue
+                                    if 0.75 <= tot / ln <= 1.3:
+                                        name = nm
+                                        break
+                            if name and name not in best_by_name:
+                                best_by_name[name] = (tot, dc, oc, kc, dk, ok_, kk, c)
+                        if best_by_name:
+                            print("   ⑧ 可直接填进 version.json 的片段:")
+                            frag = {'typeDefinitionsOffset': '0x%X' % kr['base'],
+                                    'fieldDecode.typeDef': {}}
+                            for nm in ('fieldStart', 'methodStart', 'propertyStart',
+                                       'eventStart', 'nestedTypesStart', 'interfacesStart'):
+                                if nm not in best_by_name:
+                                    continue
+                                tot, dc, oc, kc, dk, ok_, kk, c = best_by_name[nm]
+                                cd = {'count_disp': '0x%02X' % dk,
+                                      'count': '%s:0x%X' % (ok_, kk)}
+                                frag['fieldDecode.typeDef'][nm] = '%s:0x%X' % (oc, kc)
+                                frag['fieldDecode.typeDef'][nm + '_disp'] = '0x%02X' % dc
+                                frag['fieldDecode.typeDef'][nm + '_countDisp'] = '0x%02X' % dk
+                                frag['fieldDecode.typeDef'][nm + '_count'] = '%s:0x%X' % (ok_, kk)
+                                print("      %-16s  位移 +0x%02X  解码 %s:0x%X   "
+                                      "计数位移 +0x%02X  解码 %s:0x%X   (N=%d)"
+                                      % (nm, dc, oc, kc, dk, ok_, kk, tot))
+                            if args.emit:
+                                import json as _json
+                                _json.dump(frag, open(args.emit, 'w'), ensure_ascii=False, indent=1)
+                                print("      已写 %s" % args.emit)
         except Exception as e:
             print("   keyless 失败:", e)
 
