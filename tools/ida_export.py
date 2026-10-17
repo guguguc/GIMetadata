@@ -31,6 +31,9 @@ import sys
 # 无头模式：idat64 -A -S"ida_export.py <out.json> [hits.json]" <target>
 OUT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/ida_export.json'
 HITS_JSON = sys.argv[2] if len(sys.argv) > 2 else '/tmp/h.json'
+FAST = '--fast' in sys.argv      # 只反编译 sig 定位到的函数（秒级）；否则全量（小时级）
+# 额外指定函数（未命名函数里的读取点，例如 7.1 的 typeDefs 在 0x1404B1588）
+EXTRA = [int(a, 16) for a in sys.argv[2:] if a.startswith('0x') or a.startswith('0X')]
 
 HITS = {}                      # ea -> name
 
@@ -97,8 +100,18 @@ def main():
     fields = {}        # (width, local, disp, op, key) -> [func...]
     formulas = []
     nfunc = 0
+    if FAST and (HITS or EXTRA):
+        targets = sorted(set(HITS.keys()) | set(EXTRA))
+        print('FAST 模式：只反编译 %d 个函数（sig %d + 额外指定 %d；全量有几十万个）'
+              % (len(targets), len(HITS), len(EXTRA)))
+        print('   额外函数: %s' % [hex(x) for x in EXTRA])
+    else:
+        targets = list(idautils.Functions())
+        print('全量模式：%d 个函数（会很慢；建议加 --fast）' % len(targets))
 
-    for ea in idautils.Functions():
+    for _k, ea in enumerate(targets):
+        if _k and _k % 200 == 0:
+            print('  ... %d/%d' % (_k, len(targets)))
         try:
             cf = ida_hexrays.decompile(ea)
         except Exception:

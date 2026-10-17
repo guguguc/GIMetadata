@@ -42,7 +42,9 @@ if [[ ! -x "$(command -v "$IDAT" || true)" ]]; then
   echo "[ida_headless] ✗ 找不到 $IDAT（用 IDAT=/path/to/idat64 指定）" >&2
   exit 1
 fi
-# ⚠️ -S 会把它**后面**的一切都当成脚本参数 —— 所以输入数据库必须放在 -S **前面**！
-echo "[ida_headless] $IDAT -A \"$DB\" -S\"$HERE/ida_export.py $OUT $HITS\""
-"$IDAT" -A "$DB" -S"$HERE/ida_export.py $OUT $HITS"
+# ✅ 实测：正确顺序是 `-A -S"<script> <args>" <input>`（脚本参数必须在同一个引号里）
+ARGS="$OUT $HITS"
+[[ "${IDA_FULL:-0}" == "1" ]] || ARGS="$ARGS --fast"
+echo "[ida_headless] $IDAT -A -S\"$HERE/ida_export.py $ARGS\" \"$DB\""
+"$IDAT" -A -S"$HERE/ida_export.py $ARGS" "$DB"
 echo "[ida_headless] 完成，检查 $OUT"

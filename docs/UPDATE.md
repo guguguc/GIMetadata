@@ -991,6 +991,23 @@ tools/ida_headless.sh version/7.0/gi.exe /tmp/ida70.json /tmp/h70.json
 idat64 -A -S"tools/ida_export.py /tmp/ida70.json /tmp/h70.json" version/7.0/gi.exe
 ```
 
+**⚠️ 别全量反编译（431MB 有 ~58 万函数，小时级 ✗）**
+
+```bash
+# 默认就是 --fast：只反编译 sig 定位到的 54 个函数（秒级 ✓）
+tools/ida_headless.sh ida/gi.exe.i64 /tmp/ida.json /tmp/h.json
+
+# 未命名函数里的读取点（例如 7.1 的 typeDefs 在 0x1404B1588）显式加进来
+tools/ida_headless.sh ida/gi.exe.i64 /tmp/ida.json /tmp/h.json 0x1404B1588
+
+# 真要全量（小时级）
+IDA_FULL=1 tools/ida_headless.sh ida/gi.exe.i64 /tmp/ida.json /tmp/h.json
+```
+
+> **为什么默认不全量**：`ida_hexrays.decompile()` 每个函数都要跑一次；
+> 58 万个函数是**小时级** ✗。而 §5.10.3 的读取点**绝大多数**都在 sig 能定位的函数里 ✓，
+> 只有少数（如 typeDefs）在未命名函数 ✗ —— 那些用 `0x...` 显式指出来即可 ✓。
+
 - `-A` = autonomous（不弹对话框）✓
 - `ida_export.py` 检测到批处理模式会 `qexit(0)` 自动退出 ✓
 - 输出路径 / sig 命中表都由 `-S` 的参数传进去 ✓
