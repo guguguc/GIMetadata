@@ -9,12 +9,13 @@ MHY 槽位扫描器 —— 自动找出「MHY[slot] OP key => 元数据偏移」
   * capstone 必须 md.skipdata = True，否则遇到非法字节就停止反汇编（只覆盖前几 KB）
   * VA->文件偏移必须按 PE 段表逐段映射，不能拿 .rdata 的线性关系外推到 .text
     （.text 起点 VA 0x140001000 对应文件 0x400，外推会差 0x400）
-  * MHY 表本体 VA = 0x1427D4BD0（.rdata，开头 "MHY\0"）
+  * MHY 表本体：用 b"MHY\0" 魔数**自动发现**（换版本地址会变，脚本自带发现）
+    7.1 = 0x1427D4BD0（.rdata，开头 "MHY\0"）
 
 用法:
-    python3 slot_scan.py <gi.exe> [global-metadata.dat]
+    python3 slot_scan.py <gi.exe> [global-metadata.dat] [--out CACHE]
 输出:
-    1) 已知锚点自检（fieldDefaultValues 必须复现 0x3D00478）
+    1) MHY 地址 + 已知锚点自检（7.1 的常数；换版本必然不符，属正常）
     2) 所有解出「像元数据偏移」的组合
     3) 若给了 .dat，则把每个候选当 12 字节数组做结构合法性测试
 """
@@ -22,12 +23,26 @@ import struct, sys, json, os
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 from capstone.x86 import X86_OP_MEM, X86_OP_IMM, X86_OP_REG, X86_REG_RIP
 
-MHY_VA = 0x1427D4BD0
+MHY_VA_71 = 0x1427D4BD0
 NSLOT = 0x300
 M32 = (1 << 32) - 1
 # 本样本已归档的锚点
 ANCHORS = {0x3D00478: "fieldDefaultValues", 0xF1754C: "常量值 blob",
            0x37274C0: "parameterDefaultValues", 0x2439204: "methods"}
+
+
+def find_mhy(D, secs):
+    """按 b"MHY\\0" 魔数找 MHY 表的 VA（换版本自动适配）"""
+    for nm, va, vsz, off, rsz in secs:
+        if nm.upper() not in (".RDATA", ".DATA", "_RDATA"): continue
+        blob = D[off:off + rsz]
+        i = 0
+        while True:
+            j = blob.find(b'MHY\x00', i)
+            if j < 0: break
+            return va + j
+            i = j + 1
+    return None
 
 
 def load_sections(D):
@@ -173,14 +188,23 @@ def scan_text(D, secs):
 
 
 def main():
-    exe = sys.argv[1]
-    dat = sys.argv[2] if len(sys.argv) > 2 else None
+    argv = sys.argv[1:]
+    out_path = None
+    if '--out' in argv:
+        i = argv.index('--out'); out_path = argv[i + 1]; del argv[i:i + 2]
+    exe = argv[0]
+    dat = argv[1] if len(argv) > 1 else None
     D = open(exe, 'rb').read()
     secs = load_sections(D)
+    MHY_VA = find_mhy(D, secs)
+    if MHY_VA is None:
+        print("✗ 未找到 b'MHY\\0' 魔数 —— 这不像 Genshin 的 gi.exe？")
+        return 1
+    print("MHY 表 VA = 0x%X%s" % (MHY_VA, "" if MHY_VA != MHY_VA_71 else "  (与 7.1 相同)"))
     svals = {o: struct.unpack_from('<I', D, va2off(secs, MHY_VA + o))[0]
              for o in range(0, NSLOT, 4)}
 
-    print("=== 自检 ===")
+    print("\n=== 自检（7.1 的常数；换版本必然不符，属正常）===")
     for slot, op, key, tgt, name in (
             (0x13C, '^', 0x593DE464, 0x3D00478, 'fieldDefaultValues'),
             (0x0A0, '^', 0x3F525210, 0xF1754C, '常量值 blob'),
@@ -195,7 +219,7 @@ def main():
     print("唯一 (slot,op,key) 组合: %d" % len(rows))
     # 写缓存，供 tools/relocate.py 复用（省几分钟重扫）
     try:
-        cache_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'slots_cache.json')
+        cache_path = out_path or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'slots_cache.json')
         json.dump({'svals': {str(k): v for k, v in svals.items()},
                    'uniq': [[d, op, imm, n, va] for d, op, imm, n, va in rows]},
                   open(cache_path, 'w'))

@@ -867,57 +867,6 @@
   "size": 45
  },
  {
-  "name": "GIMeta_GetTypeInfoByIndex",
-  "va": "0x14051CD50",
-  "skip": 0,
-  "skip_bytes": 0,
-  "n": 8,
-  "loose": [
-   "jmp|I",
-   "int3|",
-   "int3|",
-   "int3|",
-   "int3|",
-   "int3|",
-   "int3|",
-   "int3|"
-  ],
-  "strict": [
-   "jmp|I",
-   "int3|",
-   "int3|",
-   "int3|",
-   "int3|",
-   "int3|",
-   "int3|",
-   "int3|"
-  ],
-  "bytes": [
-   "e927159919",
-   "cc",
-   "cc",
-   "cc",
-   "cc",
-   "cc",
-   "cc",
-   "cc"
-  ],
-  "mask": [
-   "ff00000000",
-   "ff",
-   "ff",
-   "ff",
-   "ff",
-   "ff",
-   "ff",
-   "ff"
-  ],
-  "pat": "e927159919cccccccccccccc",
-  "pmask": "ff00000000ffffffffffffff",
-  "distinct": 2,
-  "size": 12
- },
- {
   "name": "GIMeta_GetMethodInfoFromIndex",
   "va": "0x14051D330",
   "skip": 5,

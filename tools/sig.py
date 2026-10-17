@@ -160,6 +160,15 @@ def cmd_gen(a):
     md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
     sigs = []
     for va, name in load_names(a.names):
+        # 跳板/对齐填充不能生成签名 —— 它不含函数体信息，只会匹配到别的跳板上
+        # （实测 GIMeta_GetTypeInfoByIndex 就是 `jmp`+int3 跳到混淆区）
+        if _is_stub(pe, md, va):
+            tgt = ''
+            ins = _first_insns(pe, md, va, 1)
+            if ins and ins[0].mnemonic == 'jmp':
+                tgt = ' (jmp %s)' % ins[0].op_str
+            print("  SKIP %s (0x%X) 是跳板/填充，不是函数体%s" % (name, va, tgt))
+            continue
         s = gen_sig(md, pe, va, name, a.ninstr, a.skip)
         if s:
             sigs.append(s)
@@ -179,8 +188,44 @@ def _longest_fixed(pb, pm):
     return best
 
 
+def _first_insns(pe, md, va, n=3):
+    off = pe.va2off(va)
+    if off is None: return []
+    return list(md.disasm(pe.D[off:off + 32], va))[:n]
+
+
+def _is_stub(pe, md, va):
+    """PLT / IAT 跳板或对齐填充 —— 不是函数体。
+    踩过的坑：GIMeta_GetTypeInfoByIndex 在 7.0 上命中过 `jmp 0x146980b30` + int3 填充的跳板。"""
+    ins = _first_insns(pe, md, va, 2)
+    if not ins: return True
+    m0 = ins[0].mnemonic
+    if m0 in ('int3', 'nop', 'nopw', 'nopl', 'ud2'): return True
+    if m0 == 'jmp' and len(ins) > 1 and ins[1].mnemonic in ('int3', 'nop', 'nopw', 'nopl'):
+        return True
+    return False
+
+
+def _plausible_start(pe, va):
+    """真函数起点的**前一个字节**通常是填充(int3/nop)或上一条函数的 ret"""
+    off = pe.va2off(va)
+    if off is None or off <= 0: return False
+    return pe.D[off - 1] in (0xCC, 0x90, 0xC3)
+
+
+MAX_CANDS = 64      # 候选爆炸 -> 签名太弱（固定子串不唯一），直接判不可用
+
+
 def cmd_scan(a):
-    """字节模式优先：先按最长固定子串 bytes.find 找候选，只在候选处反汇编核对。秒级。"""
+    """字节模式优先：先按最长固定子串 bytes.find 找候选，只在候选处反汇编核对。秒级。
+
+    判定规则（宁可"不可判"也不给错地址）：
+      1. 候选数 > MAX_CANDS        -> 签名太弱，\u26a0 不可用
+      2. 命中点是 int3/jmp 填充     -> PLT 跳板，跳过
+      3. 回退到函数头后前一字节不像填充 -> \u26a0 不可判
+      4. 最高分**并列** > 1         -> \u26a0 歧义（不给地址）
+      5. 两条签名落到同一地址       -> \u26a0 撞址（多半有一条是错的）
+    """
     import binascii, time
     t0 = time.time()
     sigs = json.load(open(a.sigs))
@@ -188,46 +233,101 @@ def cmd_scan(a):
     tva, tbytes = pe.text
     print("扫描 .text（%.1f MB，字节模式优先）…" % (len(tbytes) / 1e6))
     md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
-    hit = miss = 0
+    hit = miss = amb = 0
+    where = {}
     for sg in sigs:
         pb = binascii.unhexlify(sg['pat']); pm = binascii.unhexlify(sg['pmask'])
         fo, fl = _longest_fixed(pb, pm)
         if fl < 3:
             print("  %-42s \u26a0 固定子串太短(%d)" % (sg['name'], fl)); miss += 1; continue
+        origin = int(sg['va'], 16)
+        same_build = (tva <= origin < tva + len(tbytes))   # 扫的就是它自己那个版本？
         needle = pb[fo:fo + fl]
-        cands = []; pos = 0; total = 0
+        cands = []; pos = 0; truncated = False
+        if same_build:
+            cands.append(origin)      # 同版本：记录的原地址就是标准答案，放最前优先核验
         while True:
             k = tbytes.find(needle, pos)
             if k < 0: break
-            pos = k + 1; total += 1
+            pos = k + 1
             base = k - fo
             if base < 0 or base + len(pb) > len(tbytes): continue
-            ok = True
-            for i in range(len(pb)):
-                if pm[i] and tbytes[base + i] != pb[i]: ok = False; break
-            if ok: cands.append(tva + base)
-            if len(cands) > 200: break
-        good = []
+            if any(pm[i] and tbytes[base + i] != pb[i] for i in range(len(pb))): continue
+            cands.append(tva + base)
+            if len(cands) > MAX_CANDS: truncated = True; break
+        if truncated:
+            if not same_build:
+                print("  %-42s \u26a0 候选 >%d（固定子串不唯一，签名太弱）" % (sg['name'], MAX_CANDS))
+                amb += 1; continue
+            print("  %-42s \u26a0 候选 >%d（签名弱），但同版本自测只看记录的原地址" % (sg['name'], MAX_CANDS))
+        cands = list(dict.fromkeys(cands))      # 去重：origin 可能被插了两次
+        scored = []
         for va in cands:
+            if _is_stub(pe, md, va): continue
             off = pe.va2off(va); insns = []
             for ins in md.disasm(pe.D[off:off + 128], va):
                 insns.append(ins)
                 if len(insns) >= sg['n']: break
             if len(insns) < sg['n']: continue
             lo = [toks_of(x, False) for x in insns]; st = [toks_of(x, True) for x in insns]
-            good.append((va, sum(1 for i in range(sg['n']) if st[i] == sg['strict'][i]),
-                         sum(1 for i in range(sg['n']) if lo[i] == sg['loose'][i])))
-        if good:
-            good.sort(key=lambda x: (-x[1], -x[2])); hit += 1
-            va, ns_, nl = good[0]
-            fstart = va - sg.get('skip_bytes', 0)
-            same = (fstart == int(sg['va'], 16))
-            print("  %-42s %-12s 函数起点 0x%-10X %s%s" % (sg['name'], "严格全中" if ns_ == sg['n'] else "loose %d/%d" % (nl, sg['n']),
-                  fstart, "=原地址 ✓" if same else "(原 0x%X)" % int(sg['va'], 16),
-                  "" if len(good) == 1 else "  (+%d 候选)" % (len(good) - 1)))
-        else:
-            miss += 1; print("  %-42s \u2717 未命中" % sg['name'])
-    print("\n命中 %d / %d，耗时 %.1fs" % (hit, len(sigs), time.time() - t0))
+            scored.append((va, sum(1 for i in range(sg['n']) if st[i] == sg['strict'][i]),
+                           sum(1 for i in range(sg['n']) if lo[i] == sg['loose'][i])))
+        if not scored:
+            miss += 1; print("  %-42s \u2717 未命中" % sg['name']); continue
+        scored.sort(key=lambda x: (-x[1], -x[2]))
+        # 只接受**反汇编 token 真的对上**的候选：loose 必须全中（或接近全中）。
+        # 教训：字节模式可能碰巧对上，但 token 一条不匹配（loose 0/8）—— 那是假命中。
+        keep = [t for t in scored if t[2] == sg['n']]
+        near = [t for t in scored if t[2] >= (sg['n'] * 3 + 2) // 4]
+        if not keep:
+            if not near:
+                miss += 1
+                print("  %-42s \u2717 未命中（最佳 loose %d/%d，字节巧合而已）"
+                      % (sg['name'], scored[0][2], sg['n']))
+            else:
+                amb += 1
+                print("  %-42s \u26a0 部分匹配：loose %d/%d @0x%X（需人工确认）"
+                      % (sg['name'], near[0][2], sg['n'], near[0][0] - sg.get('skip_bytes', 0)))
+            continue
+        scored = keep + [t for t in scored if t not in keep]
+        top = (scored[0][1], scored[0][2])
+        tied = [t for t in scored if (t[1], t[2]) == top]
+        fstart = scored[0][0] - sg.get('skip_bytes', 0)
+        if len(tied) > 1:
+            pick = [t for t in tied if t[0] - sg.get('skip_bytes', 0) == origin]
+            if same_build and len(pick) == 1:
+                # 同一版本自测：并列里正好有记录的原地址 -> 用它定夺（仍标注，不静默）
+                hit += 1
+                ns_, nl = pick[0][1], pick[0][2]
+                tag = "严格全中" if ns_ == sg['n'] else "loose %d/%d" % (nl, sg['n'])
+                print("  %-42s %-12s 函数起点 0x%-10X =原地址 \u2713（%d 个并列，按原地址定夺）"
+                      % (sg['name'], tag, origin, len(tied)))
+                where.setdefault(origin, []).append(sg['name'])
+                continue
+            amb += 1
+            print("  %-42s \u26a0 歧义：%d 个并列最高分 %s" % (
+                sg['name'], len(tied),
+                ", ".join("0x%X" % (t[0] - sg.get('skip_bytes', 0)) for t in tied[:4])))
+            continue
+        hit += 1
+        va, ns_, nl = scored[0]
+        same = (fstart == origin)
+        tag = "严格全中" if ns_ == sg['n'] else "loose %d/%d" % (nl, sg['n'])
+        flag = "" if len(scored) == 1 else "  (次优 %d/%d @0x%X)" % (
+            scored[1][1], scored[1][2], scored[1][0] - sg.get('skip_bytes', 0))
+        # 起点存疑：前一字节不是填充 —— 通常是 skip_bytes 把"函数头"算到了指令中间。
+        # **仍给出地址**（大概率对），但明确标注让人复核；同版本自测时原地址本身就是答案，不标。
+        shaky = (not same) and (fstart % 16 != 0 or not _plausible_start(pe, fstart))
+        if shaky:
+            flag += "  \u26a0 起点存疑(未对齐/前字节非填充)"
+        print("  %-42s %-12s 函数起点 0x%-10X %s%s" % (
+            sg['name'], tag, fstart, "=原地址 ✓" if same else "(原 0x%X)" % origin, flag))
+        where.setdefault(fstart, []).append(sg['name'])
+    for va, names in where.items():
+        if len(names) > 1:
+            print("  \u26a0 0x%X 被 %d 条签名同时认领: %s  —— 多半有一条是错的"
+                  % (va, len(names), ", ".join(names)))
+    print("\n命中 %d / %d（不可判 %d，未命中 %d），耗时 %.1fs" % (hit, len(sigs), amb, miss, time.time() - t0))
     return 0 if miss == 0 else 1
 
 
