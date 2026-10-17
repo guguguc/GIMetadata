@@ -309,7 +309,7 @@ python3 tools/ida_apply.py /tmp/ida_export.json --out /tmp/tables.json
 
 ### 无头模式（不打开 IDA 界面）
 ```bash
-tools/ida_headless.sh version/7.0/gi.exe /tmp/ida70.json /tmp/h70.json
+tools/ida_headless.sh version/7.0/gi.i64 /tmp/ida70.json /tmp/h70.json   # 可直接给 .i64
 # 等价：idat64 -A -S"tools/ida_export.py <out> <hits>" <exe>
 ```
 `-A` 自动跑完退出；**首次自动分析 431MB 的 gi.exe 是小时级**，有分析好的 `.i64` 才快。

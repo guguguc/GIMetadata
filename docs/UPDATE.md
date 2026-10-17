@@ -995,6 +995,20 @@ idat64 -A -S"tools/ida_export.py /tmp/ida70.json /tmp/h70.json" version/7.0/gi.e
 - `ida_export.py` 检测到批处理模式会 `qexit(0)` 自动退出 ✓
 - 输出路径 / sig 命中表都由 `-S` 的参数传进去 ✓
 
+**✅ 复用已分析的数据库（省掉小时级分析）**
+
+`idat64` 的输入可以直接是 **`.i64` / `.idb`** ✓：
+
+```bash
+tools/ida_headless.sh version/7.0/gi.i64 /tmp/ida70.json      # 直接给数据库
+tools/ida_headless.sh version/7.0/gi.exe  /tmp/ida70.json     # 自动找同目录 gi.i64
+```
+
+包装脚本的规则：
+- 传 `.exe` 且同目录有**比 exe 新的** `gi.i64` → 自动改用它 ✓
+- `.i64` 比 exe **旧** → 打印 `⚠ … 可能触发重建，很慢` ✓（但不会中止）
+- 传 `.i64` 就直接用 ✓
+
 **⚠️ 时间陷阱**
 
 | 情况 | 耗时 |
@@ -1002,7 +1016,11 @@ idat64 -A -S"tools/ida_export.py /tmp/ida70.json /tmp/h70.json" version/7.0/gi.e
 | 首次对 `gi.exe`（431MB）自动分析 | **小时级** ✗ |
 | 已有分析好的 `.i64` / `.idb` | 分钟级 ✓ |
 
-建议：**先手动分析一次并存库**，之后每次换代只对新样本跑一次（或让 IDA 用 `-B` 批处理并等待）。
+建议：**先手动分析一次并存库**（IDA → File → Save database），之后每次换代：
+```bash
+# 新样本仍需分析一次；老样本/重跑时直接复用 .i64
+tools/ida_headless.sh <新样本.i64 或 exe> /tmp/ida.json /tmp/h.json
+```
 
 **⚠️ 授权**：脚本调用 Hex-Rays `decompile()` → 需要 **反编译器授权** ✓
 （没有的话 `ida_export.py` 会直接打印 `✗ Hex-Rays 不可用` 并退出 ✓）。
