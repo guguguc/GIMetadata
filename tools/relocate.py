@@ -516,6 +516,32 @@ def find_string_block(d, win=1 << 16, step=1 << 13):
     return lo, int(hi - lo)
 
 
+MAGIC70 = 0x8AF8AF8B          # 除以 70 的乘法魔数（70 字节表的读取点后面必有）
+_MD = None
+
+
+def magic70_near(pe, va, before=0x80, after=0x140):
+    """读取点附近是否有 `/70` 的魔数除法 —— 这是「70 字节表」的自动判据。
+
+    实测：7.1 把候选从 4200 缩到 11 个、7.0 从 12257 缩到 8 个，且都含真基址。
+    """
+    global _MD
+    if _MD is None:
+        from capstone import Cs, CS_ARCH_X86, CS_MODE_64
+        _MD = Cs(CS_ARCH_X86, CS_MODE_64)
+        _MD.detail = True
+    from capstone.x86 import X86_OP_IMM
+    lo = max(va - before, 0)
+    o = pe.va2off(lo)
+    if o is None:
+        return False
+    for ins in _MD.disasm(pe.D[o:o + before + after], lo):
+        for op in ins.operands:
+            if op.type == X86_OP_IMM and (op.imm & 0xFFFFFFFF) == MAGIC70:
+                return True
+    return False
+
+
 def _plausible_key(op, k, disp=None):
     """判断 (op,key) 像不像**真的解码密钥**（而不是位运算/平凡值）。
 
@@ -825,7 +851,18 @@ def main():
             v = sv[dd]
             val = (v ^ imm) & M32 if op == 'xor' else ((v - imm) & M32 if op == 'sub' else (v + imm) & M32)
             cands.append((val, dd, op, imm))
-        print("   缓存 %s：%d 个候选" % (os.path.relpath(cache, ROOTDIR), len(cands)))
+        # ★ 用 /70 魔数把「70 字节表」的候选单独挑出来（typeDefinitions 的自动判据）
+        magic_vals = set()
+        for dd, op, imm, n, va in c['uniq']:
+            if dd not in sv:
+                continue
+            if not magic70_near(pe, va):
+                continue
+            v = sv[dd]
+            magic_vals.add((v ^ imm) & M32 if op == 'xor' else
+                           ((v - imm) & M32 if op == 'sub' else (v + imm) & M32))
+        print("   缓存 %s：%d 个候选（其中 70B 表候选 %d 个）"
+              % (os.path.relpath(cache, ROOTDIR), len(cands), len(magic_vals)))
     else:
         print("   ⚠ 无候选缓存（--scan 可自动生成）")
     vals = sorted({v for v, *_ in cands})
@@ -987,7 +1024,8 @@ def main():
     if args.keyless or args.typedefs_base:
         try:
             import keyless as KL
-            kb = [int(args.typedefs_base, 16)] if args.typedefs_base else vals
+            kb = ([int(args.typedefs_base, 16)] if args.typedefs_base
+                  else (sorted(magic_vals) if 'magic_vals' in dir() and magic_vals else vals))
             t_k = time.time()
             kr = KL.find_typedefs(d, kb, layout_search=bool(args.typedefs_base))
             if kr:
