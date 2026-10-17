@@ -165,6 +165,16 @@ def main():
                            'funcs': [n for n, _ in fns[:4]],
                            'func_eas': [e for _, e in fns[:4]]})
 
+    # ---- 守卫：MHY 地址/全局是否可信（解码值必须落在合理范围）----
+    plausible = [t for t in out_tables
+                 if t['value'] and 0x1000 <= int(t['value'], 16) < 0x8000000]
+    if mhy is not None and len(out_tables) and len(plausible) < max(3, len(out_tables) // 3):
+        print('⚠⚠ MHY 地址或全局可能认错了：%d 个值里只有 %d 个落在合理范围'
+              % (len(out_tables), len(plausible)))
+        print('   请人工确认 MHY（或直接把 mhy 传进来）；否则下面的 value 全是垃圾 ✗')
+    elif len(out_tables):
+        print('MHY 可信度：%d/%d 个值落在合理范围 ✓' % (len(plausible), len(out_tables)))
+
     res = {'mhy': (hex(mhy) if mhy else None), 'mhy_global': mhy_name,
            'tables': out_tables, 'fieldDecode': out_fields, 'formulas': formulas[:400]}
     with open(OUT, 'w') as f:

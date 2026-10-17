@@ -74,20 +74,23 @@ def main():
         if name in detected:
             hit = [c for c in cands if c.get('value') and int(c['value'], 16) == detected[name]]
             if len(hit) == 1:
+                hit[0]['how'] = 'value-match(最强)'
                 result[name] = hit[0]
                 continue
         # 2b) 只有一个候选 -> 直接用
         uniq = {(c['slot'], c['op'], c['key']): c for c in cands}
         if len(uniq) == 1:
-            result[name] = list(uniq.values())[0]
+            c = list(uniq.values())[0]
+            c['how'] = 'single-candidate(中)'
+            result[name] = c
         else:
             unresolved[name] = list(uniq.values())
 
     print('\n=== 已确定 %d 张表 ===' % len(result))
     for name, t in sorted(result.items()):
-        print('  %-42s slot %-6s %s %-12s -> %-10s (函数 %s)'
+        print('  %-42s slot %-6s %s %-12s -> %-10s  [%s]  (%s)'
               % (name, t['slot'], t['op'], t['key'], t.get('value'),
-                 ','.join(resolve(t)[:2])))
+                 t.get('how', '?'), ','.join(resolve(t)[:2])))
 
     if unresolved:
         print('\n=== 需要消歧 %d 张（同一函数读了多张表）===' % len(unresolved))
@@ -102,6 +105,7 @@ def main():
                        for k, v in result.items()}}
     if a.out:
         json.dump(frag, open(a.out, 'w'), ensure_ascii=False, indent=1)
+        print('⚠ 这些只是**建议**：必须用 relocate / verify.py 复核（见 UPDATE §5.12.6）')
         print('\n已写 %s' % a.out)
     print('\n可直接填 version.json 的片段（%d 项）:' % len(result))
     print(json.dumps(frag, ensure_ascii=False, indent=1)[:1200])

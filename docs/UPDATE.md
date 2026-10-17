@@ -961,6 +961,27 @@ IDA 导出 7 个 (slot,op,key)
 > ⚠️ 仍然**不是 100% 自动**：多表函数（`SetupTypeInfoLocked` 5 张、`RuntimeInit` 7 张）
 > 需要 value/计数 消歧 ✗；而且这要求**跑 IDA**（不是纯离线）✗。
 
+### 5.12.6 会不会误判？—— 会，这是**全部**已知误判点和对应守卫
+
+| # | 误判点 | 后果 | 守卫 |
+|---|---|---|---|
+| 1 | **MHY 地址认错**（`"MHY\0"` 碰巧出现在别处） | 所有 `value` 变垃圾 ✗ | 导出后检查：**≥1/3 的值要落在 [0x1000, 0x8000000)**，否则打 `⚠⚠ MHY 可能认错` ✓ |
+| 2 | **全局变量认错**（把别的结构体表当 MHY） | slot/key 全错 ✗ | 按「被当作槽位表的次数」排序，取第一 ✓（MHY 有 ~34 组，别的很少）|
+| 3 | **正则过抓**（同一函数里别的表的 `[obj+K] OP K2`） | 候选里混入假项 ✗ | 多候选时**不自动确定** ✓，只列出来 ✗ |
+| 4 | **`table_funcs.json` 映射写错**（我人工整理的那张表） | 张冠李戴 ✗ | 结果标 `[single-candidate(中)]` / `[value-match(最强)]`，**必须**用 `relocate`/`verify.py` 复核 ✓ |
+| 5 | **函数名对不上**（IDA 只有 `sub_xxx`） | 全部配不上 ✗ | **地址桥**：`--hits /tmp/h.json` ✓（已修 ✓）|
+| 6 | 同一函数读多张表（`SetupTypeInfoLocked` 5 张、`RuntimeInit` 7 张） | 无法自动分配 ✗ | 列候选 + `value` 供人工/`--detected` 匹配 ✓ |
+
+### 最终闸门（任何"建议"都必须过）
+
+```bash
+python3 verify.py <root>        # 28 项；任何表/字段错了都会在这里 FAIL
+python3 tools/relocate.py <root>  # ⑤ 会把「探测值 vs version.json」逐表对照
+```
+
+**原则**：`ida_apply.py` **只输出建议**（带置信度），**从不直接改 `version.json`** ✓ ——
+宁可多一步人工确认，也不静默写错 ✗。
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
