@@ -539,6 +539,70 @@ def probe_interfaces_table(d, off, hint, exp):
             "6B, +0 全为合法 Il2CppType 索引(-1=null) 比例 %.5f, 含 %d 个大索引" % (ok, big))
 
 
+# typeDef 各字段的宽度（字节）；**必须按这个读**，用错宽度会解出完全错误的值
+_FIELD_WIDTH = {0x30: 2, 0x34: 2, 0x36: 2, 0x38: 2, 0x3C: 2, 0x3E: 2,
+                0x40: 1, 0x43: 1, 0x44: 1, 0x45: 1}
+
+
+def probe_typedefs_semantic(d, off, keycands, n=512):
+    """**语义判定**（不是候选排序）：70 字节步长 + 「累计索引字段跨类型单调」。
+
+    `methodStart(+0x0C)` / `fieldStart(+0x1C)` / `propertyStart(+0x08)` 解出的是
+    **跨类型单调不减的累计索引**（无该表的类型允许相等，但不许回退）。
+    这个不变量**不需要任何外部锚**（不像 nameIndex 需要字符串块），
+    所以可以在「候选表基址 × 候选密钥」上直接做联合搜索。
+
+    返回 (字段偏移, op, key) 列表 —— 多个字段同时满足才算强证据。
+    """
+    STRIDE = 70
+    if off + STRIDE * n > len(d.raw):
+        return None
+    np = d.np
+    hits = []
+    for disp, cands in sorted(keycands.items()):
+        for spec in cands:
+            op, _, key = spec.partition(' ')
+            key = int(key, 0)
+            # ⚠️ 宽度必须按字段来：+0x30 method_count 是 **u16**，用 f32 读会得到
+            #    完全错误的值（实测 342425600 而不是 3）
+            W = _FIELD_WIDTH.get(disp, 4)
+            v = d.f32(off, STRIDE, n, disp) if W == 4 else (
+                d.u16(off, STRIDE, n, disp) if W == 2 else d.u8(off, STRIDE, n, disp))
+            if v is None:
+                continue
+            v = (v ^ key) if op == 'xor' else ((v - key) if op == 'sub' else (v + key))
+            # ⚠️ 必须**按字段位宽掩码并按有符号解释**，否则 16 位字段全错：
+            #    实测 +0x34 raw=0xF2FD + key 0x0D02 = 0xFFFF，
+            #    按 u16 看成 65535(正数) -> 不认成哨兵 -> 全表等值 -> 被当噪声拒掉 ✗
+            #    按 i16 看成 -1(哨兵) -> carry-forward -> 单调 -> 通过 ✓
+            Wb = W * 8
+            v = v & ((1 << Wb) - 1)
+            v = np.where(v >= (1 << (Wb - 1)), v - (1 << Wb), v)
+            if int(v.max()) > 4_000_000 or int(v.min()) < -1:
+                continue
+            # ⚠️ -1 是哨兵（"同上一个"），不是真实值 —— 实测 methodStart 解出
+            #    [-1,0,3,4,11,-1,15,20]，直接判单调会全败
+            neg = v < 0
+            if bool(neg.any()):
+                carry = np.maximum.accumulate(np.where(neg, 0, v))
+                v2 = np.where(neg, np.concatenate(([0], carry[:-1])), carry)
+            else:
+                v2 = v
+            if int(np.diff(v2).min()) < 0:            # 必须单调不减
+                continue
+            # ⚠️ 不能把"全同值"一律当噪声：+0x34/+0x36/+0x3C 在**前几百个类型里
+            #    全是 -1 哨兵**（那些类型没有事件/嵌套/接口），真值也长这样 ✗
+            if int(v2.max()) == int(v2.min()) and int(v2.max()) != 0:
+                continue
+            hits.append((disp, op, key, int(v[0]), int(v.max())))
+    if not hits:
+        return None
+    # 至少要有一个字段解出**非零**累计索引，否则全是被动哨兵，证据不足
+    if not any(h[4] > 0 for h in hits):
+        return None
+    return hits
+
+
 def find_blob(d, sig_pos, fdv_off, fdv_n, cands):
     """blob 基址：让 `sig_pos` 落在某个 fieldDefaultValues 的 dataIndex 上"""
     idxs = set()
@@ -557,6 +621,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('root')
     ap.add_argument('--slots', default=None)
+    ap.add_argument('--keys', default=None, help='slot_scan --struct --struct-json 的产物（字段密钥候选）')
     ap.add_argument('--scan', action='store_true', help='无缓存时自动跑 slot_scan.py')
     ap.add_argument('--typeCount', type=int, default=683574)
     args = ap.parse_args()
@@ -656,6 +721,34 @@ def main():
         except Exception as e:
             print("   提示读取失败:", e)
 
+    # ---- 语义判定：结构密钥候选 x 候选表基址 的联合搜索 ----
+    sem_found = None
+    if args.keys and os.path.exists(args.keys):
+        KJ = json.load(open(args.keys))
+        KC = {int(k, 16): v for k, v in KJ['cands'].items()}
+        # 只用「累计索引」类字段（methodStart/fieldStart/propertyStart/...）做锚
+        CUM = [d for d in (0x08, 0x0C, 0x1C, 0x34, 0x36, 0x3C) if d in KC]
+        KC2 = {d: KC[d] for d in CUM}
+        t0s = time.time()
+        found_sem = []
+        for val in vals:
+            if not (0x1000 <= val < len(raw) - 0x210):
+                continue
+            r = probe_typedefs_semantic(d, d.hdr + val, KC2)
+            # ⚠️ 已验证范围：**7.1 上通过自测**（真表 0x92140 命中 5 个字段，与字符串法一致）。
+        #    7.0 上实测 0 候选 —— 因为 slot_scan 给的候选**没包含真密钥**
+        #    （「多函数一致性」排序实测只有 12/18 正确），瓶颈在**候选召回**不在判定。
+        if r and len(r) >= 2:            # >=2 个累计索引字段同时成立 = 强证据
+                found_sem.append((val, r))
+        found_sem.sort(key=lambda x: -len(x[1]))
+        print("   语义判定(累计索引单调, >=2 字段同时成立): %d 个候选，用时 %.1fs"
+              % (len(found_sem), time.time() - t0s))
+        for val, r in found_sem[:5]:
+            print("      0x%-9X  命中 %d 个字段: %s"
+                  % (val, len(r), ', '.join('+0x%02X %s 0x%X' % (dd, o, k) for dd, o, k, _, _ in r[:4])))
+        # ⚠️ 此时 found 还没初始化 -> 存到临时变量，等 ④ 的 found 建好后再并入
+        sem_found = found_sem[0] if found_sem else None
+
     print("\n== ④ 数据侧结构自证（numpy 向量化）==")
     found = {}
     # ⚠️ 只保留**自测能推出已知正确值**的探测器（宁可漏报，不可误报）：
@@ -683,6 +776,13 @@ def main():
                 name, n, why = r
                 if name not in found or n > found[name][3]:
                     found[name] = (val, n, why, n)
+    if sem_found:
+        found['typeDefinitionsOffset(语义)'] = (
+            sem_found[0], 0,
+            '累计索引单调命中 %d 个字段: %s' % (
+                len(sem_found[1]),
+                ' '.join('+0x%02X %s 0x%X' % (dd, o, k) for dd, o, k, _, _ in sem_found[1])),
+            0)
     VERIFIED = {'fieldDefaultValuesOffset', 'blob(fieldAndParameterDefaultValueData)',
                 'methodsOffset', 'typeDefinitionsOffset', 'nestedTypesTable',
                 'interfacesTable', 'fieldOffset'}

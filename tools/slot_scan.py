@@ -211,7 +211,7 @@ STRUCT_LAYOUT = {
 }
 
 
-def cmd_struct(D, secs, name, funcs):
+def cmd_struct(D, secs, name, funcs, jpath=None):
     """扫描给定函数，解出「结构体字段的 (位移, op, 密钥)」并与 version.json 自检。"""
     if name not in STRUCT_LAYOUT:
         print('✗ 未知结构体 %r；可用: %s' % (name, ', '.join(STRUCT_LAYOUT)))
@@ -237,15 +237,37 @@ def cmd_struct(D, secs, name, funcs):
         if not seen:
             print('  +0x%02X  %-22s \u2014 (没扫到)' % (disp, layout[disp]))
             continue
-        if len(seen) == 1 or (len(seen[0][1]['fns']) > len(seen[1][1]['fns'])):
+        # ⚠️ 这里**不能**叫"唯一确定"：混淆器共用密钥池，同一个 key 会被多个字段用；
+        #    实测 7.1 上这个 top-1 只有 12/18 与真值一致。它只是**候选排序**。
+        #    真正的判定必须靠语义不变量（累计索引单调 / 名字可打印 / count 很小）。
+        if len(seen) == 1:
             uniq += 1
-            mark = '\u2705 \u552f\u4e00'
+            mark = '1 \u5019'
         else:
-            mark = '  %d \u5019' % len(seen)
+            mark = '%d \u5019' % len(seen)
         txt = '  '.join('%s 0x%X(%d\u51fd/%d\u6b21)'
                         % (op, key, len(e['fns']), e['n']) for (op, key), e in seen[:4])
         print('  +0x%02X  %-22s %s: %s' % (disp, layout[disp], mark, txt))
-    print('\n  \u552f\u4e00\u786e\u5b9a %d/%d \u4e2a\u5b57\u6bb5\uff08\u5176\u4f59\u9700\u8981\u5224\u5b9a\uff1a\u5019\u9009\u91cc\u9009\uff0c\u6216\u626b\u66f4\u591a\u51fd\u6570\uff09' % (uniq, len(layout)))
+    print('\n  ⚠\u8fd9\u91cc\u53ea\u662f**\u5019\u9009\u6392\u5e8f**\uff0c\u4e0d\u662f\u5224\u5b9a\uff1a'
+          '\n    7.1 \u4e0a top-1 \u53ea\u6709 12/18 \u4e0e\u771f\u503c\u4e00\u81f4\uff08\u6df7\u6cd7\u5668**\u5171\u7528\u5bc6\u94a5\u6c60**\uff09\u3002'
+          '\n    \u771f\u6b63\u7684\u5224\u5b9a\u8981\u9760\u8bed\u4e49\u4e0d\u53d8\u91cf\uff1a'
+          '\n      \u7d2f\u8ba1\u7d22\u5f15\uff08methodStart/fieldStart/...\uff09\u8de8\u7c7b\u578b\u5355\u8c03'
+          '\n      nameIndex \u89e3\u51fa\u7684\u540d\u5b57\u53ef\u6253\u5370  count \u503c\u5f88\u5c0f  flags \u53ea\u6709\u51e0\u5341\u79cd')
+    # 输出机器可读的候选表（给 relocate.py 做语义判定）
+    out = {'struct': name, 'size': size, 'layout': {('0x%02X' % k): v for k, v in layout.items()},
+           'cands': {}, 'vote': {}}
+    for disp in sorted(layout):
+        agg = {}
+        for op, key, cnt, first, va in got.get(disp, []):
+            e = agg.setdefault('%s 0x%X' % (op, key), {'fns': set(), 'n': 0})
+            e['fns'].add('0x%X' % va); e['n'] += cnt
+        out['cands']['0x%02X' % disp] = list(agg)
+        out['vote']['0x%02X' % disp] = {k: [len(v['fns']), v['n']] for k, v in agg.items()}
+    if jpath:
+        import json as _j
+        _j.dump(out, open(jpath, 'w'), indent=1)
+        print('  候选表已写 %s' % jpath)
+
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from gen_version import load_json_with_comments as L
@@ -315,7 +337,10 @@ def main():
         if not funcs:
             print('\u2717 需要 --hits <sig scan 的 json> 或 --func <VA>')
             return 1
-        return cmd_struct(D, secs, struct_name, funcs)
+        jpath = None
+        if '--struct-json' in argv:
+            i = argv.index('--struct-json'); jpath = argv[i + 1]; del argv[i:i + 2]
+        return cmd_struct(D, secs, struct_name, funcs, jpath)
     MHY_VA = find_mhy(D, secs)
     if MHY_VA is None:
         print("✗ 未找到 b'MHY\\0' 魔数 —— 这不像 Genshin 的 gi.exe？")
