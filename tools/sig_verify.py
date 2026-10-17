@@ -25,7 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64          # noqa: E402
 from capstone.x86 import X86_OP_MEM                        # noqa: E402
-from sig import PE                                        # noqa: E402
+from sig import PE, toks_of                              # noqa: E402
 
 WIN = 4096          # 函数体取多少字节
 
@@ -105,6 +105,32 @@ def callees_of(pe, md, va, nbytes=1024):
     return out
 
 
+def _seq(pe, md, va, n=60, strict=False):
+    """取函数前 n 条的「助记符序列」和「完整 token 序列」"""
+    off = pe.va2off(va)
+    if off is None:
+        return [], []
+    ins = []
+    for x in md.disasm(pe.D[off:off + 8 * n + 64], va):
+        ins.append(x)
+        if len(ins) >= n:
+            break
+    m = [x.mnemonic for x in ins]
+    t = [toks_of(x, strict) for x in ins]
+    return m, t
+
+
+def similarity(pe_r, md, rva, pe_n, md2, nva, n=60):
+    """两版函数的指令序列相似度（助记符 / 完整 token），独立于签名的第三方证据"""
+    from difflib import SequenceMatcher
+    mr, tr = _seq(pe_r, md, rva, n)
+    mn, tn = _seq(pe_n, md2, nva, n)
+    if not mr or not mn:
+        return 0.0, 0.0
+    return (SequenceMatcher(None, mr, mn).ratio(),
+            SequenceMatcher(None, tr, tn).ratio())
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--ref', required=True, help='签名来源版本的 gi.exe')
@@ -137,21 +163,30 @@ def main():
             verdict = '🟡 无字符串，但共同立即数 %d 个' % len(ir & inn)
         else:
             verdict = '⚠ 无字符串也无共同立即数（弱证据）'
+        sm, st = similarity(pe_r, md, rva, pe_n, md, nva)
         rows.append((nm, rva, nva, len(sr), len(common_s), len(only_r),
-                     len(ir & inn), cr, cn, verdict, sorted(common_s)[:2]))
+                     len(ir & inn), cr, cn, verdict, sorted(common_s)[:2], sm, st))
 
     print("=== 反汇编级验证：%d 个命中 ===" % len(rows))
-    print("%-40s %-9s %-9s %-14s %-8s %s" % ("函数", "7.1", "7.0", "共同字符串", "共同立即数", "1KB 内 call 数 7.1/7.0"))
-    for nm, rva, nva, ns, nc, no, ni, ccm, cn2, v, cs in rows:
-        print("%-40s 0x%-7X 0x%-7X %-14s %-8d %d/%-6d %s"
-              % (nm, rva, nva, "%d/%d" % (nc, ns), ni, ccm, cr, v))
+    print("%-40s %-9s %-9s %-13s %-8s %-13s %s"
+          % ("函数", "7.1", "7.0", "共同字符串", "共同立即数", "指令序列相似", "判定"))
+    for nm, rva, nva, ns, nc, no, ni, ccm, cn2, v, cs, sm, st in rows:
+        print("%-40s 0x%-7X 0x%-7X %-13s %-8d %5.0f%%/%3.0f%%  %s"
+              % (nm, rva, nva, "%d/%d" % (nc, ns), ni, sm * 100, st * 100, v))
 
     strong = sum(1 for r in rows if r[9].startswith('✅'))
+    hi = sum(1 for r in rows if r[12] >= 0.60)
+    print("指令序列相似度 >=60%%(助记符)的: %d / %d 个" % (hi, len(rows)))
+    lo_list = [(r[0], r[11], r[12]) for r in rows if r[12] < 0.50]
+    if lo_list:
+        print("相似度 <50%% 的(需重点复核):")
+        for nm, sm, st in sorted(lo_list, key=lambda x: x[1]):
+            print("   %-40s 助记符 %.0f%%  token %.0f%%" % (nm, sm * 100, st * 100))
     mid = sum(1 for r in rows if r[9].startswith('🟡'))
     weak = sum(1 for r in rows if r[9].startswith('⚠'))
     print("\n汇总: 强证据 %d, 中等 %d, 弱 %d / 共 %d" % (strong, mid, weak, len(rows)))
 
-    for nm, rva, nva, ns, nc, no, ni, ccm, cn2, v, cs in rows[:a.show]:
+    for nm, rva, nva, ns, nc, no, ni, ccm, cn2, v, cs, sm, st in rows[:a.show]:
         print("\n---- %s  7.1@0x%X  vs  7.0@0x%X ----" % (nm, rva, nva))
         lr = [(i.mnemonic, i.op_str) for i in body(pe_r, md, rva)][:14]
         ln = [(i.mnemonic, i.op_str) for i in body(pe_n, md, nva)][:14]
