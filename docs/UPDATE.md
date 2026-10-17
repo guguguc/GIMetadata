@@ -790,7 +790,7 @@ xor   rsi, 0x4ce7b502          ; KEY
 |---|---|---|
 | 1 | **上一版的指令地址** | `docs/PROVENANCE.md` 给了每张表的**读取指令地址**；用 `tools/port.py` 的对齐把它映射到新版，再核对结构 |
 | 2 | **消费者**（base 被传给谁） | 例如 base 后面紧跟 `call GIMeta_GetFieldName` → 那就是 `fields`；被拿去 `[base + 4*i]` → 4 字节表（`attributeTypes`/`fieldOffset`/`nestedTypes`/`methodPointerIndex`） |
-| 3 | **计数公式反推** | 该 base 的值 `raw op key` 解出后 ÷ 步长（±修正）必须等于**已知计数**（typeDefs 88902 / methods 733442 / fields 440172…）。**这条最硬** |
+| 3 | **计数槽位反推**（⚠️ **只对 count 有效，对 offset 无效**） | `count = (MHY[slot] op key) / 步长 (±修正)`。实测：`methodsCount` 19069493/26=733442、`typeDefsCount` 6223280/70−2=88902、`attrinfoCount` 8920/8=1115、`pDVCount` 304488/12=25374、`imagesCount` 3000/40=75、`methodSlotCount` 76964/6=12827。**偏移槽位（methodsOffset 等）与计数无关，这招用不上** ✗ |
 | 4 | **步长出现次数** | 只在少数函数里可用（上表 ✓ 的三行） |
 
 ### 实际换版本的推荐顺序
