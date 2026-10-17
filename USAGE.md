@@ -63,10 +63,11 @@ tools/
   sig.py                结构签名工具（gen / scan）
   slot_scan.py          全 .text 扫 MHY 槽位+密钥，得 (slot, op, key)
   relocate.py           换版本自动重定位（魔数 + 指令证据 + 结构自证）
+  provenance.py         逐条溯源：扫 gi.exe 给出每个常量的代码读取点 -> docs/PROVENANCE.md
   gi_string_decrypt.py  字符串解密自检（应 75/75）
   split_main.py         一次性工具：把单文件 main.cpp 切成 src/*.hpp
 
-docs/                   UPDATE.md / status.md / gi_fields.md / METHOD.md / ANALYSIS.md / mhytab_pairs.md
+docs/                   UPDATE.md / PROVENANCE.md / CROSS70.md / status.md / gi_fields.md / METHOD.md / ANALYSIS.md / mhytab_pairs.md
 version/7.1/            样本：gi.exe + Managed/Metadata/*.dat + gi/Managed 软链
 out/                    输出：dump.cs / stringliteral.json（gitignore）
 ida/                    IDA 数据库（~10GB，gitignore）
@@ -189,6 +190,16 @@ python3 tools/sig.py scan version/7.2/gi.exe --sigs tools/sigs.json
 python3 tools/gen_version.py        # version.json -> src/version.hpp（make 会调）
 ```
 
+### `tools/provenance.py` —— 逐条溯源（每个常量从哪来）
+**直接扫 `gi.exe`**（不读 `slots_cache.json`），给出 `version.json` 里每条偏移/密钥的
+**代码读取点（指令地址 + 函数名）**，输出 `docs/PROVENANCE.md`。
+```bash
+python3 tools/provenance.py version/7.1/gi.exe
+python3 tools/provenance.py version/7.0/gi.exe --out /tmp/P70.md
+# 迭代格式时可复用上次扫描：--hits-in/--hits-out
+```
+「未命中」不是错误 —— 说明那条是**结构自证 / 公式 / 反解**来的（见 `docs/UPDATE.md` §5.7）。
+
 ### `tools/split_main.py` —— 一次性工具
 把单文件 `main.cpp` 机械切分成 `src/*.hpp`。**只在需要重新搬运代码时用**，平时不用。
 
@@ -230,7 +241,7 @@ Offset = 文件里的字节位置（按 0x200 文件对齐）
 **⑥ 重新生成签名（比如改过 `sig_names.txt` 后）**
 ```bash
 python3 tools/sig.py gen version/7.1/gi.exe -o tools/sigs.json
-python3 tools/sig.py scan version/7.1/gi.exe --sigs tools/sigs.json   # 自测应 36/36
+python3 tools/sig.py scan version/7.1/gi.exe --sigs tools/sigs.json   # 自测应 54/54
 ```
 
 ## 9. 排错（症状 → 原因 → 处理）

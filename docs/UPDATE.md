@@ -479,6 +479,30 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 
 > 判别方法：**在 `.text` 里搜不到那个常数** → 基本就是反解的（或密钥在数据段，见 §4.1 形态 D）。
 
+### 5.7.5 逐条溯源报告（机器生成）
+
+上面是**按类别**的说明。**逐条**（34 张表 + 8 个结构体的每个字段）的证据在：
+
+```
+docs/PROVENANCE.md        # 由 tools/provenance.py 生成
+```
+
+它**直接扫 `gi.exe`**（**不读** `slots_cache.json`），给出每一条的：
+
+| 表/字段 | 槽位或位移 | 运算/密钥 | 代码证据（指令地址 / 函数） | 若未命中：来源 |
+
+- 「代码证据」= 真正执行 `*(对象+位移) op 密钥` 的**指令地址**，并映射到
+  `tools/sigs.json` 里的函数名（`GIMeta_*` / `MetaStr_*`）
+- 「未命中」**不是错误**：说明它是**结构自证 / 公式 / 反解**来的（见 §5.7.4）
+
+```bash
+python3 tools/provenance.py version/7.1/gi.exe          # → docs/PROVENANCE.md
+python3 tools/provenance.py version/7.0/gi.exe --out /tmp/P70.md
+```
+
+> 为什么不让它读缓存：缓存是**派生结果**（还可能漏报/含误报）。
+> 溯源必须回到**一手证据**（机器码），否则就是"引用二手结论"。
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
