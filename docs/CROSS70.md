@@ -182,3 +182,53 @@ python3 tools/sig.py scan version/7.0/gi.exe --sigs tools/sigs.json --fuzzy --js
 python3 tools/relocate.py version/7.0 --slots /tmp/opencode/slots_cache_70.json --keys /tmp/opencode/keys70.json
 #  → 强证据 3 个（fDV / methodPointerIndex / blob），弱证据 16 个但全错
 ```
+---
+
+## 八、复跑（2026-10-17，修复后的脚本）
+
+> 触发：`slot_scan` 补了 4 种形态 + 数据流追踪；`relocate` 修了语义判定的缩进 bug；
+> `sig.py` 新增 `consts` / `entryexpr`。用同一份 7.0 样本重跑。
+
+```bash
+python3 tools/sig.py scan   version/7.0/gi.exe --sigs tools/sigs.json --fuzzy --json /tmp/opencode/h70_new.json
+python3 tools/slot_scan.py  version/7.0/gi.exe version/7.0/gi/Managed/Metadata/global-metadata.dat \
+        --out /tmp/opencode/slots_cache_70_new.json          # 13033 个组合, 10:21
+python3 tools/slot_scan.py  version/7.0/gi.exe ... --struct typeDef \
+        --hits /tmp/opencode/h70_new.json --struct-json /tmp/opencode/keys70_new.json
+python3 tools/relocate.py   version/7.0 --slots /tmp/opencode/slots_cache_70_new.json \
+        --keys /tmp/opencode/keys70_new.json
+```
+
+| 项 | 旧报告 | **本次复跑** | 结论 |
+|---|---|---|---|
+| `sig.py scan` | 48/54 | **48/54** | ✅ 一致 |
+| ④ 强证据 | 3（fDV + methodPtr + **blob**） | **2**（fDV + methodPtr） | ⚠️ **blob 未复现** |
+| ⑥ slot 提示 | 16/34（值全错） | 16 唯一 **[弱]**、1 多候选、17 无 | ✅ 一致 |
+| ⑦ 反查 | 2 张 | fDV→`slot 0xC xor 0x720EB389`；methodPtr→`slot 0x130 add 0xA3B3FC56` | ✅ 一致 |
+| 语义判定（累计索引单调） | 0 | **0**（修掉缩进 bug 后仍是 0） | ✅ 确认是**召回**问题 |
+| `sig.py consts` | — | **4/5** 字符串密钥 | 新增能力 |
+| `sig.py entryexpr` | — | 形态 **B**：`((raw ^ 0x1BD33CC0) - key)` | 新增能力（**公式变了**）|
+
+### blob 为什么没复现
+
+签名位置 `0x41FB4E0` 对应 fDV 的 `dataIndex=70`，所以 blob 基址候选应为
+`0x41FB4E0 - 70 - 0x210 = 0x41FB28A` —— **不在 13033 个候选里** ✗。
+
+```
+dataIndex=70  -> 0x41FB28A   不在
+dataIndex=0   -> 0x41FB2D0   不在
+dataIndex=155 -> 0x41FB235   不在
+```
+
+又回到**候选召回**：blob 的基址在代码里大概不是"`*(MHY+K) op key`"这一种形态
+（或用了派生指针）。要复现需要 `--anchor` 模式或补形态。
+
+### 候选数量差异
+
+| | 7.1 | 7.0 |
+|---|---|---|
+| 唯一 `(slot,op,key)` | 4730 | **13033** |
+
+`.text` 大小几乎相同（35.3 vs 34.7 MB），候选却多 2.75 倍 →
+说明 7.0 的代码里「`[base+disp<0x300]` + 运算」这种形态密集得多
+（混淆器/编译器版本差异）。**候选越多，⑥ 的"唯一"越不可信**。
