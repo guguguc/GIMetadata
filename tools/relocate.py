@@ -773,8 +773,8 @@ def main():
     ap.add_argument('--keys', default=None, help='slot_scan --struct --struct-json 的产物（字段密钥候选）')
     ap.add_argument('--scan', action='store_true', help='无缓存时自动跑 slot_scan.py')
     ap.add_argument('--typeCount', type=int, default=683574)
-    ap.add_argument('--keyless', action='store_true',
-                    help='无密钥反解 typeDefinitions（哨兵+连续性+全表校验）')
+    ap.add_argument('--keyless', action=argparse.BooleanOptionalAction, default=True,
+                    help='无密钥反解 typeDefinitions（哨兵+连续性+全表校验）；默认开，--no-keyless 关')
     ap.add_argument('--typedefs-base', default=None,
                     help='已知 typeDefinitions 基址（hex）；给了就做布局搜索')
     args = ap.parse_args()

@@ -307,7 +307,8 @@ def find_typedefs(d, bases, n=4096, full=88902, layout_search=True,
     3) 全表校验：不合格就淘汰（**关键**：采样会给出假密钥）
     4) 可选 layout_search：扫 0x00..0x60 所有位移，用全表连续性定布局
     """
-    best = None
+    # ---- 采样：给每个候选基址打分（字段数 + 连续性）----
+    scored = []
     for base in bases:
         off = d.hdr + base
         fk = {}
@@ -321,10 +322,67 @@ def find_typedefs(d, bases, n=4096, full=88902, layout_search=True,
         for _, _, _, cv in fk.get(0x1C, []):
             for _, _, _, kv in derive_for_field(d, off, COUNT_DISP, 2, n, kind='count'):
                 cont = max(cont, continuity_score(cv, kv))
-        if best is None or cont > best['continuity'] or (cont == best['continuity'] and len(fk) > len(best['fields'])):
-            best = {'base': base, 'fields': fk, 'continuity': cont, 'validated': False}
-    if best is None:
+        # ★ 布局可能变了：用**全位移**采样一遍，取最佳连续性（给基址打分用）
+        lcont = cont
+        lc, lk = None, None
+        if cont < 0.5:
+            for dl in range(0x00, 0x61):
+                if dl % 2:
+                    continue
+                for w in (4, 2):
+                    if dl % w:
+                        continue
+                    for _op, _K, _sp, _v in derive_for_field(d, off, dl, w, n):
+                        if w == 4:
+                            for _op2, _K2, _s2, _v2 in derive_for_field(d, off, dl + 2, 2, n, kind='count'):
+                                sc2 = continuity_score(_v, _v2)
+                                if sc2 > lcont:
+                                    lcont, lc, lk = sc2, dl, dl + 2
+        scored.append({'base': base, 'fields': fk, 'continuity': cont,
+                       'layout_cont': lcont, 'layout_pair': (lc, lk), 'validated': False})
+    if not scored:
         return None
+    scored.sort(key=lambda x: (-max(x['continuity'], x.get('layout_cont', 0)), -len(x['fields'])))
+
+    # ---- **以全表校验为准**：按采样分排序，逐个验，第一个通过的就是答案 ----
+    best = None
+    for cand in scored[:20]:
+        base = cand['base']
+        off = d.hdr + base
+        # 采样级布局搜索（布局可能变了：已知位移不可信）
+        cums_t, cnts_t = [], []
+        for dl in range(0x00, 0x61):
+            for w in (4, 2):
+                if dl % w:
+                    continue
+                for op, K, sp, v in derive_for_field(d, off, dl, w, n):
+                    cums_t.append((dl, w, op, K, v))
+            for w in (1, 2):
+                if dl % w:
+                    continue
+                for op, K, _sp, v in derive_for_field(d, off, dl, w, n, kind='count'):
+                    cnts_t.append((dl, w, op, K, v))
+        pairs_t = []
+        for dc, wc, oc, kc, vc in cums_t:
+            for dk, wk, ok_, kk, vk in cnts_t:
+                if dc == dk:
+                    continue
+                sc2 = continuity_score(vc, vk)
+                if sc2 >= 0.75:
+                    pairs_t.append((sc2, dc, wc, oc, kc, dk, wk, ok_, kk))
+        pairs_t.sort(reverse=True)
+        for sc2, dc, wc, oc, kc, dk, wk, ok_, kk in pairs_t[:5]:
+            if (validate_full(d, off, dc, wc, oc, kc, full, 'cum') is not None and
+                    validate_full(d, off, dk, wk, ok_, kk, full, 'count') is not None):
+                best = cand
+                best['validated'] = True
+                best['seed_pair'] = (sc2, dc, wc, oc, kc, dk, wk, ok_, kk)
+                break
+        if best:
+            break
+    if best is None:
+        best = scored[0]          # 全都过不了 -> 返回采样最优，标记未通过
+    base = best['base']
 
     # ---- 全表校验 + 布局搜索 ----
     base = best['base']
