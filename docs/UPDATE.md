@@ -503,6 +503,44 @@ python3 tools/provenance.py version/7.0/gi.exe --out /tmp/P70.md
 > 为什么不让它读缓存：缓存是**派生结果**（还可能漏报/含误报）。
 > 溯源必须回到**一手证据**（机器码），否则就是"引用二手结论"。
 
+## §5.8 换版本到底要改多少个数（`version.json` 全量分类）
+
+`version.json` 现在有 **335 个叶子值**。按"换版本是否要改"分：
+
+| 类别 | 必改 | 稳定/不改 | 说明 |
+|---|---|---|---|
+| `addresses`（MHY/T0/T1 等） | **5** | 0 | 7.0 实测会变 |
+| `stringDecrypt` | **5** | 2 | 5 个密钥必变；`offsetMask`/`lengthShift` 是打包格式，稳定 |
+| `tables[].slot / .op / .key` | **102**（34×3） | 0 | slot 实测变；**op 也变**（7.1 `methodPointerIndex` 是 `xor`，7.0 是 `add`） |
+| `tables[].stride / .side / .role / countBias` | 0 | 103 | `stride` 在 7.0 上**未验证** |
+| `keyFormulas`（8 个公式的全部系数） | **43** | 0 | 每版重解 |
+| `fieldDecode`（8 结构体全部字段密钥） | **42** | 0 | 每版重解 |
+| `structSizes`（18 个结构体大小） | 0 | 18 | 布局，**未在 7.0 验证** |
+| `registrationFields`（T0/T1 字段偏移） | 0 | 5 | **未在 7.0 验证** |
+| `*CountFormula` 的 `key` / `op` | **6** | 0 | |
+| `*CountFormula` 的 `table0Field/table1Field` | 0 | 3 | T0/T1 字段偏移 |
+| `version` | 0 | 1 | |
+| **合计** | **203** | **132** | 共 335 |
+
+> **需要拿 7.0 复核的"稳定"项共 57 个**：`tables.stride` 34 + `structSizes` 18 + `registrationFields` 5。
+> 若 7.0 的结构布局变了，这 57 个也要改（`CROSS70.md` §七 已列为待办）。
+
+### 203 个必改项里，**自动/手工**各占多少
+
+| 项 | 数量 | 怎么来 | 7.0 实测状态 |
+|---|---|---|---|
+| `tables[].slot/op/key` | 102 | `slot_scan` 候选 + `relocate`（④自证 / ⑥提示 / ⑦反查） | ⚠️ 候选**召回不足**；靠旧 slot 会错 → 需语义判定/无密钥反解 |
+| `fieldDecode` 字段密钥 | 42 | `slot_scan --struct` 候选 + 语义判定（累计索引单调 / 名字可打印 / count 很小） | 7.0：5/18 → **15/18**（`CROSS70.md`） |
+| `keyFormulas` 系数 | 43 | 反编译 `xxxKey(i)` 函数体，人工抄 | 未自动 |
+| `addresses` | 5 | 魔数 + `sig.py` 找 `RuntimeInit` | `sig.py` 7.0 找回 48/54 |
+| `stringDecrypt` 密钥 | 5 | 反编译字符串解密函数 | 未自动 |
+| `*CountFormula` 的 key/op | 6 | 反编译消费者（`RuntimeInit`） | 未自动 |
+
+**结论：真正要人工盯的只有「`keyFormulas` 43 + 字符串密钥 5 + 公式 6 + 地址 5 = 59 个」；
+其余 144 个（表 102 + 字段 42）有自动/半自动通道，但 7.0 显示「候选召回」仍是瓶颈。**
+
+
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
