@@ -25,6 +25,30 @@
    "lea|R,Md",
    "mov|Md,R"
   ],
+  "ext_loose": [
+   "lea|R,Md",
+   "mov|Md,R",
+   "ret|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|"
+  ],
+  "ext_strict": [
+   "lea|R,Md",
+   "mov|Md,R",
+   "ret|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|"
+  ],
   "bytes": [
    "488d0559bafe01",
    "4889057a297e05",
@@ -75,6 +99,30 @@
    "movaps|Md310,R",
    "movaps|Md300,R",
    "movdqa|Md2f0,R"
+  ],
+  "ext_loose": [
+   "movaps|Md,R",
+   "mov|Md,I",
+   "mov|R,R",
+   "mov|R,Md",
+   "call|Md",
+   "mov|R,Md",
+   "lea|R,Md",
+   "mov|Md,R",
+   "test|R,R",
+   "jle|I"
+  ],
+  "ext_strict": [
+   "movaps|Md2e0,R",
+   "mov|Md2d8,i-2",
+   "mov|R,R",
+   "mov|R,Md",
+   "call|Md",
+   "mov|R,Md",
+   "lea|R,Md1",
+   "mov|Md,R",
+   "test|R,R",
+   "jle|I"
   ],
   "bytes": [
    "488dac2480000000",
@@ -127,6 +175,30 @@
    "mov|R,R",
    "mov|R,Md"
   ],
+  "ext_loose": [
+   "call|Md",
+   "mov|R,R",
+   "movabs|R,I",
+   "imul|R,R",
+   "movabs|R,I",
+   "xor|R,R",
+   "rol|R,I",
+   "movabs|R,I",
+   "imul|R,R",
+   "movabs|R,I"
+  ],
+  "ext_strict": [
+   "call|Md",
+   "mov|R,R",
+   "movabs|R,I",
+   "imul|R,R",
+   "movabs|R,I",
+   "xor|R,R",
+   "rol|R,i17",
+   "movabs|R,I",
+   "imul|R,R",
+   "movabs|R,I"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bda0000000",
@@ -177,6 +249,30 @@
    "lea|R,Md26f",
    "movsxd|R,Md0*",
    "add|R,R"
+  ],
+  "ext_loose": [
+   "jmp|R",
+   "mov|R,Md",
+   "add|R,I",
+   "pop|R",
+   "pop|R",
+   "jmp|I",
+   "mov|R,Md",
+   "jmp|I",
+   "mov|R,Md",
+   "jmp|I"
+  ],
+  "ext_strict": [
+   "jmp|R",
+   "mov|R,Md0",
+   "add|R,i48",
+   "pop|R",
+   "pop|R",
+   "jmp|I",
+   "mov|R,Md",
+   "jmp|I",
+   "mov|R,Md",
+   "jmp|I"
   ],
   "bytes": [
    "0fbe490a",
@@ -229,6 +325,30 @@
    "add|R,i28",
    "pop|R"
   ],
+  "ext_loose": [
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "ret|",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,Md",
+   "call|I"
+  ],
+  "ext_strict": [
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "ret|",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,Md0",
+   "call|I"
+  ],
   "bytes": [
    "488d6c2420",
    "48c74500feffffff",
@@ -279,6 +399,30 @@
    "mov|R,Md",
    "call|Md",
    "mov|R,Md8"
+  ],
+  "ext_loose": [
+   "movabs|R,I",
+   "mov|R,R",
+   "imul|R,R",
+   "rol|R,I",
+   "movabs|R,I",
+   "imul|R,R",
+   "movabs|R,I",
+   "xor|R,R",
+   "rol|R,I",
+   "imul|R,R"
+  ],
+  "ext_strict": [
+   "movabs|R,I",
+   "mov|R,R",
+   "imul|R,R",
+   "rol|R,i1f",
+   "movabs|R,I",
+   "imul|R,R",
+   "movabs|R,I",
+   "xor|R,R",
+   "rol|R,i1b",
+   "imul|R,R"
   ],
   "bytes": [
    "488dac2480000000",
@@ -331,6 +475,30 @@
    "test|Mdc9,i10",
    "jne|I"
   ],
+  "ext_loose": [
+   "lea|R,Md",
+   "mov|Md,R",
+   "mov|R,Md",
+   "call|Md",
+   "lea|R,Md",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md",
+   "mov|R,Md",
+   "call|Md"
+  ],
+  "ext_strict": [
+   "lea|R,Md",
+   "mov|Md-30,R",
+   "mov|R,Md",
+   "call|Md",
+   "lea|R,Md-30",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md-30",
+   "mov|R,Md0",
+   "call|Md"
+  ],
   "bytes": [
    "488d6c2470",
    "48c74500feffffff",
@@ -381,6 +549,30 @@
    "cmp|Md30,i0",
    "jne|I",
    "mov|R,Md"
+  ],
+  "ext_loose": [
+   "call|Md",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md",
+   "call|Md",
+   "cmp|Md,I",
+   "jne|I",
+   "mov|R,Md",
+   "call|Md",
+   "mov|R,R"
+  ],
+  "ext_strict": [
+   "call|Md",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md",
+   "call|Md",
+   "cmp|Md30,i0",
+   "jne|I",
+   "mov|R,Md",
+   "call|Md",
+   "mov|R,R"
   ],
   "bytes": [
    "488d6c2430",
@@ -433,6 +625,30 @@
    "je|I",
    "mov|R,Md"
   ],
+  "ext_loose": [
+   "mov|R,Md",
+   "test|Md+,I",
+   "jne|I",
+   "add|R,R",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md",
+   "test|R,R",
+   "je|I",
+   "mov|R,Md"
+  ],
+  "ext_strict": [
+   "mov|R,Md0",
+   "test|Mdc9+,i8",
+   "jne|I",
+   "add|R,R",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md38",
+   "test|R,R",
+   "je|I",
+   "mov|R,Md0"
+  ],
   "bytes": [
    "f681c900000008",
    "0f8509050000",
@@ -483,6 +699,30 @@
    "mov|R,R",
    "mov|R,R",
    "mov|R,Md38"
+  ],
+  "ext_loose": [
+   "test|R,R",
+   "je|I",
+   "test|Md,I",
+   "jne|I",
+   "or|R,I",
+   "mov|Md,R",
+   "mov|R,Md",
+   "call|I",
+   "mov|R,R",
+   "mov|R,R"
+  ],
+  "ext_strict": [
+   "test|R,R",
+   "je|I",
+   "test|Mda0,i10",
+   "jne|I",
+   "or|R,i20",
+   "mov|Mdc9,R",
+   "mov|R,Md0",
+   "call|I",
+   "mov|R,R",
+   "mov|R,R"
   ],
   "bytes": [
    "488dac2480000000",
@@ -535,6 +775,30 @@
    "je|I",
    "add|R,i58"
   ],
+  "ext_loose": [
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "ret|",
+   "mov|R,Md"
+  ],
+  "ext_strict": [
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "ret|",
+   "mov|R,Md38"
+  ],
   "bytes": [
    "0fb799c2000000",
    "4885db",
@@ -585,6 +849,30 @@
    "test|Mdc8,ie",
    "je|I",
    "test|R,R"
+  ],
+  "ext_loose": [
+   "jle|I",
+   "mov|R,R",
+   "xor|R,R",
+   "jmp|I",
+   "nop|",
+   "inc|R",
+   "cmp|R,R",
+   "je|I",
+   "cmp|Md*,I",
+   "jne|I"
+  ],
+  "ext_strict": [
+   "jle|I",
+   "mov|R,R",
+   "xor|R,R",
+   "jmp|I",
+   "nop|",
+   "inc|R",
+   "cmp|R,R",
+   "je|I",
+   "cmp|Md0*,i0",
+   "jne|I"
   ],
   "bytes": [
    "e84fc2ffff",
@@ -637,6 +925,30 @@
    "mov|Md30,R",
    "je|I"
   ],
+  "ext_loose": [
+   "mov|R,Md",
+   "mov|R,R",
+   "call|I",
+   "mov|R,R",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md",
+   "mov|R,Md",
+   "call|I",
+   "mov|Md,R"
+  ],
+  "ext_strict": [
+   "mov|R,Md0",
+   "mov|R,R",
+   "call|I",
+   "mov|R,R",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md38",
+   "mov|R,Md0",
+   "call|I",
+   "mov|Md28,R"
+  ],
   "bytes": [
    "4883b98800000000",
    "0f85b1040000",
@@ -688,6 +1000,30 @@
    "je|I",
    "mov|R,Md0"
   ],
+  "ext_loose": [
+   "call|I",
+   "mov|R,R",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md",
+   "mov|R,Md",
+   "call|I",
+   "mov|R,R",
+   "mov|R,Md",
+   "movzx|R,Md"
+  ],
+  "ext_strict": [
+   "call|I",
+   "mov|R,R",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md38",
+   "mov|R,Md0",
+   "call|I",
+   "mov|R,R",
+   "mov|R,Md98",
+   "movzx|R,Md43"
+  ],
   "bytes": [
    "4883796000",
    "0f85c0030000",
@@ -737,6 +1073,30 @@
    "mov|R,i1",
    "test|R,R",
    "je|I",
+   "mov|R,Md"
+  ],
+  "ext_loose": [
+   "mov|R,Md",
+   "cmp|Md+,I",
+   "jne|I",
+   "add|R,R",
+   "call|I",
+   "mov|R,Md",
+   "test|R,R",
+   "je|I",
+   "mov|R,R",
+   "mov|R,Md"
+  ],
+  "ext_strict": [
+   "mov|R,Md0",
+   "cmp|Md30+,i0",
+   "jne|I",
+   "add|R,R",
+   "call|I",
+   "mov|R,Mdac",
+   "test|R,R",
+   "je|I",
+   "mov|R,R",
    "mov|R,Md"
   ],
   "bytes": [
@@ -790,6 +1150,30 @@
    "mov|R,Md",
    "call|R"
   ],
+  "ext_loose": [
+   "mov|R,Md",
+   "call|R",
+   "mov|R,Md",
+   "mov|R,Md",
+   "mov|R,Md",
+   "xor|R,R",
+   "movabs|R,I",
+   "xor|R,R",
+   "mov|R,R",
+   "jmp|I"
+  ],
+  "ext_strict": [
+   "mov|R,Md",
+   "call|R",
+   "mov|R,Md",
+   "mov|R,Md",
+   "mov|R,Md",
+   "xor|R,R",
+   "movabs|R,I",
+   "xor|R,R",
+   "mov|R,R",
+   "jmp|I"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bd80000000",
@@ -840,6 +1224,30 @@
    "movabs|R,I",
    "mov|R,Md0",
    "add|R,R"
+  ],
+  "ext_loose": [
+   "je|I",
+   "mov|R,Md",
+   "call|Md",
+   "mov|R,R",
+   "add|R,I",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "ret|"
+  ],
+  "ext_strict": [
+   "je|I",
+   "mov|R,Md",
+   "call|Md",
+   "mov|R,R",
+   "add|R,i28",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "ret|"
   ],
   "bytes": [
    "488d6c2420",
@@ -892,6 +1300,30 @@
    "jne|I",
    "mov|R,R"
   ],
+  "ext_loose": [
+   "mov|R,Md",
+   "mov|R,I",
+   "add|R,Md",
+   "movsxd|R,R",
+   "add|R,Md",
+   "mov|R,R",
+   "imul|R,R,I",
+   "xor|R,I",
+   "add|R,I",
+   "lea|R,Md*"
+  ],
+  "ext_strict": [
+   "mov|R,Md",
+   "mov|R,I",
+   "add|R,Md16c",
+   "movsxd|R,R",
+   "add|R,Md",
+   "mov|R,R",
+   "imul|R,R,I",
+   "xor|R,I",
+   "add|R,I",
+   "lea|R,Md0*"
+  ],
   "bytes": [
    "488d6c2430",
    "48c74500feffffff",
@@ -942,6 +1374,30 @@
    "movaps|R,Md-10",
    "add|R,i78",
    "pop|R"
+  ],
+  "ext_loose": [
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "ret|",
+   "mov|R,R",
+   "mov|R,R"
+  ],
+  "ext_strict": [
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "pop|R",
+   "ret|",
+   "mov|R,R",
+   "mov|R,R"
   ],
   "bytes": [
    "488d6c2470",
@@ -994,6 +1450,30 @@
    "mov|R,Md0",
    "cmp|R,i10"
   ],
+  "ext_loose": [
+   "mov|Md,R",
+   "jb|I",
+   "mov|R,Md",
+   "mov|Md,R",
+   "cmp|Md,I",
+   "je|I",
+   "jmp|I",
+   "lea|R,Md",
+   "mov|Md,R",
+   "cmp|Md,I"
+  ],
+  "ext_strict": [
+   "mov|Md50,R",
+   "jb|I",
+   "mov|R,Md20",
+   "mov|Md48,R",
+   "cmp|Md24,I",
+   "je|I",
+   "jmp|I",
+   "lea|R,Md20",
+   "mov|Md48,R",
+   "cmp|Md24,I"
+  ],
   "bytes": [
    "4488442427",
    "4889cf",
@@ -1044,6 +1524,30 @@
    "mov|Md-20,i8",
    "lea|R,Md-18",
    "mov|R,R"
+  ],
+  "ext_loose": [
+   "call|I",
+   "mov|R,Md",
+   "cmp|Md,I",
+   "jb|I",
+   "mov|R,Md",
+   "mov|Md,R",
+   "mov|Md,R",
+   "lea|R,Md",
+   "lea|R,Md",
+   "lea|R,Md"
+  ],
+  "ext_strict": [
+   "call|I",
+   "mov|R,Md-8",
+   "cmp|Md0,i10",
+   "jb|I",
+   "mov|R,Md-18",
+   "mov|Md8,R",
+   "mov|Md10,R",
+   "lea|R,Md-48",
+   "lea|R,Md8",
+   "lea|R,Md-28"
   ],
   "bytes": [
    "488dac2480000000",
@@ -1096,6 +1600,30 @@
    "mov|R,Md",
    "add|R,R"
   ],
+  "ext_loose": [
+   "imul|R,R,I",
+   "lea|R,Md",
+   "xor|R,I",
+   "imul|R,R,I",
+   "inc|R",
+   "add|R,I",
+   "xor|R,I",
+   "xor|R,Md*",
+   "imul|R,R,I",
+   "xor|R,Md*"
+  ],
+  "ext_strict": [
+   "imul|R,R,I",
+   "lea|R,Md",
+   "xor|R,I",
+   "imul|R,R,I",
+   "inc|R",
+   "add|R,I",
+   "xor|R,I",
+   "xor|R,Md0*",
+   "imul|R,R,I",
+   "xor|R,Md0*"
+  ],
   "bytes": [
    "488d6c2430",
    "48c74500feffffff",
@@ -1146,6 +1674,30 @@
    "mov|Md-38,i0",
    "mov|Md-38,R",
    "mov|Md-30,R"
+  ],
+  "ext_loose": [
+   "mov|Md,R",
+   "lea|R,Md",
+   "mov|Md,R",
+   "mov|Md,I",
+   "mov|R,Md",
+   "call|Md",
+   "movsxd|R,R",
+   "movabs|R,I",
+   "mov|Md,R",
+   "mov|R,R"
+  ],
+  "ext_strict": [
+   "mov|Md-28,R",
+   "lea|R,Md",
+   "mov|Md-50,R",
+   "mov|Md-48,i0",
+   "mov|R,Md",
+   "call|Md",
+   "movsxd|R,R",
+   "movabs|R,I",
+   "mov|Md8,R",
+   "mov|R,R"
   ],
   "bytes": [
    "488dac2480000000",
@@ -1198,6 +1750,30 @@
    "mov|Md20,R",
    "mov|R,Md0"
   ],
+  "ext_loose": [
+   "mov|Md,R",
+   "mov|Md,R",
+   "mov|R,Md",
+   "mov|Md,R",
+   "movsxd|R,R",
+   "imul|R,R",
+   "rol|R,I",
+   "imul|R,R",
+   "xor|R,R",
+   "rol|R,I"
+  ],
+  "ext_strict": [
+   "mov|Md28,R",
+   "mov|Md38,R",
+   "mov|R,Md8",
+   "mov|Md30,R",
+   "movsxd|R,R",
+   "imul|R,R",
+   "rol|R,i1f",
+   "imul|R,R",
+   "xor|R,R",
+   "rol|R,i1b"
+  ],
   "bytes": [
    "48bb4febd4273daeb2c2",
    "48bd87caeb85b179379e",
@@ -1248,6 +1824,30 @@
    "mov|Md20,i0",
    "mov|Md20,R",
    "mov|R,Md0"
+  ],
+  "ext_loose": [
+   "mov|Md,R",
+   "mov|Md,R",
+   "mov|R,Md",
+   "mov|Md,R",
+   "movsxd|R,R",
+   "imul|R,R",
+   "rol|R,I",
+   "imul|R,R",
+   "xor|R,R",
+   "rol|R,I"
+  ],
+  "ext_strict": [
+   "mov|Md28,R",
+   "mov|Md38,R",
+   "mov|R,Md8",
+   "mov|Md30,R",
+   "movsxd|R,R",
+   "imul|R,R",
+   "rol|R,i1f",
+   "imul|R,R",
+   "xor|R,R",
+   "rol|R,i1b"
   ],
   "bytes": [
    "48bb4febd4273daeb2c2",
@@ -1300,6 +1900,30 @@
    "mov|R,Md0*",
    "test|R,R"
   ],
+  "ext_loose": [
+   "jne|I",
+   "mov|R,Md",
+   "mov|R,R",
+   "shl|R,I",
+   "add|R,Md",
+   "call|I",
+   "test|R,R",
+   "je|I",
+   "mov|R,R",
+   "test|Md,I"
+  ],
+  "ext_strict": [
+   "jne|I",
+   "mov|R,Md",
+   "mov|R,R",
+   "shl|R,i4",
+   "add|R,Md48",
+   "call|I",
+   "test|R,R",
+   "je|I",
+   "mov|R,R",
+   "test|Mdc9,i10"
+  ],
   "bytes": [
    "488d6c2430",
    "48c745f8feffffff",
@@ -1351,6 +1975,30 @@
    "int3|",
    "int3|"
   ],
+  "ext_loose": [
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "mov|R,Md",
+   "mov|R,Md",
+   "sar|R,I",
+   "xor|R,I"
+  ],
+  "ext_strict": [
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "int3|",
+   "mov|R,Md",
+   "mov|R,Md40",
+   "sar|R,i3",
+   "xor|R,I"
+  ],
   "bytes": [
    "8b01",
    "2b02",
@@ -1400,6 +2048,30 @@
    "movabs|R,I",
    "movsxd|R,Md0",
    "mov|R,Md8",
+   "imul|R,R"
+  ],
+  "ext_loose": [
+   "rol|R,I",
+   "imul|R,R",
+   "xor|R,R",
+   "rol|R,I",
+   "imul|R,R",
+   "add|R,R",
+   "mov|R,R",
+   "shr|R,I",
+   "xor|R,R",
+   "imul|R,R"
+  ],
+  "ext_strict": [
+   "rol|R,i1f",
+   "imul|R,R",
+   "xor|R,R",
+   "rol|R,i1b",
+   "imul|R,R",
+   "add|R,R",
+   "mov|R,R",
+   "shr|R,i21",
+   "xor|R,R",
    "imul|R,R"
   ],
   "bytes": [
@@ -1453,6 +2125,30 @@
    "mov|R,Md",
    "mov|R,Md"
   ],
+  "ext_loose": [
+   "lea|R,Md",
+   "cmp|R,R",
+   "je|I",
+   "nop|Md",
+   "mov|R,Md",
+   "test|Md,I",
+   "jne|I",
+   "add|R,I",
+   "mov|R,Md",
+   "xor|R,R"
+  ],
+  "ext_strict": [
+   "lea|R,Md",
+   "cmp|R,R",
+   "je|I",
+   "nop|Md0",
+   "mov|R,Md20",
+   "test|Md2f,i20",
+   "jne|I",
+   "add|R,i10",
+   "mov|R,Md0",
+   "xor|R,R"
+  ],
   "bytes": [
    "f6412f20",
    "7579",
@@ -1503,6 +2199,30 @@
    "mov|R,Md30",
    "movabs|R,I",
    "test|R,R"
+  ],
+  "ext_loose": [
+   "je|I",
+   "mov|R,Md",
+   "cmp|R,R",
+   "jne|I",
+   "jmp|I",
+   "mov|R,Md",
+   "mov|R,I",
+   "call|I",
+   "mov|Md,R",
+   "movabs|R,I"
+  ],
+  "ext_strict": [
+   "je|I",
+   "mov|R,Md0",
+   "cmp|R,R",
+   "jne|I",
+   "jmp|I",
+   "mov|R,Md",
+   "mov|R,i18",
+   "call|I",
+   "mov|Md0,R",
+   "movabs|R,I"
   ],
   "bytes": [
    "488d6c2420",
@@ -1555,6 +2275,30 @@
    "movabs|R,I",
    "test|R,R"
   ],
+  "ext_loose": [
+   "je|I",
+   "movabs|R,I",
+   "cmp|Md,R",
+   "jne|I",
+   "test|Md,I",
+   "jne|I",
+   "mov|R,Md",
+   "test|Md,I",
+   "mov|R,Md",
+   "je|I"
+  ],
+  "ext_strict": [
+   "je|I",
+   "movabs|R,I",
+   "cmp|Md8,R",
+   "jne|I",
+   "test|Md2f,i20",
+   "jne|I",
+   "mov|R,Md8",
+   "test|Mdc8,ie",
+   "mov|R,Md10",
+   "je|I"
+  ],
   "bytes": [
    "488d6c2430",
    "48c74500feffffff",
@@ -1605,6 +2349,30 @@
    "mov|R,R",
    "mov|Md-38,R",
    "mov|Md8,R"
+  ],
+  "ext_loose": [
+   "mov|R,Md",
+   "movabs|R,I",
+   "cmp|R,R",
+   "je|I",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,Md",
+   "mov|R,Md",
+   "xorps|R,R",
+   "movaps|Md,R"
+  ],
+  "ext_strict": [
+   "mov|R,Md10",
+   "movabs|R,I",
+   "cmp|R,R",
+   "je|I",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,Md0",
+   "mov|R,Md18",
+   "xorps|R,R",
+   "movaps|Md10,R"
   ],
   "bytes": [
    "488dac2480000000",
@@ -1657,6 +2425,30 @@
    "mov|Md90,R",
    "mov|R,R"
   ],
+  "ext_loose": [
+   "mov|R,Md",
+   "cmp|R,Md",
+   "mov|Md,R",
+   "jae|I",
+   "add|R,Md",
+   "cmp|R,Md",
+   "jb|I",
+   "mov|R,Md",
+   "mov|R,Md",
+   "jmp|I"
+  ],
+  "ext_strict": [
+   "mov|R,Md38",
+   "cmp|R,Md48",
+   "mov|Mdd0,R",
+   "jae|I",
+   "add|R,Md40",
+   "cmp|R,Md50",
+   "jb|I",
+   "mov|R,Mdd0",
+   "mov|R,Md30",
+   "jmp|I"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bdf0000000",
@@ -1707,6 +2499,30 @@
    "test|Md9,i80",
    "je|I",
    "movabs|R,I"
+  ],
+  "ext_loose": [
+   "xor|R,Md",
+   "sub|R,Md",
+   "movzx|R,Md",
+   "shl|R,I",
+   "cmp|R,I",
+   "jne|I",
+   "mov|R,Md",
+   "mov|R,Md",
+   "call|I",
+   "mov|R,R"
+  ],
+  "ext_strict": [
+   "xor|R,Md8",
+   "sub|R,Md28",
+   "movzx|R,Md82",
+   "shl|R,i10",
+   "cmp|R,I",
+   "jne|I",
+   "mov|R,Md38",
+   "mov|R,Md0",
+   "call|I",
+   "mov|R,R"
   ],
   "bytes": [
    "488d6c2450",
@@ -1759,6 +2575,30 @@
    "mov|R,Md0",
    "sub|R,i20"
   ],
+  "ext_loose": [
+   "call|I",
+   "add|R,I",
+   "mov|R,R",
+   "mov|R,Md",
+   "mov|R,I",
+   "cmp|R,R",
+   "je|I",
+   "mov|R,Md",
+   "mov|R,I",
+   "add|R,Md"
+  ],
+  "ext_strict": [
+   "call|I",
+   "add|R,i20",
+   "mov|R,R",
+   "mov|R,Md10",
+   "mov|R,I",
+   "cmp|R,R",
+   "je|I",
+   "mov|R,Md",
+   "mov|R,I",
+   "add|R,Md9c"
+  ],
   "bytes": [
    "41c60000",
    "0fb6412f",
@@ -1809,6 +2649,30 @@
    "test|R,R",
    "je|I",
    "mov|R,Md0"
+  ],
+  "ext_loose": [
+   "mov|R,Md",
+   "mov|R,I",
+   "xor|R,R",
+   "call|I",
+   "mov|R,R",
+   "mov|R,R",
+   "call|I",
+   "mov|R,R",
+   "test|R,R",
+   "je|I"
+  ],
+  "ext_strict": [
+   "mov|R,Md",
+   "mov|R,i1",
+   "xor|R,R",
+   "call|I",
+   "mov|R,R",
+   "mov|R,R",
+   "call|I",
+   "mov|R,R",
+   "test|R,R",
+   "je|I"
   ],
   "bytes": [
    "488b4110",
@@ -1861,6 +2725,30 @@
    "movabs|R,I",
    "add|R,Md10"
   ],
+  "ext_loose": [
+   "je|I",
+   "xorps|R,R",
+   "movaps|Md,R",
+   "mov|Md,I",
+   "mov|Md,I",
+   "lea|R,Md",
+   "mov|R,I",
+   "mov|R,R",
+   "call|I",
+   "mov|Md,I"
+  ],
+  "ext_strict": [
+   "je|I",
+   "xorps|R,R",
+   "movaps|Md-20,R",
+   "mov|Md-10,i0",
+   "mov|Md-8,if",
+   "lea|R,Md-20",
+   "mov|R,i100",
+   "mov|R,R",
+   "call|I",
+   "mov|Md-10,i0"
+  ],
   "bytes": [
    "488d6c2470",
    "48c74500feffffff",
@@ -1911,6 +2799,30 @@
    "mov|R,Md",
    "call|Md",
    "mov|Md68,R"
+  ],
+  "ext_loose": [
+   "shr|R,I",
+   "mov|R,Md",
+   "mov|R,Md",
+   "mov|R,I",
+   "mov|R,Md",
+   "movabs|R,I",
+   "mov|Md,R",
+   "mov|R,R",
+   "mov|R,I",
+   "jmp|I"
+  ],
+  "ext_strict": [
+   "shr|R,i3",
+   "mov|R,Md",
+   "mov|R,Md",
+   "mov|R,i1",
+   "mov|R,Md",
+   "movabs|R,I",
+   "mov|Md38,R",
+   "mov|R,R",
+   "mov|R,i1",
+   "jmp|I"
   ],
   "bytes": [
    "488dac2480000000",
@@ -1963,6 +2875,30 @@
    "mov|R,R",
    "cmp|R,i2"
   ],
+  "ext_loose": [
+   "setae|R",
+   "setb|Md",
+   "mov|R,Md",
+   "call|Md",
+   "mov|Md,R",
+   "or|R,R",
+   "mov|Md,R",
+   "lea|R,Md",
+   "mov|Md,R",
+   "call|I"
+  ],
+  "ext_strict": [
+   "setae|R",
+   "setb|Mdc8",
+   "mov|R,Md",
+   "call|Md",
+   "mov|Md48,R",
+   "or|R,R",
+   "mov|Mde8,R",
+   "lea|R,Md78",
+   "mov|Mdf8,R",
+   "call|I"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bd20010000",
@@ -2013,6 +2949,30 @@
    "ja|I",
    "mov|R,R",
    "movzx|R,R"
+  ],
+  "ext_loose": [
+   "lea|R,Md",
+   "movsxd|R,Md*",
+   "add|R,R",
+   "jmp|R",
+   "mov|R,R",
+   "shr|R,I",
+   "movzx|R,R",
+   "movabs|R,I",
+   "cmp|R,R",
+   "mov|Md,R"
+  ],
+  "ext_strict": [
+   "lea|R,Md2e9",
+   "movsxd|R,Md0*",
+   "add|R,R",
+   "jmp|R",
+   "mov|R,R",
+   "shr|R,i10",
+   "movzx|R,R",
+   "movabs|R,I",
+   "cmp|R,R",
+   "mov|Md-18,R"
   ],
   "bytes": [
    "488d6c2440",
@@ -2065,6 +3025,30 @@
    "mov|R,R",
    "call|I"
   ],
+  "ext_loose": [
+   "mov|R,R",
+   "mov|R,Md",
+   "movsxd|R,Md",
+   "movabs|R,I",
+   "imul|R,R",
+   "rol|R,I",
+   "movabs|R,I",
+   "imul|R,R",
+   "movabs|R,I",
+   "xor|R,R"
+  ],
+  "ext_strict": [
+   "mov|R,R",
+   "mov|R,Md8",
+   "movsxd|R,Md0",
+   "movabs|R,I",
+   "imul|R,R",
+   "rol|R,i1f",
+   "movabs|R,I",
+   "imul|R,R",
+   "movabs|R,I",
+   "xor|R,R"
+  ],
   "bytes": [
    "488b4908",
    "e844ecffff",
@@ -2115,6 +3099,30 @@
    "xor|R,R",
    "xor|R,R",
    "lock cmpxchg|Md,R"
+  ],
+  "ext_loose": [
+   "jne|I",
+   "mov|R,Md",
+   "call|Md",
+   "xor|R,R",
+   "xor|R,R",
+   "lock cmpxchg|Md,R",
+   "jne|I",
+   "mov|R,Md",
+   "mov|R,I",
+   "add|R,Md"
+  ],
+  "ext_strict": [
+   "jne|I",
+   "mov|R,Md",
+   "call|Md",
+   "xor|R,R",
+   "xor|R,R",
+   "lock cmpxchg|Md,R",
+   "jne|I",
+   "mov|R,Md",
+   "mov|R,I",
+   "add|R,Md18"
   ],
   "bytes": [
    "488d6c2430",
@@ -2167,6 +3175,30 @@
    "test|Mdc8,ie",
    "jne|I"
   ],
+  "ext_loose": [
+   "movzx|R,Md",
+   "shl|R,I",
+   "mov|R,R",
+   "cmp|R,I",
+   "jne|I",
+   "mov|R,Md",
+   "mov|R,Md",
+   "add|R,Md",
+   "mov|R,Md",
+   "mov|R,I"
+  ],
+  "ext_strict": [
+   "movzx|R,Md72",
+   "shl|R,i10",
+   "mov|R,R",
+   "cmp|R,I",
+   "jne|I",
+   "mov|R,Mdb0",
+   "mov|R,Md",
+   "add|R,Md0",
+   "mov|R,Md98",
+   "mov|R,I"
+  ],
   "bytes": [
    "8b09",
    "e88464fdff",
@@ -2217,6 +3249,30 @@
    "jne|I",
    "test|Mdc8,ie",
    "jne|I"
+  ],
+  "ext_loose": [
+   "movzx|R,Md",
+   "shl|R,I",
+   "mov|R,R",
+   "cmp|R,I",
+   "jne|I",
+   "mov|R,Md",
+   "mov|R,Md",
+   "add|R,Md",
+   "mov|R,Md",
+   "mov|R,I"
+  ],
+  "ext_strict": [
+   "movzx|R,Md72",
+   "shl|R,i10",
+   "mov|R,R",
+   "cmp|R,I",
+   "jne|I",
+   "mov|R,Mdb0",
+   "mov|R,Md",
+   "add|R,Md0",
+   "mov|R,Md98",
+   "mov|R,I"
   ],
   "bytes": [
    "8b09",
@@ -2269,6 +3325,30 @@
    "test|Mdc8,ie",
    "jne|I"
   ],
+  "ext_loose": [
+   "movzx|R,Md",
+   "shl|R,I",
+   "mov|R,R",
+   "cmp|R,I",
+   "jne|I",
+   "mov|R,Md",
+   "mov|R,Md",
+   "add|R,Md",
+   "mov|R,Md",
+   "mov|R,I"
+  ],
+  "ext_strict": [
+   "movzx|R,Md72",
+   "shl|R,i10",
+   "mov|R,R",
+   "cmp|R,I",
+   "jne|I",
+   "mov|R,Mdb0",
+   "mov|R,Md",
+   "add|R,Md0",
+   "mov|R,Md98",
+   "mov|R,I"
+  ],
   "bytes": [
    "8b09",
    "e86463fdff",
@@ -2319,6 +3399,30 @@
    "test|Mdc8,ie",
    "je|I",
    "cmp|Md20,i0"
+  ],
+  "ext_loose": [
+   "jne|I",
+   "mov|R,Md",
+   "call|Md",
+   "lea|R,Md",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md",
+   "call|Md",
+   "nop|",
+   "add|R,I"
+  ],
+  "ext_strict": [
+   "jne|I",
+   "mov|R,Md",
+   "call|Md",
+   "lea|R,Md-8",
+   "mov|R,R",
+   "call|I",
+   "mov|R,Md",
+   "call|Md",
+   "nop|",
+   "add|R,i38"
   ],
   "bytes": [
    "488d6c2430",
@@ -2371,6 +3475,30 @@
    "mov|R,R",
    "mov|R,R"
   ],
+  "ext_loose": [
+   "mov|R,Md",
+   "movabs|R,I",
+   "nop|",
+   "xor|R,R",
+   "nop|Md+",
+   "test|R,R",
+   "je|I",
+   "add|R,I",
+   "movzx|R,Md",
+   "shl|R,I"
+  ],
+  "ext_strict": [
+   "mov|R,Md70",
+   "movabs|R,I",
+   "nop|",
+   "xor|R,R",
+   "nop|Md0+",
+   "test|R,R",
+   "je|I",
+   "add|R,i8",
+   "movzx|R,Mdc2",
+   "shl|R,i3"
+  ],
   "bytes": [
    "488d6c2430",
    "48c74500feffffff",
@@ -2421,6 +3549,30 @@
    "movaps|Md-30,R",
    "mov|Md-20,i0",
    "mov|Md-18,if"
+  ],
+  "ext_loose": [
+   "mov|Md,I",
+   "lea|R,Md",
+   "lea|R,Md",
+   "mov|R,I",
+   "mov|R,R",
+   "call|I",
+   "test|Md,I",
+   "jne|I",
+   "movzx|R,Md",
+   "shl|R,I"
+  ],
+  "ext_strict": [
+   "mov|Md20,i15",
+   "lea|R,Md",
+   "lea|R,Md-30",
+   "mov|R,i15",
+   "mov|R,R",
+   "call|I",
+   "test|Mdc8,ie",
+   "jne|I",
+   "movzx|R,Md72",
+   "shl|R,i10"
   ],
   "bytes": [
    "488d6c2460",
@@ -2473,6 +3625,30 @@
    "movabs|R,I",
    "cmp|R,R"
   ],
+  "ext_loose": [
+   "mov|Md,R",
+   "jne|I",
+   "mov|R,R",
+   "mov|R,Md",
+   "call|Md",
+   "cmp|Md,R",
+   "jne|I",
+   "mov|R,Md",
+   "mov|Md,R",
+   "mov|R,I"
+  ],
+  "ext_strict": [
+   "mov|Md-30,R",
+   "jne|I",
+   "mov|R,R",
+   "mov|R,Md",
+   "call|Md",
+   "cmp|Md18,R",
+   "jne|I",
+   "mov|R,Md",
+   "mov|Md-20,R",
+   "mov|R,i60"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f2975f0",
@@ -2523,6 +3699,30 @@
    "mov|R,Md30",
    "movabs|R,I",
    "test|R,R"
+  ],
+  "ext_loose": [
+   "je|I",
+   "mov|R,Md",
+   "movabs|R,I",
+   "cmp|R,R",
+   "jne|I",
+   "test|Md,I",
+   "jne|I",
+   "mov|R,Md",
+   "test|Md,I",
+   "mov|R,Md"
+  ],
+  "ext_strict": [
+   "je|I",
+   "mov|R,Md10",
+   "movabs|R,I",
+   "cmp|R,R",
+   "jne|I",
+   "test|Md2f,i20",
+   "jne|I",
+   "mov|R,Md8",
+   "test|Mdc8,ie",
+   "mov|R,Md10"
   ],
   "bytes": [
    "488d6c2420",
@@ -2575,6 +3775,30 @@
    "mov|R,R",
    "mov|R,Md10"
   ],
+  "ext_loose": [
+   "mov|R,Md",
+   "mov|R,R",
+   "sub|R,R",
+   "cmp|R,R",
+   "jae|I",
+   "mov|Md,R",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,R",
+   "call|I"
+  ],
+  "ext_strict": [
+   "mov|R,Md18",
+   "mov|R,R",
+   "sub|R,R",
+   "cmp|R,R",
+   "jae|I",
+   "mov|Md20,R",
+   "mov|R,R",
+   "mov|R,R",
+   "mov|R,R",
+   "call|I"
+  ],
   "bytes": [
    "b201",
    "e8b8410500",
@@ -2625,6 +3849,30 @@
    "xor|R,R",
    "cmp|R,R",
    "jb|I"
+  ],
+  "ext_loose": [
+   "mov|R,R",
+   "mov|R,R",
+   "add|R,R",
+   "mov|R,Md",
+   "mov|R,R",
+   "or|R,I",
+   "movabs|R,I",
+   "js|I",
+   "mov|R,R",
+   "shr|R,I"
+  ],
+  "ext_strict": [
+   "mov|R,R",
+   "mov|R,R",
+   "add|R,R",
+   "mov|R,Md18",
+   "mov|R,R",
+   "or|R,if",
+   "movabs|R,I",
+   "js|I",
+   "mov|R,R",
+   "shr|R,i1"
   ],
   "bytes": [
    "488d6c2430",
@@ -2677,6 +3925,30 @@
    "cmp|R,R",
    "jb|I"
   ],
+  "ext_loose": [
+   "mov|R,R",
+   "mov|R,R",
+   "add|R,R",
+   "mov|R,Md",
+   "mov|R,R",
+   "or|R,I",
+   "movabs|R,I",
+   "js|I",
+   "mov|R,R",
+   "shr|R,I"
+  ],
+  "ext_strict": [
+   "mov|R,R",
+   "mov|R,R",
+   "add|R,R",
+   "mov|R,Md18",
+   "mov|R,R",
+   "or|R,if",
+   "movabs|R,I",
+   "js|I",
+   "mov|R,R",
+   "shr|R,i1"
+  ],
   "bytes": [
    "488d6c2420",
    "48c74500feffffff",
@@ -2727,6 +3999,30 @@
    "xor|R,R",
    "cmp|R,R",
    "jb|I"
+  ],
+  "ext_loose": [
+   "mov|R,R",
+   "mov|R,R",
+   "add|R,R",
+   "mov|R,Md",
+   "mov|R,R",
+   "or|R,I",
+   "movabs|R,I",
+   "js|I",
+   "mov|R,R",
+   "shr|R,I"
+  ],
+  "ext_strict": [
+   "mov|R,R",
+   "mov|R,R",
+   "add|R,R",
+   "mov|R,Md18",
+   "mov|R,R",
+   "or|R,if",
+   "movabs|R,I",
+   "js|I",
+   "mov|R,R",
+   "shr|R,i1"
   ],
   "bytes": [
    "488d6c2420",

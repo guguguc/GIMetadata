@@ -107,15 +107,16 @@ def _interesting(t):
     return ('M' in t) or ('I' in t) or t.startswith('call') or t.startswith('cmp')
 
 
-def gen_sig(md, pe, va, name, ninstr=8, skip=0):
+def gen_sig(md, pe, va, name, ninstr=8, skip=0, next_=0):
     """跳过序言 + 跳过无信息量指令，再从**函数中部**取 ninstr 条"""
     off = pe.va2off(va)
     if off is None: return None
     insns = []
-    for insn in md.disasm(pe.D[off:off + 512], va):
+    for insn in md.disasm(pe.D[off:off + 1024], va):
         insns.append(insn)
-        if len(insns) >= ninstr + 40: break
+        if len(insns) >= ninstr + next_ + 40: break
     if len(insns) < 4: return None
+    insns_all = insns
     i = 0
     # 1) 跳序言
     while i < len(insns):
@@ -136,8 +137,17 @@ def gen_sig(md, pe, va, name, ninstr=8, skip=0):
     loose = [toks_of(x, False) for x in insns]
     strict = [toks_of(x, True) for x in insns]
     bl = [mask_bytes(x) for x in insns]
+    # 扩展参考：紧接其后的更多指令。**只用于并列时定夺**，搜索仍用上面 ninstr 条模式
+    ext_loose = ext_strict = []
+    if next_:
+        tail = insns_all[i:i + ninstr + next_]
+        if len(tail) > ninstr:
+            more = tail[ninstr:]
+            ext_loose = [toks_of(x, False) for x in more]
+            ext_strict = [toks_of(x, True) for x in more]
     return {'name': name, 'va': '0x%X' % va, 'skip': i, 'skip_bytes': skip_bytes, 'n': len(insns),
             'loose': loose, 'strict': strict,
+            'ext_loose': ext_loose, 'ext_strict': ext_strict,
             'bytes': [b[0] for b in bl], 'mask': [b[1] for b in bl],
             'pat': ''.join(b[0] for b in bl), 'pmask': ''.join(b[1] for b in bl),
             'distinct': len(set(loose)),
@@ -169,7 +179,7 @@ def cmd_gen(a):
                 tgt = ' (jmp %s)' % ins[0].op_str
             print("  SKIP %s (0x%X) 是跳板/填充，不是函数体%s" % (name, va, tgt))
             continue
-        s = gen_sig(md, pe, va, name, a.ninstr, a.skip)
+        s = gen_sig(md, pe, va, name, a.ninstr, a.skip, a.next)
         if s:
             sigs.append(s)
             if s['distinct'] < 4: print("  ⚠ 弱签名(区分度低): %s" % name)
@@ -235,6 +245,7 @@ def cmd_scan(a):
     md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
     hit = miss = amb = 0
     where = {}
+    pending = []      # 歧义项（末尾按「同组相对次序」定夺）
     for sg in sigs:
         pb = binascii.unhexlify(sg['pat']); pm = binascii.unhexlify(sg['pmask'])
         fo, fl = _longest_fixed(pb, pm)
@@ -270,11 +281,24 @@ def cmd_scan(a):
                 if len(insns) >= sg['n']: break
             if len(insns) < sg['n']: continue
             lo = [toks_of(x, False) for x in insns]; st = [toks_of(x, True) for x in insns]
+            # 扩展参考打分（只用紧接其后的 token，不改变 8 条搜索模式的判据）
+            xs = 0
+            if sg.get('ext_loose'):
+                more = []
+                for ins in md.disasm(pe.D[off:off + 128], va):
+                    more.append(ins)
+                    if len(more) >= sg['n'] + len(sg['ext_loose']): break
+                if len(more) >= sg['n']:
+                    tail = more[sg['n']:]
+                    tl = [toks_of(x, False) for x in tail]
+                    ts = [toks_of(x, True) for x in tail]
+                    xs = (sum(1 for i in range(len(tl)) if ts[i] == sg['ext_strict'][i]) * 2
+                          + sum(1 for i in range(len(tl)) if tl[i] == sg['ext_loose'][i]))
             scored.append((va, sum(1 for i in range(sg['n']) if st[i] == sg['strict'][i]),
-                           sum(1 for i in range(sg['n']) if lo[i] == sg['loose'][i])))
+                           sum(1 for i in range(sg['n']) if lo[i] == sg['loose'][i]), xs))
         if not scored:
             miss += 1; print("  %-42s \u2717 未命中" % sg['name']); continue
-        scored.sort(key=lambda x: (-x[1], -x[2]))
+        scored.sort(key=lambda x: (-x[1], -x[2], -x[3]))
         # 只接受**反汇编 token 真的对上**的候选：loose 必须全中（或接近全中）。
         # 教训：字节模式可能碰巧对上，但 token 一条不匹配（loose 0/8）—— 那是假命中。
         keep = [t for t in scored if t[2] == sg['n']]
@@ -290,8 +314,8 @@ def cmd_scan(a):
                       % (sg['name'], near[0][2], sg['n'], near[0][0] - sg.get('skip_bytes', 0)))
             continue
         scored = keep + [t for t in scored if t not in keep]
-        top = (scored[0][1], scored[0][2])
-        tied = [t for t in scored if (t[1], t[2]) == top]
+        top = (scored[0][1], scored[0][2], scored[0][3])
+        tied = [t for t in scored if (t[1], t[2], t[3]) == top]
         fstart = scored[0][0] - sg.get('skip_bytes', 0)
         if len(tied) > 1:
             pick = [t for t in tied if t[0] - sg.get('skip_bytes', 0) == origin]
@@ -304,17 +328,14 @@ def cmd_scan(a):
                       % (sg['name'], tag, origin, len(tied)))
                 where.setdefault(origin, []).append(sg['name'])
                 continue
-            amb += 1
-            print("  %-42s \u26a0 歧义：%d 个并列最高分 %s" % (
-                sg['name'], len(tied),
-                ", ".join("0x%X" % (t[0] - sg.get('skip_bytes', 0)) for t in tied[:4])))
+            pending.append((sg, sorted(t[0] - sg.get('skip_bytes', 0) for t in tied)))
             continue
         hit += 1
-        va, ns_, nl = scored[0]
+        va, ns_, nl, _xs = scored[0]
         same = (fstart == origin)
         tag = "严格全中" if ns_ == sg['n'] else "loose %d/%d" % (nl, sg['n'])
-        flag = "" if len(scored) == 1 else "  (次优 %d/%d @0x%X)" % (
-            scored[1][1], scored[1][2], scored[1][0] - sg.get('skip_bytes', 0))
+        flag = "" if len(scored) == 1 else "  (次优 %d/%d 扩展%d @0x%X)" % (
+            scored[1][1], scored[1][2], scored[1][3], scored[1][0] - sg.get('skip_bytes', 0))
         # 起点存疑：前一字节不是填充 —— 通常是 skip_bytes 把"函数头"算到了指令中间。
         # **仍给出地址**（大概率对），但明确标注让人复核；同版本自测时原地址本身就是答案，不标。
         shaky = (not same) and (fstart % 16 != 0 or not _plausible_start(pe, fstart))
@@ -323,6 +344,30 @@ def cmd_scan(a):
         print("  %-42s %-12s 函数起点 0x%-10X %s%s" % (
             sg['name'], tag, fstart, "=原地址 ✓" if same else "(原 0x%X)" % origin, flag))
         where.setdefault(fstart, []).append(sg['name'])
+    # ---- 歧义项：同组的（候选集合完全相同）按相对次序定夺 ----
+    # 例：TypePredicateB/C/D 三个函数内容完全相同 -> 候选集合一样，
+    #     但它们在 .text 里的**先后次序**跨版本保留，按记录次序一一对应。
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for sg, addrs in pending:
+        groups[tuple(addrs)].append((sg, addrs))
+    resolved = {}
+    for addrs, items in groups.items():
+        items.sort(key=lambda it: int(it[0]['va'], 16))
+        if len(items) == len(addrs):
+            for (sg, _), a in zip(items, addrs):
+                resolved[sg['name']] = a
+    for sg, addrs in pending:
+        if sg['name'] in resolved:
+            a = resolved[sg['name']]
+            hit += 1
+            print("  %-42s %-12s 函数起点 0x%-10X (原 0x%X)  \u26a0 %d 个并列(同组，按相对次序定夺)"
+                  % (sg['name'], "严格全中" if sg['n'] else "", a, int(sg['va'], 16), len(addrs)))
+            where.setdefault(a, []).append(sg['name'])
+        else:
+            amb += 1
+            print("  %-42s \u26a0 歧义：%d 个并列最高分 %s" % (
+                sg['name'], len(addrs), ", ".join("0x%X" % x for x in addrs[:4])))
     for va, names in where.items():
         if len(names) > 1:
             print("  \u26a0 0x%X 被 %d 条签名同时认领: %s  —— 多半有一条是错的"
@@ -337,6 +382,7 @@ def main():
     g = sub.add_parser('gen');  g.add_argument('exe'); g.add_argument('--names', default=os.path.join(HERE, 'sig_names.txt'))
     g.add_argument('-o', '--out', default=os.path.join(HERE, 'sigs.json'))
     g.add_argument('--ninstr', type=int, default=8); g.add_argument('--skip', type=int, default=2)
+    g.add_argument('--next', type=int, default=10, help='额外存的参考 token 条数（仅并列时定夺用）')
     g.set_defaults(fn=cmd_gen)
     s = sub.add_parser('scan'); s.add_argument('exe'); s.add_argument('--sigs', default=os.path.join(HERE, 'sigs.json'))
     s.add_argument('--loose-only', action='store_true'); s.set_defaults(fn=cmd_scan)
