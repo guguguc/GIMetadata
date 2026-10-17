@@ -1040,6 +1040,53 @@ def main():
                     found['typeDefinitionsOffset'] = (
                         kr['base'], 0,
                         '无密钥反解（哨兵+连续性+全表校验）%d 对' % len(kr['pairs']), 0)
+                # ---- 布局识别：用 fDV 的 fieldIndex 覆盖率 + 区间铺满 ----
+                fv = found.get('fieldDefaultValuesOffset')
+                if fv:
+                    fdv_off = d.hdr + fv[0]
+                    allp = []
+                    for idx_disp in (0, 4, 8):
+                        try:
+                            lr = KL.layout_search_fdv(d, kr['base'], fdv_off,
+                                                      fdv_idx_disp=idx_disp,
+                                                      n=2048, full=88902)
+                        except Exception:
+                            continue
+                        for row in lr['pairs']:
+                            allp.append((row, idx_disp))
+                    if allp:
+                        # ★ fieldStart 的判据：N 必须 >= max(fDV.fieldIndex)，
+                        #    且是**刚好覆盖**它的那个（methodStart 的 N 会大很多）
+                        import struct as _st
+                        maxf_by = {}
+                        for _ix in (0, 4, 8):
+                            _m = 0
+                            for _i in range(min(fv[1], 80000)):
+                                _x = _st.unpack_from('<i', d.raw, fdv_off + 12 * _i + _ix)[0]
+                                if _x > _m:
+                                    _m = _x
+                            maxf_by[_ix] = _m
+                        # 每对用自己的 fDV 列：N 必须 >= 该列最大值，取**刚好覆盖**的那个
+                        cands2 = [(r, i, maxf_by[i]) for r, i in allp if r[1] >= maxf_by[i]]
+                        cands2.sort(key=lambda x: (x[0][1], -x[0][0]))
+                        if cands2:
+                            (c, tot, dc, wc, oc, kc, dk, wk, ok_, kk), idx_disp, maxf = cands2[0]
+                            print("   ⑧ 布局识别: **fieldStart +0x%02X %s 0x%X / fieldCount +0x%02X %s 0x%X**  "
+                                  "N=%d  cov=%.5f  (fDV 列 +%d, max=%d)"
+                                  % (dc, oc, kc, dk, ok_, kk, tot, c, idx_disp, maxf))
+                            found['typeDefFieldStartDisp'] = (dc, oc, kc, 0, '', 0)
+                            found['typeDefFieldCountDisp'] = (dk, ok_, kk, 0, '', 0)
+                        print("  ⑧ 布局识别: %d 组能铺满（按 N 排序展示前 4）:" % len(allp))
+                        seen = set()
+                        for (c, tot, dc, wc, oc, kc, dk, wk, ok_, kk), idx_disp in allp[:8]:
+                            key = (dc, dk, tot)
+                            if key in seen:
+                                continue
+                            seen.add(key)
+                            print("      cov=%.5f N=%-7d 累计 +0x%02X %s 0x%-9X  计数 +0x%02X %s 0x%X"
+                                  % (c, tot, dc, oc, kc, dk, ok_, kk))
+                    else:
+                        print("   ⑧ 布局识别: 未找到能铺满的 (累计,计数) 对")
         except Exception as e:
             print("   keyless 失败:", e)
 

@@ -110,7 +110,7 @@ def check_count(v, width):
     return v
 
 
-def derive_for_field(d, base, disp, width, n, kind='cum'):
+def derive_for_field(d, base, disp, width, n, kind='cum', topk=1):
     """返回 [(op, K, v2, span)] —— 从"最频繁的 raw 值"反推
 
     kind='cum'   -> 累计索引（跨度要 >=1000）
@@ -122,14 +122,14 @@ def derive_for_field(d, base, disp, width, n, kind='cum'):
     vals, cnts = np.unique(col, return_counts=True)
     if len(vals) < 8:
         return []
-    i = int(np.argmax(cnts))
-    raw_star, freq = int(vals[i]), int(cnts[i])
-    if freq < n // 20:                     # 哨兵应占至少 5%
+    order = np.argsort(-cnts)[:max(1, topk)]
+    cands = [(int(vals[i]), int(cnts[i])) for i in order if int(cnts[i]) >= n // 50]
+    if not cands:
         return []
     wb = width * 8
     m = (1 << wb) - 1
     out = []
-    if True:
+    for raw_star, freq in cands:
       for sentinel in (-1, 0):
         for op in ('xor', 'add', 'sub'):
             if op == 'xor':
@@ -418,3 +418,79 @@ def find_typedefs(d, bases, n=4096, full=88902, layout_search=True,
     best['cums'] = [(dc, wc, oc, kc, mx) for dc, wc, oc, kc, mx, _ in sorted(cums)]
     best['validated'] = bool(pairs)
     return best
+
+
+def layout_search_fdv(d, base, fdv_off, fdv_idx_disp=8, fdv_n=73818,
+                      n=4096, full=88902, topk=8, min_cov=0.999):
+    """**布局自动识别**：`(累计,计数)` 配对必须**全表铺满** + fDV 覆盖率裁决。
+
+    ⚠️ **不能用"单调"**：7.0 的 typeDef 是**乱序**的，单调会误杀真布局。
+    正确判据是「所有类型的 [start,start+count) 恰好拼成 [0, N)」。
+    """
+    import struct
+    off = d.hdr + base
+    cums, cnts = [], []
+    for disp in range(0x00, 0x61):
+        for w in (4, 2):
+            if disp % w:
+                continue
+            for op, K, _sp, _v in derive_for_field(d, off, disp, w, n, topk=topk):
+                cums.append((disp, w, op, K))
+        for w in (1, 2):
+            if disp % w:
+                continue
+            for op, K, _sp, _v in derive_for_field(d, off, disp, w, n, kind='count', topk=topk):
+                cnts.append((disp, w, op, K))
+    fidx = sorted({struct.unpack_from('<i', d.raw, fdv_off + 12 * i + fdv_idx_disp)[0]
+                   for i in range(fdv_n)} - {-1})
+
+    def cov_of(fs, fc):
+        if not fidx:
+            return 1.0
+        N = int(max(int(fs[fs >= 0].max(initial=0)) + int(fc.max(initial=0)) + 8, 16))
+        covered = np.zeros(N, dtype=bool)
+        for s, c in zip(fs.tolist(), fc.tolist()):
+            if c > 0 and 0 <= s < N:
+                covered[s:min(s + c, N)] = True
+        arr = np.array(fidx, dtype=np.int64)
+        arr = arr[arr < N]
+        return float(covered[arr].mean()) if len(arr) else 1.0
+
+    pairs = []
+    for dc, wc, oc, kc in cums:
+        for dk, wk, ok_, kk in cnts:
+            if dc == dk:
+                continue
+            fs = _decode_full(d, off, dc, wc, oc, kc, full)
+            fc = _decode_full(d, off, dk, wk, ok_, kk, full)
+            if fs is None or fc is None:
+                continue
+            tot = ranges_tile(fs, fc)          # ★ 铺满（全表）
+            if tot is None:
+                continue
+            c = cov_of(fs, fc)
+            if c >= min_cov:
+                pairs.append((round(c, 5), tot, dc, wc, oc, kc, dk, wk, ok_, kk))
+    pairs.sort(key=lambda x: (-x[0], -x[1]))
+    return {'cums': cums, 'cnts': cnts, 'pairs': pairs}
+
+
+def ranges_tile(fs, fc, maxn=3_000_000):
+    """**区间铺满**判据：所有类型的 [start, start+count) 必须恰好拼成 [0, N)
+
+    比"单调"强得多，而且**不要求类型按 start 排序**（7.0 实测是乱序的）。
+    """
+    if fs is None or fc is None:
+        return None
+    segs = sorted((int(s), int(s) + int(c)) for s, c in zip(fs.tolist(), fc.tolist())
+                  if c > 0 and s >= 0)
+    if not segs:
+        return None
+    cur = 0
+    for a, b in segs:
+        if a != cur:
+            return None
+        cur = b
+        if cur > maxn:
+            return None
+    return cur if cur > 0 else None

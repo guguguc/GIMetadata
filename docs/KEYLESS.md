@@ -135,3 +135,46 @@ fieldStart   (+0x2C) max = 2.1e9   ✗   (应 ~440172)
 ```
 
 → 7.0 上 `typeDef` 的**字段密钥仍未解出** ✗，基址已确定 ✓。
+
+---
+
+## 六、布局自动识别（2026-10-17 完成 ✅）
+
+### 判据：**区间铺满** + fDV 覆盖率
+
+7.0 的 typeDef 是**乱序**的（`fieldStart` 不再单调）✗，所以"单调"判据会误杀真布局 ✗。
+真正的强不变量是：
+
+```
+所有类型的 [start, start+count) 必须恰好拼成 [0, N)
+```
+
+再加 **fDV 覆盖率**（`fieldIndex` 必须落在某个类型的字段区间内 = 1.0000）✓
+
+### 结果（全自动，无需任何版本常量）
+
+```
+7.1: fieldStart +0x1C xor 0x29010897 / fieldCount +0x38 xor 0x51A8   N=440172  cov=1.00000
+7.0: fieldStart +0x2C add 0xE1978E1C / fieldCount +0x3C add 0xFF75   N=430290  cov=1.00000
+```
+
+7.1 的 N 与 `verify.py` 的 440172 完全一致 ✓
+7.0 的 N=430290 刚好覆盖 fDV 的 fieldIndex 最大值 430272 ✓
+
+### 现在完整自动的链路（`relocate --keyless` 默认开）
+
+```
+① /70 魔数短名单（4200→11 / 12257→8）
+② 无密钥反解：哨兵推 key（top-K 哨兵）
+③ 全表校验（max/单调/计数范围）
+④ 区间铺满（乱序也成立）
+⑤ fDV 覆盖率裁决（=1.0000）
+⑥ 「N 刚好覆盖 fDV.fieldIndex 最大值」→ 唯一锁定 fieldStart/fieldCount
+```
+
+### 仍未自动的
+
+- `fieldDecode.typeDef` 的**其余字段**（nameIndex/flags/methodStart/...）：
+  需要按各自的语义判据逐个找（nameIndex 用"名字可打印"、flags 用"种数少"）
+- **dumper 本身**仍按 7.1 的位移写死（`src/il2cpp_image.hpp`），
+  所以即使工具识别出新布局，也要改 C++ 才能用它
