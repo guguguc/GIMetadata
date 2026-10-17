@@ -128,10 +128,12 @@ def main():
                 nm = old_truth.get(int(v, 16)) if v else None
                 # ★ 保留 None 占位！跳过会让"新导出"的位置整体偏移 ✗
                 for fn in set(t.get('funcs') or []):      # ★ 去重！否则同一条目被加两次 -> 位置翻倍
-                    byf.setdefault(fn, []).append((t.get('seq', 0), nm))
+                    byf.setdefault(fn, []).append(
+                        (t.get('seq', 0), nm, tuple(t.get('strides') or ())))
             for fn, rows in byf.items():
                 rows.sort()
-                learned[fn] = [nm for _, nm in rows]
+                # ★ 元素 = (表名, strides)：用 strides 当"身份"做序列对齐
+                learned[fn] = [(nm, st) for _, nm, st in rows]
             print('学到 %d 个函数的读取顺序（%d 张表）'
                   % (len(learned), sum(len(v) for v in learned.values())))
 
@@ -153,20 +155,27 @@ def main():
     if learned:
         for t in tables:
             for fn in set(t.get('funcs') or []):
-                names = learned.get(fn)
-                if not names:
+                learned_rows = learned.get(fn)
+                if not learned_rows:
                     continue
-                # 该函数导出的所有条目按 seq 排序
                 sibs = sorted([x for x in tables if fn in set(x.get('funcs') or [])],
                               key=lambda x: x.get('seq', 0))
-                i = sibs.index(t)
-                if i < len(names):
-                    nm = names[i]
-                    k = (t['slot'], t['op'], t['key'])
-                    if nm and nm not in result and k not in used:
-                        t['how'] = 'order-match(学自旧版顺序)'
-                        result[nm] = t
-                        used.add(k)
+                if t not in sibs:
+                    continue
+                import difflib
+                _old_sig = [st for _nm, st in learned_rows]
+                _new_sig = [tuple(x.get('strides') or ()) for x in sibs]
+                sm = difflib.SequenceMatcher(None, _old_sig, _new_sig, autojunk=False)
+                pos = sibs.index(t)
+                for blk in sm.get_matching_blocks():
+                    if blk.b <= pos < blk.b + blk.size:
+                        nm = learned_rows[blk.a + (pos - blk.b)][0]
+                        k = (t['slot'], t['op'], t['key'])
+                        if nm and nm not in result and k not in used:
+                            t['how'] = 'order-match(序列对齐)'
+                            result[nm] = t
+                            used.add(k)
+                        break
 
     def key_of(c):
         return (c['slot'], c['op'], c['key'])

@@ -1189,7 +1189,16 @@ python3 tools/ida_apply.py <新导出.json> --hits <新hits.json> \
 **9/9 可比函数顺序全部保持单调** ✓✓ —— **`seq` 稳定性的假设得到支持** ✓
 
 > ⚠️ 但**读取条数会变**（如 fields 452→467、parameters 237→224）✗
-> → **不能按绝对序号对齐** ✗；要用**序列对齐**（LCS/difflib，元素用 stride 当身份）✓
+> → **不能按绝对序号对齐** ✗；已改成**序列对齐**（`difflib.SequenceMatcher`，
+> 元素身份 = `strides`）✓
+
+**序列对齐后自测（7.1 → 7.1）**：
+
+```
+=== 已确定 20 张表 ===   [order-match(序列对齐)]
+=== 需要消歧 5 张 ===     （绝对序号法时是 9 张 ✗）
+→ 20/20 全对 ✓
+```
 > 未定位的 4 个函数（`SetupTypeInfoLocked` / `GetFieldDefaultValue` /
 > `GetDefaultParameterValueObject` / `BuildMethodName`）在 7.0 上 sig 没命中 ✗，无法比较 ✗
 
