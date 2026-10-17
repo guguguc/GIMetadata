@@ -872,15 +872,19 @@ def main():
             elif not ok_c:
                 ver, none_n = '✗ 无落入元数据范围的候选', none_n + 1
             elif len(ok_c) == 1:
-                ver, uniq_n = '✅ 唯一', uniq_n + 1
+                # ⚠️ 这是**弱证据**：「唯一落进元数据范围」只说明这一组 (slot,op,key) 碰巧
+                #    算出了一个看着像偏移的数，并没有验证它真的是那张表。
+                #    7.0 实测：34 张里只有 16 张能这样定出来，剩下 18 张 slot 搬家了。
+                ver, uniq_n = '✅ 唯一 -> 0x%X  [弱证据]' % ok_c[0][0], uniq_n + 1
             else:
                 ver, multi = '⚠ %d 个候选，需结构/人工判定' % len(ok_c), multi + 1
-            if not ver.startswith('✅'):
-                details.append("   %-38s slot 0x%-4X %s" % (k, s, ver))
+            details.append("   %-38s slot 0x%-4X %s" % (k, s, ver))
         for line in details:
             print(line)
-        print("   合计: slot 唯一确定 %d 张, 多候选 %d 张, 无候选 %d 张" % (uniq_n, multi, none_n))
-        print("   （前提：slot 跨版本稳定 —— 尚未用第二个样本验证；见 docs/UPDATE.md §8.6）")
+        print("   合计: slot 唯一确定 %d 张 [弱], 多候选 %d 张, 无候选 %d 张"
+              % (uniq_n, multi, none_n))
+        print("   ⚠ 已用 7.0 样本**证伪**「slot 跨版本稳定」：见下方实际落到多少张。")
+        print("     换版本时这 %d 张只是初值，必须靠 ④ 结构自证或人工确认。" % uniq_n)
 
     print("\n== ⑦ 反查 slot：结构自证得到的值 → 唯一 (slot,op,key)（换版本可全自动）==")
     byval = {}
