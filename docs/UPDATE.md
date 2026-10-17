@@ -741,7 +741,8 @@ xor   rsi, 0x4ce7b502          ; KEY
 
 | 字段 | 怎么确认 |
 |---|---|
-| `nameIndex` | 解出的值必须是 `offset\|len<<24`，且解密后是可打印名字（**用字符串解密器裁决**，`relocate ⑧` 已自动化） |
+| `nameIndex` | 解出的值必须是 `offset\|len<<24`，且解密后是可打印名字（**用字符串解密器裁决**，`relocate ⑧` 已自动化）。7.1 实测：`+0x24 sub 72511848`，可打印率 **1.000**、**502 个不同值** |
+| `namespaceIndex` | 同上，但**允许 `len==0`**（无命名空间）；区分靠**不同值个数**：7.1 实测 `+0x00 sub 1145778368` → 可打印率 0.818（其余是空串）、**只有 17 个不同值**（类型名有 502 个）✓ |
 | `flags` | 解码后只有几十种取值，且是 bitmask（`TYPE_ATTRIBUTE`） |
 | `parentIndex` | 解码后必须是 **Il2CppType 索引**（`-1` = 无父类）；用 `System.Enum`/`System.ValueType` 的已知父类反解（见 §8 Worked example A） |
 | `genericContainerIndex` | 解码后是**容器表**索引；用名字里的 `` `N `` 反解（argc 必须等于 N） |
