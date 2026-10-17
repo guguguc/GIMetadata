@@ -991,6 +991,24 @@ tools/ida_headless.sh version/7.0/gi.exe /tmp/ida70.json /tmp/h70.json
 idat64 -A -S"tools/ida_export.py /tmp/ida70.json /tmp/h70.json" version/7.0/gi.exe
 ```
 
+**⚠️ 全量反编译是**没用的**（431MB 有 ~58 万函数，小时级 ✗，而且抓到也没法贴标签 ✗）**
+
+> 关键认识：`ida_export` 只是**把表达式抓出来** ✗ —— 它**不知道** `*(_DWORD*)(MHY+0xB4)-0x13B75461`
+> 是哪张表 ✗。**"这是哪张表"只能来自两处**：
+> ① **函数名**（`table_funcs.json` ✓，已覆盖 28/29 张表 ✓）
+> ② **值**的结构自证（`relocate ④` ✓，只有 6~7 张 ✓）
+>
+> 所以：**抓 5000 个没标签的表达式 = 0 收益** ✗。全量唯一有用的场景是"你愿意自己给每个表达式贴标签" ✗。
+
+**54 个 sig 函数到底覆盖多少（实测）**
+
+```
+table_funcs.json: 13 个函数 -> 覆盖 28 / 29 张有步长的表 ✓（只差 fieldOffset）
+  其中 7 个**单表函数** -> 可**全自动** ✓
+       6 个**多表函数** -> 只能给候选 ✗
+       （SetupTypeInfoLocked 5 张、RuntimeInit 7 张、SetupMethodsLocked 3 张 …）
+```
+
 **⚠️ 别全量反编译（431MB 有 ~58 万函数，小时级 ✗）**
 
 ```bash

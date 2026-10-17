@@ -43,8 +43,9 @@ if [[ ! -x "$(command -v "$IDAT" || true)" ]]; then
   exit 1
 fi
 # ✅ 实测：正确顺序是 `-A -S"<script> <args>" <input>`（脚本参数必须在同一个引号里）
-ARGS="$OUT $HITS"
-[[ "${IDA_FULL:-0}" == "1" ]] || ARGS="$ARGS --fast"
+# 默认**只**反编译 sig 定位到的函数：
+#   全量抓到的表达式**没有标签**（不知道是哪张表），所以没有收益 ✗
+ARGS="$OUT $HITS --fast"
 echo "[ida_headless] $IDAT -A -S\"$HERE/ida_export.py $ARGS\" \"$DB\""
 "$IDAT" -A -S"$HERE/ida_export.py $ARGS" "$DB"
 echo "[ida_headless] 完成，检查 $OUT"
