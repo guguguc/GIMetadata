@@ -202,26 +202,40 @@ python3 tools/relocate.py   version/7.0 --slots /tmp/opencode/slots_cache_70_new
 | 项 | 旧报告 | **本次复跑** | 结论 |
 |---|---|---|---|
 | `sig.py scan` | 48/54 | **48/54** | ✅ 一致 |
-| ④ 强证据 | 3（fDV + methodPtr + **blob**） | **2**（fDV + methodPtr） | ⚠️ **blob 未复现** |
+| ④ 强证据 | 3（fDV + methodPtr + **blob**） | **3**（修 find_blob 后） | ✅ 一致 |
 | ⑥ slot 提示 | 16/34（值全错） | 16 唯一 **[弱]**、1 多候选、17 无 | ✅ 一致 |
 | ⑦ 反查 | 2 张 | fDV→`slot 0xC xor 0x720EB389`；methodPtr→`slot 0x130 add 0xA3B3FC56` | ✅ 一致 |
 | 语义判定（累计索引单调） | 0 | **0**（修掉缩进 bug 后仍是 0） | ✅ 确认是**召回**问题 |
 | `sig.py consts` | — | **4/5** 字符串密钥 | 新增能力 |
 | `sig.py entryexpr` | — | 形态 **B**：`((raw ^ 0x1BD33CC0) - key)` | 新增能力（**公式变了**）|
 
-### blob 为什么没复现
+### blob「没复现」的真相：不是缺形态，是**字段顺序变了**（已修）
 
-签名位置 `0x41FB4E0` 对应 fDV 的 `dataIndex=70`，所以 blob 基址候选应为
-`0x41FB4E0 - 70 - 0x210 = 0x41FB28A` —— **不在 13033 个候选里** ✗。
+第一次复跑时 blob 找不到，一度以为要"补读取形态"。实际是 `find_blob` **写死了
+`dataIndex` 在 `+4`**，而 7.0 的 `Il2CppFieldDefaultValue` **字段顺序被置换**了：
 
 ```
-dataIndex=70  -> 0x41FB28A   不在
-dataIndex=0   -> 0x41FB2D0   不在
-dataIndex=155 -> 0x41FB235   不在
+7.1:  {fieldIndex@0, dataIndex@4, typeIndex@8}     前 3 条 = (155,0,70) (156,4,70) (157,8,70)
+7.0:  {dataIndex@0, typeIndex@4, fieldIndex@8}     前 3 条 = (0,70,155) (4,70,156) (8,70,157)
 ```
 
-又回到**候选召回**：blob 的基址在代码里大概不是"`*(MHY+K) op key`"这一种形态
-（或用了派生指针）。要复现需要 `--anchor` 模式或补形态。
+用正确的 `+0` 重算，blob 立刻命中：
+
+```
+blob(fieldAndParameterDefaultValueData) = 0x41FB240   (slot 0x1B0 xor 0x26AB5EF8)  @0x14049787E
+```
+
+修法：`find_blob` 同时试 `+4` 和 `+0`。修后：
+
+| | 7.1 | 7.0 |
+|---|---|---|
+| blob | `0xF1754C`（slot 0xA0 xor 0x3F525210）| `0x41FB240`（slot 0x1B0 xor 0x26AB5EF8）|
+
+**→ ④ 强证据恢复为 3 项**（fDV + methodPointerIndex + blob），与旧报告一致 ✓
+
+> ⚠️ 更重要的教训：**表内字段顺序会换**。结构探针只看"某个字段递增 / 某个字段是合法索引"，
+> 置换后**仍会通过**（7.0 上 +0=dataIndex 递增、+8=fieldIndex 合法 → 探针照样过）。
+> 所以**不能**从"探针通过"推断字段语义，必须用数据核对（见 `UPDATE.md` §9 坑 18）。
 
 ### 候选数量差异
 

@@ -604,10 +604,18 @@ def probe_typedefs_semantic(d, off, keycands, n=512):
 
 
 def find_blob(d, sig_pos, fdv_off, fdv_n, cands):
-    """blob 基址：让 `sig_pos` 落在某个 fieldDefaultValues 的 dataIndex 上"""
+    """blob 基址：让 `sig_pos` 落在某个 fieldDefaultValues 的 dataIndex 上。
+
+    ⚠️ **字段顺序会换**（7.0 实测）：
+        7.1: {fieldIndex@0, dataIndex@4, typeIndex@8}
+        7.0: {dataIndex@0, typeIndex@4, fieldIndex@8}   ← 转了一圈
+    所以 dataIndex 可能在 +4 **或** +0 —— 两个都试（否则 7.0 上永远找不到 blob）。
+    """
     idxs = set()
     for i in range(min(fdv_n, 80000)):
-        idxs.add(struct.unpack_from('<i', d.raw, fdv_off + 12 * i + 4)[0])
+        row = fdv_off + 12 * i
+        idxs.add(struct.unpack_from('<i', d.raw, row + 4)[0])
+        idxs.add(struct.unpack_from('<i', d.raw, row + 0)[0])
     out = []
     for val, slot, op, key in cands:
         base = d.hdr + val
