@@ -1170,7 +1170,28 @@ python3 tools/ida_apply.py <新导出.json> --hits <新hits.json> \
 1. 学习顺序时**跳过**"没有真值"的条目 → 位置整体错位 ✗ → 必须保留 `None` 占位 ✓
 2. `funcs` 里有**重复函数名**（`['A','A']`）→ 同一条目被加两次 → 位置翻倍 ✗ → 必须 `set()` 去重 ✓
 
-**剩下的唯一风险**：`seq` 顺序**跨版本**是否稳定 ✗（需要 7.0 的导出才能验 ✗）
+**✅ 跨版本验证（capstone，`tools/cmp_funcs.py`，2026-10-17）**
+
+不需要 IDA：直接把 7.1/7.0 的同名函数反汇编 + 对齐 + 比较**槽位读取顺序**：
+
+| 函数 | 指令 7.1/7.0 | 相似度 | 槽位读取 | 顺序 |
+|---|---|---|---|---|
+| `RegisterTables` | 15530/15530 | **1.000** | 4031/4031 | ✅ 单调 |
+| `IterNestedTypes` | 6719/6739 | 0.986 | 714/716 | ✅ |
+| `RuntimeInit` | 7962/7978 | 0.973 | 804/801 | ✅ |
+| `SetupPropertiesLocked` | 1575/1579 | 0.973 | 135/135 | ✅ |
+| `AllocTypeInfoArray` | 3462/3448 | 0.964 | 359/359 | ✅ |
+| `SetupEventsLocked` | 1853/1869 | 0.961 | 175/175 | ✅ |
+| `SetupParameters` | 2046/1969 | 0.955 | 237/224 | ✅ |
+| `SetupMethodsLocked` | 2314/2330 | 0.942 | 222/222 | ✅ |
+| `SetupFieldsLocked` | 4123/4169 | 0.924 | 452/467 | ✅ |
+
+**9/9 可比函数顺序全部保持单调** ✓✓ —— **`seq` 稳定性的假设得到支持** ✓
+
+> ⚠️ 但**读取条数会变**（如 fields 452→467、parameters 237→224）✗
+> → **不能按绝对序号对齐** ✗；要用**序列对齐**（LCS/difflib，元素用 stride 当身份）✓
+> 未定位的 4 个函数（`SetupTypeInfoLocked` / `GetFieldDefaultValue` /
+> `GetDefaultParameterValueObject` / `BuildMethodName`）在 7.0 上 sig 没命中 ✗，无法比较 ✗
 
 **⚠️ 未验证的关键假设**：**跨版本时 `seq` 顺序是否稳定** ✗
 - 支持：源码逻辑顺序不变 ✓、代码结构相似（48/54 函数 8/8 命中）✓
