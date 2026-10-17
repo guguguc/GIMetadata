@@ -184,6 +184,10 @@ python3 tools/sig.py scan version/7.2/gi.exe --sigs tools/sigs.json --fuzzy --js
 # 2) 从定位到的函数里自动迁移「字符串解密常量」
 python3 tools/sig.py consts version/7.2/gi.exe \
     --func <DecryptString> --func <RuntimeInit>
+
+# 3) 自动推导「entry 解码表达式」（**结构**是否变了）
+python3 tools/sig.py entryexpr version/7.2/gi.exe \
+    --decrypt <DecryptString> --caller <RuntimeInit>
 ```
 - `gen` 会**跳过序言**、从函数中部取 8 条指令；寄存器全通配、精确保留小立即数/偏移
 - `scan` 走**字节优先**（最长固定子串 `bytes.find` → 只在候选处反汇编核对）→ **0.8 秒 / 54 条**
@@ -191,6 +195,12 @@ python3 tools/sig.py consts version/7.2/gi.exe \
 - `consts` 自动解出 **4/5** 个字符串密钥（`keyMulA/keyMulB/keySeed/keyStep`），
   并用「`xor reg,reg` 紧跟 `xor reg,imm32` **且之后 call 解密函数**」解出 `entryXor`
   —— 7.1 自测 **5/5**；7.0 只出 4/5（它把 entry 解码换成了 `xor K; sub key`，结构变了）
+- `entryexpr` 把 entry 解码**表达式**推导出来（不是只给常数）：
+  ```
+  7.1:  ((raw ^ key) ^ 0x772FA51E)      形态 A（单一 xor）
+  7.0:  ((raw ^ 0x1BD33CC0) - key)      形态 B（xor + sub）★ 结构不同
+  ```
+  两个版本都**唯一命中**（限定 `--caller RuntimeInit` + 只认 `scale=8` 的索引读取）
 
 ### `tools/gen_version.py` —— 生成版本头
 ```bash

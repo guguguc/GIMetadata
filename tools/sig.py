@@ -901,6 +901,164 @@ def cmd_consts(a):
 
 
 
+# ============ entryexpr: 自动推导 entry 解码表达式 ============
+FAM = {}
+for _names, _f in ((('rax', 'eax', 'ax', 'al', 'ah'), 'a'), (('rbx', 'ebx', 'bx', 'bl', 'bh'), 'b'),
+                   (('rcx', 'ecx', 'cx', 'cl', 'ch'), 'c'), (('rdx', 'edx', 'dx', 'dl', 'dh'), 'd'),
+                   (('rsi', 'esi', 'si', 'sil'), 'si'), (('rdi', 'edi', 'di', 'dil'), 'di'),
+                   (('rbp', 'ebp', 'bp', 'bpl'), 'bp'), (('rsp', 'esp', 'sp', 'spl'), 'sp')):
+    for _n in _names:
+        FAM[_n] = _f
+for _k in range(8, 16):
+    FAM['r%d' % _k] = 'r%d' % _k
+    FAM['r%dd' % _k] = 'r%d' % _k
+    FAM['r%dw' % _k] = 'r%d' % _k
+    FAM['r%db' % _k] = 'r%d' % _k
+
+OPN = {'xor': '^', 'add': '+', 'sub': '-', 'imul': '*'}
+ARG = 'c'          # rcx / ecx 族
+
+
+def _fam(ins, reg):
+    n = ins.reg_name(reg)
+    return FAM.get(n, n)
+
+
+def fmt(e):
+    t = e[0]
+    if t == 'var':
+        return e[1]
+    if t == 'const':
+        return '0x%X' % e[1]
+    return '(%s %s %s)' % (fmt(e[1]), t, fmt(e[2]))
+
+
+def depth(e):
+    return 0 if e[0] in ('var', 'const') else 1 + max(depth(e[1]), depth(e[2]))
+
+
+def derive(ins_list, call_idx, lookback=14):
+    """返回 (表达式AST, 读内存的指令地址列表)"""
+    start = max(0, call_idx - lookback)
+    cst = {}                 # 族 -> 常量（只做 mov 传播）
+    arg = ('var', 'ecx')
+    raw_loads = []
+    for ins in ins_list[start:call_idx]:
+        ops = ins.operands
+        m = ins.mnemonic
+        if not ops:
+            continue
+        d = _fam(ins, ops[0].reg) if ops[0].type == X86_OP_REG else None
+        # ---- mov 家族 ----
+        if m in ('mov', 'movsxd', 'movsx', 'movzx') and d is not None and len(ops) == 2:
+            if ops[1].type == X86_OP_IMM:
+                cst[d] = ops[1].imm & 0xFFFFFFFF
+                if d == ARG:
+                    arg = ('const', cst[d])
+            elif ops[1].type == X86_OP_REG:
+                s = _fam(ins, ops[1].reg)
+                if s in cst:
+                    cst[d] = cst[s]
+                    if d == ARG:
+                        arg = ('const', cst[s])
+                else:
+                    cst.pop(d, None)
+                    if d == ARG:
+                        arg = ('var', s)
+            elif ops[1].type == X86_OP_MEM:
+                cst.pop(d, None)
+                if d == ARG:
+                    arg = ('var', 'raw')
+                    raw_loads.append((ins.address, ops[1].mem.scale, ops[1].mem.disp))
+            continue
+        # ---- 二元运算 ----
+        if m in OPN and d is not None and len(ops) == 2:
+            if m == 'imul' and ops[1].type == X86_OP_IMM:
+                if d == ARG:
+                    arg = ('*', arg, ('const', ops[1].imm & 0xFFFFFFFF))
+                cst.pop(d, None)
+                continue
+            if ops[1].type == X86_OP_IMM:
+                if d == ARG:
+                    arg = (OPN[m], arg, ('const', ops[1].imm & 0xFFFFFFFF))
+                cst.pop(d, None)
+            elif ops[1].type == X86_OP_REG:
+                s = _fam(ins, ops[1].reg)
+                rhs = ('const', cst[s]) if s in cst else ('var', s)
+                if d == ARG:
+                    arg = (OPN[m], arg, rhs)
+                cst.pop(d, None)
+            continue
+        # ---- 其它写寄存器：失效 ----
+        if d is not None:
+            cst.pop(d, None)
+            if d == ARG:
+                arg = ('var', 'ecx')
+    return arg, raw_loads
+
+
+def find_calls(pe, target):
+    tva, tbytes = pe.text
+    out = []
+    for i in range(len(tbytes) - 5):
+        if tbytes[i] != 0xE8:
+            continue
+        rel = struct.unpack_from('<i', tbytes, i + 1)[0]
+        if tva + i + 5 + rel == target:
+            out.append(tva + i)
+    return out
+
+
+def entryexpr_run(exe, decrypt_va, lookback=14, limit=40, caller=None, caller_size=0x14000):
+    pe = PE(exe)
+    md = Cs(CS_ARCH_X86, CS_MODE_64)
+    md.detail = True
+    calls = find_calls(pe, decrypt_va)
+    if caller is not None:
+        calls = [c for c in calls if caller <= c < caller + caller_size]
+        print("=== 调用 0x%X（限定在函数 0x%X 内）: %d 个 ===" % (decrypt_va, caller, len(calls)))
+    else:
+        print("=== 调用 0x%X 的位置: %d 个 ===" % (decrypt_va, len(calls)))
+    rows = []
+    for va in calls[:limit]:
+        off = pe.va2off(max(va - 0x100, 0))
+        if off is None:
+            continue
+        lo = max(va - 0x100, 0)
+        ins_list = list(md.disasm(pe.D[off:off + 0x100 + 8], lo))
+        ci = next((i for i, x in enumerate(ins_list) if x.address == va), None)
+        if ci is None:
+            continue
+        expr, raws = derive(ins_list, ci, lookback)
+        rows.append((va, expr, raws))
+    # 打印
+    entry = []
+    for va, expr, raws in rows:
+        if 'raw' not in fmt(expr):
+            continue
+        # ★ 只在「字符串字面量表」上判 entry：索引步长必须是 8（8 字节项）
+        if not any(sc == 8 for _, sc, _p in raws):
+            continue
+        s = fmt(expr)
+        # 把源寄存器统一改名 key（跨版本可比）
+        import re
+        s = re.sub(r'\b(?!raw\b)(r[a-z0-9]+|e[a-z]{2}|[a-d]x|[sd]i|[sb]p|r\d+)\b', 'key', s)
+        s = s.replace('key key', 'key')
+        d = depth(expr)
+        tag = '★ entry 候选' if d >= 2 else '普通 nameIndex 解码'
+        if d >= 2:
+            entry.append((va, s))
+        print("  call @0x%-10X  %-28s  %s" % (va, s, tag))
+    print("\n=== entry 候选（raw 与 key 合完再与常量合）: %d 个 ===" % len(entry))
+    seen = {}
+    for va, s in entry:
+        seen.setdefault(s, []).append(va)
+    for s, vs in seen.items():
+        print("  %-40s  %d 处  例 @0x%X" % (s, len(vs), vs[0]))
+    return entry
+
+
+
 def cmd_verify(a):
     # 参数由 main() 的子命令解析器提供（--ref/--new/--hits/--show）
 
@@ -985,6 +1143,15 @@ def main():
     c.add_argument('--bytes', type=lambda x: int(x, 0), default=0x2000)
     c.add_argument('--role', default=None); c.add_argument('--json', default=None)
     c.set_defaults(fn=cmd_consts)
+
+    ee = sub.add_parser('entryexpr', help='自动推导 entry 解码表达式（跨版本比较结构）')
+    ee.add_argument('exe'); ee.add_argument('--decrypt', required=True)
+    ee.add_argument('--caller', default=None, help='限定函数内（如 RuntimeInit）')
+    ee.add_argument('--caller-size', type=lambda x: int(x, 0), default=0x14000)
+    ee.add_argument('--lookback', type=int, default=14)
+    ee.add_argument('--limit', type=int, default=40)
+    ee.set_defaults(fn=lambda a: (entryexpr_run(a.exe, int(a.decrypt, 16), a.lookback, a.limit,
+                                                int(a.caller, 16) if a.caller else None, a.caller_size), 0)[1])
 
     v = sub.add_parser('verify', help='反汇编级验证 scan 的命中对不对')
     v.add_argument('--ref', required=True); v.add_argument('--new', required=True)
