@@ -314,6 +314,79 @@ def ladder_expected_lengths(hint, d, td_off, td_count):
     return out
 
 
+def probe_pdv(d, off, typeCount, maxn=80000):
+    """parameterDefaultValues：12B {parameterIndex@+0, dataIndex@+4, typeIndex@+8}。
+    与 fieldDefaultValues 结构同构，但用 **+4 的 -1 哨兵**区分（fDV 没有）。
+    **完全不依赖任何版本常量**（typeCount 只当上界，不参与判据）。"""
+    v0 = d.f32(off, 12, maxn, 0)
+    if v0 is None: return None
+    good = d.np.diff(v0) > 0
+    run = 0
+    for g in good:
+        if not g: break
+        run += 1
+    if run < 5000: return None
+    v4 = d.f32s(off, 12, run, 4)
+    v8 = d.f32(off, 12, run, 8)
+    if v4 is None or v8 is None: return None
+    if int((v4 == -1).sum()) == 0: return None            # fDV 没有 -1，pDV 有
+    if int((v8 < typeCount).mean()) < 0.98: return None
+    return ('parameterDefaultValuesOffset', run,
+            "12B, +0 严格递增 %d 项, +4 含 -1 哨兵, +8 全为合法 Il2CppType 索引" % run)
+
+
+def probe_attrinfo(d, off, maxn=40000):
+    """attributesInfo：8B {start@+0, token@+4}。**+0 严格递增**且 +4 高字节受限
+    （实测 token 的高字节在 1..0x54 之间，低 24 位单调）。完全无版本常量。"""
+    v0 = d.f32(off, 8, maxn, 0)
+    if v0 is None: return None
+    good = d.np.diff(v0) > 0
+    run = 0
+    for g in good:
+        if not g: break
+        run += 1
+    if run < 200: return None
+    v4 = d.f32(off, 8, run, 4)
+    if v4 is None: return None
+    hi = (v4 >> 24) & 0xFF
+    if int(hi.min()) < 1 or int(hi.max()) > 0x60: return None
+    return ('attributesInfoOffset', run,
+            "8B, +0 严格递增 %d 项, +4 高字节 ∈[1,0x%X]" % (run, int(hi.max())))
+
+
+def probe_typedefs_hintfree(d, off, maxn=6000):
+    """typeDefinitions（70 字节）的 hint-free 初筛。
+
+    ⚠️ **目前不生效**：它直接读 +0x08/+0x0C/+0x1C/+0x28 的**原始字节**，
+    但这些字段是**逐字段混淆**的（`raw op key`），原始值是随机的 ——
+    所以"累计索引单调""flags 只有几十种"都不成立，实测一律返回 None。
+
+    要让它真正 hint-free，得先做**字段密钥反查**：对每个字段偏移枚举
+    slot_scan 候选里的 (op,key)，挑出"解出值单调/落在字符串块内且可打印"的那个
+    —— 与 ⑦「值 -> 唯一 slot」同源，只是方向相反（字段密钥 -> 偏移）。
+    保留在此作为占位与思路记录。"""
+    STRIDE = 70
+    if off + STRIDE * 200 > len(d.raw): return None
+    n = min(maxn, (len(d.raw) - off) // STRIDE)
+    if n < 200: return None
+    a8 = d.f32(off, STRIDE, n, 0x08)
+    ac = d.f32(off, STRIDE, n, 0x0C)
+    a1c = d.f32(off, STRIDE, n, 0x1C)
+    if a8 is None or ac is None or a1c is None: return None
+    for v in (a8, ac, a1c):
+        if int(v.min()) < 0: return None
+        # 累计索引：允许相等（无该表的类型），但不允许大幅回退
+        if int(d.np.diff(v).min()) < -1000: return None
+    # 三个字段都不该超过总表长度的合理上界（几十万）
+    if max(int(a8.max()), int(ac.max()), int(a1c.max())) > 4_000_000: return None
+    f28 = d.f32(off, STRIDE, n, 0x28)
+    if f28 is None: return None
+    kinds = len(set(f28[:400].tolist()))
+    if kinds > 200: return None                          # flags 只有几十种
+    return ('typeDefinitionsOffset', n,
+            "70B, +0x08/+0x0C/+0x1C 累计索引单调, +0x28 flags %d 种" % kinds)
+
+
 def probe_nestedtypes_verified(d, off, hint, exp):
     """4B 表：typeDefs 的 nested 区间必须**恰好铺满** [0, N)，且条目全为合法 typeDef 索引。
     两个独立条件 —— 指纹很强。（长度 N 由 typeDefs 解出，不用猜）"""
@@ -414,6 +487,15 @@ def main():
     if cache and os.path.exists(cache):
         c = json.load(open(cache))
         sv = {int(k): v for k, v in c['svals'].items()}
+        # ---- 缓存自检（踩过的坑）----
+        # 缓存里存的是 MHY 各槽位的原始值；若生成时 MHY 定位错了，这些值会退化成 0/1，
+        # 于是所有候选值都算错、探测**静默地啥也找不到**（不是报错，只是结果为空）。
+        deg = sum(1 for v in sv.values() if v <= 1)
+        if sv and deg > len(sv) * 0.5:
+            print("   \u26a0\u26a0 缓存可疑：%d/%d 个槽位值 <=1 —— 生成时 MHY 定位错了？"
+                  % (deg, len(sv)))
+            print("      请重扫：python3 tools/slot_scan.py <gi.exe> <global-metadata.dat> --out %s" % cache)
+            return 1
         for dd, op, imm, n, va in c['uniq']:
             if dd not in sv: continue
             v = sv[dd]
@@ -480,9 +562,13 @@ def main():
     #    methods          : +0x18 有 256 种（逐方法 key 打散）→ 无可用指纹
     #  要启用它们，得先加**二次证据**（字符串解码 / 跨表一致性），见 §12 末
     probes = [lambda o: probe_fdv(d, o, args.typeCount),
+              lambda o: probe_pdv(d, o, args.typeCount),
+              lambda o: probe_attrinfo(d, o),
               lambda o: probe_method_pointer_index(d, o),
-              # 阶梯第二级：弱指纹 + 二次证据（名字可打印）→ 可安全启用
-              lambda o: probe_typedefs_verified(d, o, hint)]
+              # 阶梯第二级：弱指纹 + 二次证据（名字可打印）→ 可安全启用（依赖 hint）
+              lambda o: probe_typedefs_verified(d, o, hint),
+              # **无 hint 兜底**：字符串解码密钥每版都变，这个探针只用结构 → 换版本仍能初筛
+              lambda o: probe_typedefs_hintfree(d, o)]
     t1 = time.time()
     for val in vals:
         if not (0x1000 <= val < len(raw) - 0x210): continue
