@@ -773,6 +773,10 @@ def main():
     ap.add_argument('--keys', default=None, help='slot_scan --struct --struct-json 的产物（字段密钥候选）')
     ap.add_argument('--scan', action='store_true', help='无缓存时自动跑 slot_scan.py')
     ap.add_argument('--typeCount', type=int, default=683574)
+    ap.add_argument('--keyless', action='store_true',
+                    help='无密钥反解 typeDefinitions（哨兵+连续性+全表校验）')
+    ap.add_argument('--typedefs-base', default=None,
+                    help='已知 typeDefinitions 基址（hex）；给了就做布局搜索')
     args = ap.parse_args()
 
     root = args.root if os.path.isabs(args.root) else os.path.join(ROOTDIR, args.root)
@@ -978,6 +982,28 @@ def main():
                 'methodsOffset', 'typeDefinitionsOffset', 'nestedTypesTable',
                 'interfacesTable', 'fieldOffset', 'methodSlotTableOffset',
                 'attributesInfoOffset'}
+
+    # ---- ⑧ 无密钥反解 typeDefinitions（独立于 slot_scan 的候选）----
+    if args.keyless or args.typedefs_base:
+        try:
+            import keyless as KL
+            kb = [int(args.typedefs_base, 16)] if args.typedefs_base else vals
+            t_k = time.time()
+            kr = KL.find_typedefs(d, kb, layout_search=bool(args.typedefs_base))
+            if kr:
+                print("   %-27s   keyless 基址 0x%X  采样连续 %.3f  全表校验 %s (%.1fs)"
+                      % ('[⑧ 无密钥]', kr['base'], kr['continuity'],
+                         '✅' if kr['validated'] else '✗', time.time() - t_k))
+                for row in kr.get('pairs', [])[:4]:
+                    sc, dc, wc, oc, kc, mx, dk, wk, ok_, kk = row
+                    print("       连续 %.3f 累计+0x%02X %s 0x%-9X max=%-7d  计数+0x%02X %s 0x%X"
+                          % (sc, dc, oc, kc, mx, dk, ok_, kk))
+                if kr['validated']:
+                    found['typeDefinitionsOffset'] = (
+                        kr['base'], 0,
+                        '无密钥反解（哨兵+连续性+全表校验）%d 对' % len(kr['pairs']), 0)
+        except Exception as e:
+            print("   keyless 失败:", e)
 
     for k, (val, n, why, _) in sorted(found.items()):
         tag = '已验收' if k in VERIFIED else '未验收(仅参考)'

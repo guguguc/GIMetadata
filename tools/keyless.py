@@ -266,3 +266,97 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+
+
+# ============================================================================
+#  供 relocate.py 调用：无密钥定位 typeDefinitions
+# ============================================================================
+def _decode_full(d, base, disp, w, op, K, n):
+    col = read_col(d, base, disp, w, n)
+    if col is None:
+        return None
+    return decode(col, op, K, w)
+
+
+def validate_full(d, off, disp, w, op, K, n=88902, kind='cum'):
+    """**全表**校验（`off` 是**文件偏移** = d.hdr + 表偏移）"""
+    v = _decode_full(d, off, disp, w, op, K, n)
+    if v is None:
+        return None
+    if kind == 'count':
+        return v if (int(v.min()) >= 0 and int(v.max()) <= 0xFFF) else None
+    if int(v.min()) < -1 or int(v.max()) > 6_000_000:
+        return None
+    neg = v < 0
+    if bool(neg.any()):
+        carry = np.maximum.accumulate(np.where(neg, 0, v))
+        v2 = np.where(neg, np.concatenate(([0], carry[:-1])), carry)
+    else:
+        v2 = v
+    if int(np.diff(v2).min()) < 0:
+        return None
+    return v2
+
+
+def find_typedefs(d, bases, n=4096, full=88902, layout_search=True,
+                  min_cont=0.5, verbose=False):
+    """返回 {'base','fields','continuity','validated'} 或 None
+
+    1) 采样：候选基址 × 已知位移 -> 反推 key（哨兵法）
+    2) 排序：字段数 + 连续性
+    3) 全表校验：不合格就淘汰（**关键**：采样会给出假密钥）
+    4) 可选 layout_search：扫 0x00..0x60 所有位移，用全表连续性定布局
+    """
+    best = None
+    for base in bases:
+        off = d.hdr + base
+        fk = {}
+        for disp, w in FIELDS.items():
+            r = derive_for_field(d, off, disp, w, n)
+            if r:
+                fk[disp] = r
+        if len(fk) < 2:
+            continue
+        cont = 0.0
+        for _, _, _, cv in fk.get(0x1C, []):
+            for _, _, _, kv in derive_for_field(d, off, COUNT_DISP, 2, n, kind='count'):
+                cont = max(cont, continuity_score(cv, kv))
+        if best is None or cont > best['continuity'] or (cont == best['continuity'] and len(fk) > len(best['fields'])):
+            best = {'base': base, 'fields': fk, 'continuity': cont, 'validated': False}
+    if best is None:
+        return None
+
+    # ---- 全表校验 + 布局搜索 ----
+    base = best['base']
+    off = d.hdr + base
+    cums, cnts = [], []
+    disps = range(0x00, 0x61) if layout_search else FIELDS.keys()
+    for disp in disps:
+        for w in (4, 2):
+            if disp % w:
+                continue
+            for op, K, _span, _vv in derive_for_field(d, off, disp, w, n):
+                v = validate_full(d, off, disp, w, op, K, full, 'cum')
+                if v is not None:
+                    cums.append((disp, w, op, K, int(v.max()), v))
+    for disp in (range(0x00, 0x61) if layout_search else (COUNT_DISP,)):
+        for w in (1, 2):
+            if disp % w:
+                continue
+            for op, K, _sp, _vv in derive_for_field(d, off, disp, w, n, kind="count"):
+                v = validate_full(d, off, disp, w, op, K, full, 'count')
+                if v is not None:
+                    cnts.append((disp, w, op, K, v))
+    pairs = []
+    for dc, wc, oc, kc, mx, vc in cums:
+        for dk, wk, ok_, kk, vk in cnts:
+            if dc == dk:
+                continue
+            sc = continuity_score(vc, vk)
+            if sc >= min_cont:
+                pairs.append((sc, dc, wc, oc, kc, mx, dk, wk, ok_, kk))
+    pairs.sort(reverse=True)
+    best['pairs'] = pairs[:8]
+    best['cums'] = [(dc, wc, oc, kc, mx) for dc, wc, oc, kc, mx, _ in sorted(cums)]
+    best['validated'] = bool(pairs)
+    return best
