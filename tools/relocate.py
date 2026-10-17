@@ -361,6 +361,105 @@ def probe_attrinfo(d, off, maxn=40000):
             "8B, +0 严格递增 %d 项, +4 高字节 ∈[1,0x%X] 且低 24 位单调" % (run, int(hi.max())))
 
 
+def find_string_block(d, win=1 << 16, step=1 << 13):
+    """【实验性 · 目前不可用】hint-free 定位「字符串数据块」。
+
+    ❌ 实测两种朴素做法都不成立：
+       1) 「最长连续可打印段」—— 名字是**逐条存储**的（每条一个 \\0，条间夹非打印字节），
+          最长段只有 0.4 KB；
+       2) 「可打印密度最高的窗口」—— 会命中**整数表**（大量小值，其间 0x00 不算可打印，
+          但短序列密度仍高），实测 7.1 落到 0xF44000，而真值是 0x444C1E8（差 54 MB）。
+    真正可靠的 hint-free 锚应该是"程序集名文本"（mscorlib 等，跨版本稳定），
+    但那只能给出**近似**位置，够不上 nameIndex 逐条校验所需的精度。
+    —— 保留在此作为**研究记录**，不参与主流程。
+
+    ⚠️ 不能用"最长连续可打印段"—— 实测名字是**逐条存储**的（每条一个 \\0 结尾，
+    条与条之间夹着非打印字节），最长连续段只有 0.4 KB。
+    字符串区的特征是**密度**（绝大多数字节可打印），用滑窗密度即可定位。
+    返回 (块基址, 保守上界)；上界只当 nameIndex 的合法范围用，宽松一点无妨。
+    """
+    np = d.np
+    b = d.ub
+    pr = ((b >= 0x20) & (b < 0x7F)) | (b == 0x0A) | (b == 0x0D) | (b == 0x09)
+    n = len(b)
+    if n < win:
+        return 0, n
+    # 用累加和做 O(1) 滑窗
+    cs = np.concatenate(([0], np.cumsum(pr, dtype=np.int64)))
+    starts = np.arange(0, n - win, step, dtype=np.int64)
+    dens = (cs[starts + win] - cs[starts]) / float(win)
+    k = int(np.argmax(dens))
+    if float(dens[k]) < 0.55:
+        return None, 0
+    base = int(starts[k])
+    # 从命中窗口向两侧扩张，直到密度掉下来（保守给个上界）
+    lo = base
+    hi = base + win
+    step2 = win // 8
+    while lo - step2 > 0 and (cs[lo] - cs[max(0, lo - step2)]) / float(step2) > 0.30:
+        lo -= step2
+    while hi + step2 < n and (cs[min(n, hi + step2)] - cs[hi]) / float(step2) > 0.30:
+        hi += step2
+    return lo, int(hi - lo)
+
+
+def _decode(v, op, key, mask=0xFFFFFFFF):
+    if op == 'xor': return (v ^ key) & mask
+    if op == 'sub': return (v - key) & mask
+    return (v + key) & mask
+
+
+def discover_typedefs(d, cands24, sbase, ssize, maxn=4000):
+    """【实验性 · 依赖 find_string_block，故目前不可用】**字段密钥反查**：枚举「候选表基址 × nameIndex 偏移(+0x24) 的 (op,key)」，
+    挑出解出的 nameIndex 能指向字符串块内可打印文本、且跨类型严格递增的那个。
+
+    这是 ⑦「值 -> 唯一 slot」的反方向（**密钥 -> 值**）。
+    好处：完全不依赖旧 version.json 的任何常量（密钥每版都变、槽位每版重排都能扛）。
+    """
+    np = d.np
+    STRIDE = 70
+    best = []
+    for val in cands24['tables']:
+        off = d.hdr + val
+        if off + STRIDE * 64 > len(d.raw):
+            continue
+        n = min(maxn, (len(d.raw) - off) // STRIDE)
+        if n < 200:
+            continue
+        raw = d.f32(off, STRIDE, n, 0x24)
+        if raw is None:
+            continue
+        for op, key in cands24['keys']:
+            idx = _decode(raw, op, key)
+            if idx.size < 200:
+                continue
+            if int(idx.min()) < 0 or int(idx.max()) >= ssize:
+                continue
+            d0 = np.diff(idx[:512])
+            if int(d0.min()) < 0:                       # 必须严格递增（名字按类型顺序存）
+                continue
+            if int(idx.max()) >= ssize:
+                continue
+            offv = idx & 0xFFFFFF
+            lens = idx >> 24
+            if int(lens.min()) <= 0 or int(lens.max()) > 0x400:
+                continue
+            # 抽样验可打印（8 个位置够了，命中率要求高）
+            ok = 0
+            probe = np.linspace(0, n - 1, 8).astype(np.int64)
+            for i in probe:
+                ln = int(lens[i])
+                if ln <= 0 or sbase + int(offv[i]) + ln > len(d.raw):
+                    continue
+                seg = d.ub[sbase + int(offv[i]): sbase + int(offv[i]) + ln]
+                if seg.size == ln and np.all((seg >= 0x20) & (seg < 0x7F)):
+                    ok += 1
+            if ok >= 7:
+                best.append((ok, val, op, key, n))
+    best.sort(key=lambda x: (-x[0], -x[4]))
+    return best
+
+
 def probe_typedefs_hintfree(d, off, maxn=6000):
     """typeDefinitions（70 字节）的 hint-free 初筛。
 
@@ -570,7 +669,6 @@ def main():
     #  要启用它们，得先加**二次证据**（字符串解码 / 跨表一致性），见 §12 末
     probes = [lambda o: probe_fdv(d, o, args.typeCount),
               lambda o: probe_pdv(d, o, args.typeCount),
-              lambda o: probe_attrinfo(d, o),
               lambda o: probe_method_pointer_index(d, o),
               # 阶梯第二级：弱指纹 + 二次证据（名字可打印）→ 可安全启用（依赖 hint）
               lambda o: probe_typedefs_verified(d, o, hint),
