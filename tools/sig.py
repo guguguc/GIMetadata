@@ -274,6 +274,73 @@ def _score_at(pe, md, va, sg):
             lo, st)
 
 
+def _enum_func_starts(pe, tva, tbytes, limit=None):
+    """字节级枚举 .text 里所有"像函数头"的位置：前一个字节是填充(int3/nop)或 ret。
+    不需要反汇编，比全量 disasm 快两个数量级。"""
+    out = []
+    lo = tva + 1
+    for k in range(1, len(tbytes)):
+        if tbytes[k - 1] in (0xCC, 0x90, 0xC3):
+            out.append(tva + k)
+            if limit and len(out) >= limit:
+                break
+    return out
+
+
+def deep_rescue(pe, md, sigs, unmatched, tva, tbytes, verbose=True):
+    """--deep：穷举整个 .text 的函数头，对**未定下来的签名**逐个打分。
+
+    解决"调用图到不了"的盲区：那 6 个函数既不在已定位函数的 call/指针可达集里，
+    就只能全量枚举。此模式慢（分钟级），但只在收尾救援时用。"""
+    if not unmatched:
+        return {}
+    starts = _enum_func_starts(pe, tva, tbytes)
+    if verbose:
+        print("\n  深度救援：枚举到 %d 个函数头（.text %.1f MB）" % (len(starts), len(tbytes) / 1e6))
+    best = {}
+    for sg in unmatched:
+        b0 = None
+        for st in starts:
+            if _is_stub(pe, md, st):
+                continue
+            r = _score_at(pe, md, st, sg)
+            if not r or r[0] < 4:
+                continue
+            if b0 is None or (r[0], r[1]) > (b0[0], b0[1]):
+                b0 = (r[0], r[1], st)
+        if b0:
+            best[sg['name']] = b0
+            if verbose:
+                print("      %-40s 最优 %d/%d (严格 %d) @0x%X" % (sg['name'], b0[0], sg['n'], b0[1], b0[2]))
+        else:
+            if verbose:
+                print("      %-40s -- 没有任何函数头能到 4/8" % sg['name'])
+    return best
+
+
+def _vtable_ptrs(pe, limit=None):
+    """`.rdata` 等只读段里所有指向 .text 的 8 字节指针（函数指针表 / vtable）。
+    这些是"经表间接调用"的函数的所在位置 —— 调用图扫不到的盲区。"""
+    import numpy as np
+    tva, tbytes = pe.text
+    out = set()
+    for nm, va, vsz, off, rsz in pe.sec:
+        if nm == '.text':
+            continue
+        n = (rsz // 8) * 8
+        if n < 8:
+            continue
+        # numpy 向量化：纯 Python 逐 8 字节 unpack_from 要循环几千万次，慢两个数量级
+        arr = np.frombuffer(pe.D, dtype='<u8', count=n // 8, offset=off)
+        m = (arr >= tva) & (arr < tva + len(tbytes))
+        for v in arr[m]:
+            if int(v) % 8 == 0:
+                out.add(int(v))
+        if limit and len(out) >= limit:
+            break
+    return sorted(out)
+
+
 MAX_CANDS = 64      # 候选爆炸 -> 签名太弱（固定子串不唯一），直接判不可用
 
 
@@ -433,16 +500,38 @@ def cmd_scan(a):
         for f in list(where):
             cands.update(_call_targets(pe, md, f))
             cands.update(_ptr_targets(pe, md, f))
+        if getattr(a, 'vtable', False):
+            # 全量函数指针表（vtable/派发表）当候选源。
+            # 实测：它**救不回**任何未命中签名（75118 个候选 vs 调用图的 722 个，结果同为 48/54），
+            # 但它是「搜索空间已穷尽」的证据，所以做成 --vtable 可选（+12s），不进默认路径。
+            cands.update(_vtable_ptrs(pe))
         cands = sorted(c for c in cands
                        if tva <= c < tva + len(tbytes) and c % 4 == 0 and not _is_stub(pe, md, c))
         print("\n  模糊救援 第%d轮：调用图候选 %d 个（锚点 %d 个已定位函数）" % (rnd, len(cands), len(where)))
         still = []
+        # 每个候选**只反汇编一次**，token 序列缓存下来供全部未命中签名比对
+        # （否则 7.5 万候选 × 6 签名 = 45 万次重复反汇编，慢一个数量级）
+        need = max((sg['skip'] + sg['n'] for sg in unmatched), default=0)
+        tokcache = {}
+        for c in cands:
+            off = pe.va2off(c)
+            if off is None: continue
+            ins = []
+            for x in md.disasm(pe.D[off:off + 24 + need * 8], c):
+                ins.append(x)
+                if len(ins) >= need: break
+            tokcache[c] = (ins, [toks_of(x, False) for x in ins],
+                           [toks_of(x, True) for x in ins])
         for sg in unmatched:
             sc = []
-            for c in cands:
-                r = _score_at(pe, md, c, sg)
-                if r and r[0] > 0:
-                    sc.append((r[0], r[1], c))
+            for c, (ins, lo_all, st_all) in tokcache.items():
+                k, n2 = sg['skip'], sg['n']
+                if len(lo_all) < k + n2: continue
+                lo, st = lo_all[k:k + n2], st_all[k:k + n2]
+                s_lo = sum(1 for i in range(n2) if lo[i] == sg['loose'][i])
+                if s_lo <= 0: continue
+                s_st = sum(1 for i in range(n2) if st[i] == sg['strict'][i])
+                sc.append((s_lo, s_st, c))
             if not sc:
                 print("      %-40s -- 调用图里没有候选能对上 token" % sg['name']); still.append(sg); continue
             sc.sort(reverse=True)
@@ -457,6 +546,19 @@ def cmd_scan(a):
             else:
                 print("      %-40s -- 最优 %d/%d @0x%X（低于门槛 5 或与次优太近，不采信）"
                       % (sg['name'], b0[0], sg['n'], b0[2])); still.append(sg)
+        unmatched = still
+
+    if getattr(a, 'deep', False) and unmatched:
+        best = deep_rescue(pe, md, sigs, unmatched, tva, tbytes)
+        still = []
+        for sg in unmatched:
+            b0 = best.get(sg['name'])
+            if b0 and b0[0] >= 6:
+                hit += 1; miss -= 1
+                print("      -> 采信 %s @0x%X (%d/%d, 严格 %d)" % (sg['name'], b0[2], b0[0], sg['n'], b0[1]))
+                where.setdefault(b0[2], []).append(sg['name']); fuzzy_names[sg['name']] = b0[1]
+            else:
+                still.append(sg)
         unmatched = still
 
     # ---- 置信度分档（回答「命中的是不是对的」）----
@@ -514,6 +616,8 @@ def main():
     s = sub.add_parser('scan'); s.add_argument('exe'); s.add_argument('--sigs', default=os.path.join(HERE, 'sigs.json'))
     s.add_argument('--fuzzy', action='store_true', help='未命中的签名走「调用图 + token 打分」救援')
     s.add_argument('--json', default=None, help='把命中表 name -> 新地址 写成 JSON（给 sig_verify.py 用）')
+    s.add_argument('--deep', action='store_true', help='深度救援：穷举整个 .text 的函数头（分钟级，收尾用）')
+    s.add_argument('--vtable', action='store_true', help='把 .rdata 里全部函数指针(vtable)当候选源（+12s，用于证明搜索空间已穷尽）')
     s.add_argument('--loose-only', action='store_true'); s.set_defaults(fn=cmd_scan)
     a = ap.parse_args()
     sys.exit(a.fn(a))
