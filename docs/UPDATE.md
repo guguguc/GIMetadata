@@ -529,12 +529,22 @@ python3 tools/provenance.py version/7.0/gi.exe --out /tmp/P70.md
 
 | 项 | 数量 | 怎么来 | 7.0 实测状态 |
 |---|---|---|---|
-| `tables[].slot/op/key` | 102 | `slot_scan` 候选 + `relocate`（④自证 / ⑥提示 / ⑦反查） | ⚠️ 候选**召回不足**；靠旧 slot 会错 → 需语义判定/无密钥反解 |
+| `tables[].slot/op/key` | 102 | `slot_scan` 候选 + `relocate`（④自证 / ⑥提示 / ⑦反查） | **4 表 + blob 全自动**（fDV / methodPointerIndex / methodSlotTable / attributesInfo / blob）；其余召回不足 |
 | `fieldDecode` 字段密钥 | 42 | `slot_scan --struct` 候选 + 语义判定（累计索引单调 / 名字可打印 / count 很小） | 7.0：5/18 → **15/18**（`CROSS70.md`） |
 | `keyFormulas` 系数 | 43 | 反编译 `xxxKey(i)` 函数体，人工抄 | 未自动 |
 | `addresses` | 5 | 魔数 + `sig.py` 找 `RuntimeInit` | `sig.py` 7.0 找回 48/54 |
 | `stringDecrypt` 密钥 | 5 | **`sig.py consts`**（4/5）+ **`sig.py entryexpr`**（推导公式） | 7.0：consts 4/5；entryexpr 报出形态 B（公式变了） |
 | `*CountFormula` 的 key/op | 6 | 反编译消费者（`RuntimeInit`） | 未自动 |
+
+**④ 的「纯结构、不需要 key」探针（跨版本可靠）**：
+
+```
+fieldDefaultValues  12B,+0 严格递增 + +8 合法类型索引
+methodSlotTable     6B, 第 i 行 +4(u16) == i
+attributesInfo      8B, +0 严格递增(<=2M) + +4 低24位严格递增 + 高字节多种 kind
+methodPointerIndex  4B, 值域 [-1,79765)                       (弱, 仅参考)
+blob                常量签名落在某条 dataIndex 上
+```
 
 **结论：真正要人工盯的只有「`keyFormulas` 43 + 字符串密钥 5 + 公式 6 + 地址 5 = 59 个」；
 其余 144 个（表 102 + 字段 42）有自动/半自动通道，但 7.0 显示「候选召回」仍是瓶颈。**

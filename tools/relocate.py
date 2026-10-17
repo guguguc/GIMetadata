@@ -211,6 +211,54 @@ def probe_method_slot_table_DISABLED(d, off, methodsCount=733442):
     return ('methodSlotTableOffset', n, "6B, +0 严格递增且 <methodsCount, +4 == 索引（slot==行号）")
 
 
+def probe_method_slot_table(d, off, n=4096):
+    """methodSlotTable（6B）：第 i 行的 `+4`(u16) == i。
+
+    **纯结构不变量**，不需要任何逐索引 key → 跨版本可用。
+    实测 7.1：前 2000 行 2000/2000 命中。
+    """
+    import numpy as np
+    if off + 6 * n + 6 > len(d.raw):
+        return None
+    b = d.ub
+    idx = off + np.arange(n, dtype=np.int64) * 6
+    v = b[idx + 4].astype(np.int64) | (b[idx + 5].astype(np.int64) << 8)
+    if int((v == np.arange(n)).sum()) < n * 0.999:
+        return None
+    return ('methodSlotTableOffset', n, "6B, 前 %d 行 `+4`(u16)==行号（纯结构，无需 key）" % n)
+
+
+def probe_attributes_info(d, off, n=1024):
+    """attributesInfo（8B）：`+0` 严格递增 **且** `+4` 的低 24 位严格递增。
+
+    两条独立不变量（token 的高字节是 kind、低 24 位是排序键）。
+    实测 7.1：1114/1114 两条都成立 → 不像 fDV 那样会误命中。
+    """
+    import numpy as np
+    if off + 8 * n > len(d.raw):
+        return None
+    b = d.ub
+    idx = off + np.arange(n, dtype=np.int64) * 8
+    s0 = (b[idx].astype(np.int64) | (b[idx + 1].astype(np.int64) << 8)
+          | (b[idx + 2].astype(np.int64) << 16) | (b[idx + 3].astype(np.int64) << 24))
+    s4 = (b[idx + 4].astype(np.int64) | (b[idx + 5].astype(np.int64) << 8)
+          | (b[idx + 6].astype(np.int64) << 16) | (b[idx + 7].astype(np.int64) << 24))
+    s0 = np.where(s0 >= (1 << 31), s0 - (1 << 32), s0)
+    if int(np.diff(s0).min()) <= 0:
+        return None
+    if int(np.diff(s4 & 0xFFFFFF).min()) <= 0:
+        return None
+    # ⚠️ 只靠上面两条会**误命中字符串字面量表**（那里的 +0 是 6700 万级字符串偏移、
+    #    +4 高字节恒为 0x01）。attrinfo 的特征是：+0 是**小的 range 起点**、+4 高字节是多种 kind。
+    if int(s0.min()) < 0 or int(s0.max()) > 2_000_000:
+        return None
+    if len(set((s4 >> 24).tolist())) < 8:
+        return None
+    return ('attributesInfoOffset', n,
+            "8B, +0 严格递增且 <=2M, +4 低24位严格递增, 高字节 %d 种 kind（纯结构）"
+            % len(set((s4 >> 24).tolist())))
+
+
 def probe_method_pointer_index(d, off, ptrCount=79765):
     """methodPointerIndex：4B，值只有 -1（无实现）或 < 泛型方法指针数组长度。"""
     import numpy as np
@@ -759,6 +807,7 @@ def main():
 
     print("\n== ④ 数据侧结构自证（numpy 向量化）==")
     found = {}
+    exp = None
     # ⚠️ 只保留**自测能推出已知正确值**的探测器（宁可漏报，不可误报）：
     #    fieldDefaultValues / methodPointerIndex / blob
     # 其余探测器判据不够独特，会在**其他表**上误命中（实测过）：
@@ -771,61 +820,61 @@ def main():
     probes = [lambda o: probe_fdv(d, o, args.typeCount),
               lambda o: probe_pdv(d, o, args.typeCount),
               lambda o: probe_method_pointer_index(d, o),
+              # 纯结构不变量（不需要逐索引 key）→ 跨版本可用
+              lambda o: probe_method_slot_table(d, o),
+              lambda o: probe_attributes_info(d, o),
               # 阶梯第二级：弱指纹 + 二次证据（名字可打印）→ 可安全启用（依赖 hint）
               lambda o: probe_typedefs_verified(d, o, hint),
               # **无 hint 兜底**：字符串解码密钥每版都变，这个探针只用结构 → 换版本仍能初筛
               lambda o: probe_typedefs_hintfree(d, o)]
     t1 = time.time()
+    hits_by = {}
     for val in vals:
         if not (0x1000 <= val < len(raw) - 0x210): continue
         for pr in probes:
             r = pr(d.hdr + val)
             if r:
                 name, n, why = r
+                hits_by.setdefault(name, []).append((val, n, why))
                 if name not in found or n > found[name][3]:
                     found[name] = (val, n, why, n)
-    if sem_found:
-        found['typeDefinitionsOffset(语义)'] = (
-            sem_found[0], 0,
-            '累计索引单调命中 %d 个字段: %s' % (
-                len(sem_found[1]),
-                ' '.join('+0x%02X %s 0x%X' % (dd, o, k) for dd, o, k, _, _ in sem_found[1])),
-            0)
+    # ⚠️ 同一张表有多个候选 = 判据不够独特
+    #   取舍：① 有 tie-break 的用 tie-break；② 否则较大 n 明显胜出(>=2x)才采信；
+    #        ③ 都不行 -> **不采用**（宁可漏报，不可误报）
+    import struct as _st
+    def _min_s0(val):
+        b = d.hdr + val
+        return min(_st.unpack_from('<i', d.raw, b + 8 * i)[0] for i in range(512))
+    TIE = {'attributesInfoOffset': _min_s0}      # 实测：真表 min(+0)=109，假候选=769
+    for nm, hs in sorted(hits_by.items()):
+        if len(hs) == 1:
+            continue
+        if nm in TIE:
+            hs2 = sorted(hs, key=lambda h: TIE[nm](h[0]))
+            keep = hs2[0]
+            print("   ⚠ %-27s **%d 个候选** → tie-break(min +0) 取 0x%X: %s"
+                  % (nm, len(hs), keep[0], ' '.join('0x%X' % h[0] for h in sorted(hs)[:5])))
+            found[nm] = (keep[0], keep[1], keep[2] + ' [tie-break]', keep[1])
+            continue
+        hs2 = sorted(hs, key=lambda h: -h[1])
+        best_n, second_n = hs2[0][1], (hs2[1][1] if len(hs2) > 1 else 0)
+        if best_n >= 2 * max(second_n, 1):
+            print("   ⚠ %-27s **%d 个候选** → 取项数最大者 0x%X (%d vs %d)"
+                  % (nm, len(hs), hs2[0][0], best_n, second_n))
+            found[nm] = (hs2[0][0], hs2[0][1], hs2[0][2], hs2[0][1])
+        elif nm in ('methodPointerIndexOffset',):
+            # 已知是弱判据（4B 值域）—— 保留"仅参考"，不冒充已验收
+            print("   ⚠ %-27s **%d 个候选** → 弱判据，保留首项 0x%X（仅参考）"
+                  % (nm, len(hs), hs2[0][0]))
+            found[nm] = (hs2[0][0], hs2[0][1], hs2[0][2], hs2[0][1])
+        else:
+            print("   ⛔ %-27s **%d 个候选且无法区分** → 不采用（需人工）: %s"
+                  % (nm, len(hs), ' '.join('0x%X' % h[0] for h in sorted(hs)[:5])))
+            found.pop(nm, None)
     VERIFIED = {'fieldDefaultValuesOffset', 'blob(fieldAndParameterDefaultValueData)',
                 'methodsOffset', 'typeDefinitionsOffset', 'nestedTypesTable',
-                'interfacesTable', 'fieldOffset'}
-
-    # ---- 阶梯 ④⑤：typeDefinitions（已检测）→ 各表预期长度/区间 → 钉住更多表 ----
-    # 必须在打印之前跑，否则结果来不及显示
-    exp = None
-    if 'typeDefinitionsOffset' in found and hint.get('keys'):
-        td_off = d.hdr + found['typeDefinitionsOffset'][0]
-        try:
-            td = J0['tables']['typeDefinitionsCount']
-            v = slot(int(td['slot'], 0))
-            key = int(td['key'], 0)
-            if td['op'] in ('^', 'xor'): tdc = ((v ^ key) & M32) // 70 - 2
-            else: tdc = ((v - key) & M32) // 70 - 2
-        except Exception:
-            tdc = 88902
-        hint['typeDefCount'] = tdc
-        exp = ladder_expected_lengths(hint, d, td_off, tdc)
-        # 每个「长度约束」探针：候选值必须让该表**完整落在文件内**且结构自证
-        ladder_multi = {}
-        for val in vals:
-            if not (0x1000 <= val < len(raw) - 0x210): continue
-            for name, r in (('nestedTypesTable', probe_nestedtypes_verified(d, d.hdr + val, hint, exp)),
-                            ('interfacesTable', probe_interfaces_table(d, d.hdr + val, hint, exp))):
-                # 注：fieldOffset 表**不是**按 fieldStart 索引，而是按 typeDef+0x20(unknown20) + k，
-                #     且实测"类型内偏移非递减"只有 57% —— 判据不足，暂不启用（宁可漏报）
-                if not r: continue
-                ladder_multi.setdefault(name, []).append(val)
-                if name not in found:
-                    found[name] = (val, r[1], r[2], r[1])
-        for name, ms in ladder_multi.items():
-            if len(ms) > 1:
-                print("   ⚠ %s 有 %d 个候选同时通过（可能是误报）: %s"
-                      % (name, len(ms), [hex(x) for x in ms]))
+                'interfacesTable', 'fieldOffset', 'methodSlotTableOffset',
+                'attributesInfoOffset'}
 
     for k, (val, n, why, _) in sorted(found.items()):
         tag = '已验收' if k in VERIFIED else '未验收(仅参考)'

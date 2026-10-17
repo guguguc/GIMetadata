@@ -202,7 +202,8 @@ python3 tools/relocate.py   version/7.0 --slots /tmp/opencode/slots_cache_70_new
 | 项 | 旧报告 | **本次复跑** | 结论 |
 |---|---|---|---|
 | `sig.py scan` | 48/54 | **48/54** | ✅ 一致 |
-| ④ 强证据 | 3（fDV + methodPtr + **blob**） | **3**（修 find_blob 后） | ✅ 一致 |
+| ④ 强证据 | 3（fDV + methodPtr + **blob**） | **5**（新增 `methodSlotTable` / `attributesInfo`，纯结构无需 key） | ✅ 更多 |
+| ⑦ 反查 | 2 张 | **4 张**（+methodSlotTable / attributesInfo），全部唯一 | ✅ 更多 |
 | ⑥ slot 提示 | 16/34（值全错） | 16 唯一 **[弱]**、1 多候选、17 无 | ✅ 一致 |
 | ⑦ 反查 | 2 张 | fDV→`slot 0xC xor 0x720EB389`；methodPtr→`slot 0x130 add 0xA3B3FC56` | ✅ 一致 |
 | 语义判定（累计索引单调） | 0 | **0**（修掉缩进 bug 后仍是 0） | ✅ 确认是**召回**问题 |
@@ -246,3 +247,14 @@ blob(fieldAndParameterDefaultValueData) = 0x41FB240   (slot 0x1B0 xor 0x26AB5EF8
 `.text` 大小几乎相同（35.3 vs 34.7 MB），候选却多 2.75 倍 →
 说明 7.0 的代码里「`[base+disp<0x300]` + 运算」这种形态密集得多
 （混淆器/编译器版本差异）。**候选越多，⑥ 的"唯一"越不可信**。
+
+### 补充：两个「纯结构、不需要 key」的新探针（7.0/7.1 都成立）
+
+| 表 | 不变量 | 7.1 真值 | 7.0 |
+|---|---|---|---|
+| `methodSlotTable` | 6B，第 i 行 `+4`(u16) == i | `0x2426560` ✓ | `0x10FB0EC` ✓（表长 ≈12695，之后断）|
+| `attributesInfo` | 8B，`+0` 严格递增且 ≤2M、`+4` 低24位严格递增、高字节 ≥8 种 kind | `0xF15274` ✓ | `0x41C1B50` ✓ |
+
+> `attributesInfo` 在两个版本上都有**第 2 个同构候选**（7.1 `0x1B99C70` / 7.0 `0x385DB08`）。
+> 区分：真表 `min(+0)=109`、`首项 +4=0x05000001`；假候选 `min(+0)=769`、`+4=0x01000000`。
+> 已做成 tie-break（取 `min(+0)` 最小）。
