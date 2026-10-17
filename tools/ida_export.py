@@ -145,7 +145,8 @@ def main():
                         callees.add(cm.group(1))
             ent = (name, hex(fstart))
             tables.setdefault((g, slot, op, key), []).append(ent)
-            tbl_meta.setdefault((g, slot, op, key), {'strides': set(), 'callees': set(), 'lhs': set()})
+            tbl_meta.setdefault((g, slot, op, key), {'strides': set(), 'callees': set(),
+                                                     'lhs': set(), 'seq': m.start()})
             tbl_meta[(g, slot, op, key)]['strides'] |= strides
             tbl_meta[(g, slot, op, key)]['callees'] |= callees
             if lhs:
@@ -193,6 +194,7 @@ def main():
                                'n_funcs': len(fns),
                                'funcs': [n for n, _ in fns[:4]],
                                'func_eas': [e for _, e in fns[:4]],
+                               'seq': tbl_meta.get((g, slot, op, key), {}).get('seq', 0),
                                'strides': sorted(tbl_meta.get((g, slot, op, key), {}).get('strides', [])),
                                'callees': sorted(tbl_meta.get((g, slot, op, key), {}).get('callees', []))[:6]})
 

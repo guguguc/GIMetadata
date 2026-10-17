@@ -32,6 +32,8 @@ def main():
     ap.add_argument('--hits', default=None, help='sig.py scan --json（地址 -> 名字），用于补名字')
     ap.add_argument('--version-json', default=os.path.join(os.path.dirname(HERE), 'version.json'),
                     help='用它的 tables[].stride 做消歧（步长跨版本稳定）')
+    ap.add_argument('--order', default=None,
+                    help='旧版本的 ida_export.json：从它**学**函数内读取顺序，再套到新版本')
     ap.add_argument('--allow-guess', action='store_true',
                     help='允许"只剩一个候选就采用"（默认关：实测会张冠李戴 ✗）')
     ap.add_argument('--out', default=None)
@@ -90,6 +92,50 @@ def main():
         except Exception:
             return None
 
+    # ---- 从旧版本**学**「函数内读取顺序」----
+    # 前提：源码里读表的先后是稳定的（跨版本）—— 未验证 ✗，但机制已就绪
+    learned = {}
+    if a.order and os.path.exists(a.order):
+        olde = load(a.order)
+        ofuncs = None
+        old_truth = {}
+        try:
+            from gen_version import load_json_with_comments as _L2
+            from relocate import PE as _PE
+            _J2 = _L2(a.version_json)
+            _mhy = None
+            for k, v in _J2.get('addresses', {}).items():
+                if 'mhy' in k.lower():
+                    _mhy = int(v, 0)
+            _pe = _PE(os.path.join(os.path.dirname(HERE), 'version/7.1', 'gi.exe')) \
+                if '7.1' in a.version_json or True else None
+            if _mhy and _pe:
+                M32 = (1 << 32) - 1
+                for nm, cfg in _J2.get('tables', {}).items():
+                    if 'slot' not in cfg or not cfg.get('stride'):
+                        continue
+                    raw = _pe.u32(_mhy + int(cfg['slot'], 0))
+                    key = int(cfg['key'], 0) if isinstance(cfg['key'], str) else cfg['key']
+                    op = cfg['op']
+                    val = ((raw - key) & M32) if op == '-' else (((raw ^ key) & M32) if op == '^' else (raw + key) & M32)
+                    old_truth[val] = nm
+        except Exception as e:
+            print('⚠ 学习顺序失败:', e)
+        if old_truth:
+            byf = {}
+            for t in olde.get('tables', []):
+                v = t.get('value')
+                nm = old_truth.get(int(v, 16)) if v else None
+                if not nm:
+                    continue
+                for fn in (t.get('funcs') or []):
+                    byf.setdefault(fn, []).append((t.get('seq', 0), nm))
+            for fn, rows in byf.items():
+                rows.sort()
+                learned[fn] = [nm for _, nm in rows]
+            print('学到 %d 个函数的读取顺序（%d 张表）'
+                  % (len(learned), sum(len(v) for v in learned.values())))
+
     tables = exp.get('tables', [])
     print('IDA 导出：%d 个 (slot,op,key)，MHY 全局 = %s' % (len(tables), exp.get('mhy_global')))
 
@@ -103,6 +149,25 @@ def main():
     # ---- 2) 消歧（**一对一**：一个候选只能给一张表）----
     result, unresolved = {}, {}
     used = set()
+
+    # ★ 按「学到的函数内顺序」逐位分配（最可能正确的自动方式）
+    if learned:
+        for t in tables:
+            for fn in (t.get('funcs') or []):
+                names = learned.get(fn)
+                if not names:
+                    continue
+                # 该函数导出的所有条目按 seq 排序
+                sibs = sorted([x for x in tables if fn in (x.get('funcs') or [])],
+                              key=lambda x: x.get('seq', 0))
+                i = sibs.index(t)
+                if i < len(names):
+                    nm = names[i]
+                    k = (t['slot'], t['op'], t['key'])
+                    if nm not in result and k not in used:
+                        t['how'] = 'order-match(学自旧版顺序)'
+                        result[nm] = t
+                        used.add(k)
 
     def key_of(c):
         return (c['slot'], c['op'], c['key'])
