@@ -493,6 +493,12 @@ def cmd_scan(a):
         if len(names) > 1:
             print("  \u26a0 0x%X 被 %d 条签名同时认领: %s  —— 多半有一条是错的"
                   % (va, len(names), ", ".join(names)))
+    if getattr(a, 'json', None):
+        json.dump({'hits': addr_of,
+                   'ref': {sg2['name']: sg2['va'] for sg2 in sigs},
+                   'stats': {'hit': hit, 'undecidable': amb, 'miss': miss}},
+                  open(a.json, 'w'), indent=1)
+        print("命中表已写 %s" % a.json)
     print("\n命中 %d / %d（不可判 %d，未命中 %d），耗时 %.1fs" % (hit, len(sigs), amb, miss, time.time() - t0))
     return 0 if miss == 0 else 1
 
@@ -507,6 +513,7 @@ def main():
     g.set_defaults(fn=cmd_gen)
     s = sub.add_parser('scan'); s.add_argument('exe'); s.add_argument('--sigs', default=os.path.join(HERE, 'sigs.json'))
     s.add_argument('--fuzzy', action='store_true', help='未命中的签名走「调用图 + token 打分」救援')
+    s.add_argument('--json', default=None, help='把命中表 name -> 新地址 写成 JSON（给 sig_verify.py 用）')
     s.add_argument('--loose-only', action='store_true'); s.set_defaults(fn=cmd_scan)
     a = ap.parse_args()
     sys.exit(a.fn(a))
