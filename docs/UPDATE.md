@@ -39,8 +39,9 @@ python3 tools/slot_scan.py <gi.exe> <Managed/Metadata/global-metadata.dat>
 
 # 3) 自动重定位表常量（秒级；结构自证 + ⓪ slot 提示 + ⑦ 反查）
 python3 tools/relocate.py version/<新版本>
-#    ✅ 唯一确定 / ⚠ 多候选 / ✗ 无候选 会逐张打印 —— 有 ⚠/✗ 的才需要人工
-#    → 把结果填进 version.json 的 tables / fieldDecode / keyFormulas
+#    ④ 结构自证（3 项跨版本可靠）/ ⑤ 对照 / ⑥ slot 提示 / ⑦ 反查
+#    ⛔ ⑥ 的「✅ 唯一」**跨版本不可信**（7.0 实测 16/34 全错，见 docs/CROSS70.md）
+#       只有 ④ 的「表内部自洽」判据（fDV / methodPointerIndex / blob）跨版本可靠
 
 # 4) 逐索引 key / 结构体字段：到反编译里抄表达式（或用 §8 锚点法反解）
 #    → version.json 的 keyFormulas / fieldDecode      →  §5 + §6 + §8
@@ -64,10 +65,16 @@ python3 verify.py version/<新版本>          # 必须 28/28 PASS
 **做完任何一步都跑一次 `verify.py version/<新版本>`。** 本项目最危险的 bug 都是「不崩、只静默产出垃圾」，
 只有统计量能发现（见 §9 陷阱 7 与 10）。
 
-**自动化能覆盖多少**（本版本实测，详见 §8.6）：
-- **6 张表 + blob** 可**完全独立**定位（结构自证值 → 反查唯一 slot），不依赖旧 JSON
-- **其余在用的表（30 张）**：靠旧 JSON 的 **slot 提示**（前提：slot 跨版本稳定，**尚未用第二个样本验证**）
-- **做不到**：内容逐索引混淆 + 无结构指纹的表、以及"结构体内部字段偏移"（见 §8.6 末）
+**自动化能覆盖多少**（含 **7.0 跨版本实测**，详见 §8.6 与 `docs/CROSS70.md`）：
+
+- **跨版本真正可靠：3 项**（`fieldDefaultValues` / `methodPointerIndex` / 常量 blob）
+  —— 判据是**表内部自洽**，不依赖任何版本常量
+- **6 张表 + blob** 在**同版本自测**下可完全独立定位（结构自证值 → ⑦ 反查唯一 slot）
+- ⛔ **`slot` 提示不能当跨版本主路径**：7.0 实测 `fieldDefaultValues` 的 slot `0x13C→0xC`、
+  `methodPointerIndex` `0x94→0x130`；靠旧 slot 得到的 16/34 个"唯一值"**全部是错的**
+- **真正的瓶颈是「候选召回」**：7.0 上 `slot_scan` 的候选里**缺失真密钥**
+  → 方向已转向**语义不变量**（累计索引单调）与**无密钥反解**（见 §8.6 五/六）
+- **做不到**：内容逐索引混淆 + 无结构指纹的表、以及"结构体内部字段偏移"
 
 ---
 
@@ -342,8 +349,10 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 每项形如 `{slot, op, key, stride, side, role, …}`。**这才是换版本的主战场**。
 
 - **逐条清单**：`docs/status.md` §3.2（与 `version.json` 逐条对应）
-- **能自动重定位的**：先跑 `python3 tools/relocate.py version/<新版本>` ——
-  ⑥ 会逐表告诉你「slot 唯一确定 / 多候选 / 无候选」，✅ 的直接采用（见 §8.5/§8.6）
+- **能自动重定位的**：先跑 `python3 tools/relocate.py version/<新版本>`
+  - **④ 结构自证**（fDV / methodPointerIndex / blob）→ **跨版本可靠**，可直接采用
+  - **⑥ slot 提示** → ⛔ **跨版本不可信**（7.0 实测 16/34"唯一"全错）→ 只能当粗筛
+  - **⑦ 反查** → 需要先有可靠的值，才能反查回唯一 slot
 - 改完用 `verify.py` 交叉核对；`relocate.py` ⑤ 会打印「探测值一致」的表
 
 **`side` 字段**：`global`（`global-metadata.dat` 侧，偏移要 **+0x210**）/ `startup`（另一块数据）。
@@ -417,7 +426,7 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 |---|---|---|---|
 | `addresses.MHY` | 搜 `.rdata` 魔数 `"MHY\0"` | 表头魔数 | — |
 | `addresses.T0/T1` | 反编译 `GIMeta_RuntimeInit`，末尾对两个全局的赋值 | `*(T1+0x48)` 抽样 `type` 字节 100% ∈[1,0x1D]；`*(T0+0x88)` 非零项 ≈ 方法数 | `tools/sig.py` 按结构签名找函数 |
-| `tables[].slot` | 反编译里"表基址"表达式的 **`*(MHY+K)` 的 K** | 该槽位必须出现在 `slot_scan` 候选里 | 补 §4.1 的四种形态 |
+| `tables[].slot` | 反编译里"表基址"表达式的 **`*(MHY+K)` 的 K** | 该槽位必须出现在 `slot_scan` 候选里 | 补 §4.1 的四种形态。⛔ **slot 跨版本不稳定**（7.0：`0x13C→0xC`）→ 只能当"同版本内定位"，不能当跨版本提示 |
 | `tables[].op/key` | 同一表达式里的**运算与常数** | 用 `slot_scan` 的 `(slot,op,key)` 复算，值落进元数据且过结构自证 | `relocate.py` ⑦ **反查**（值→唯一三元组）|
 | `tables[].stride` | il2cpp 结构体大小（`structSizes`）+ 反编译里的步长 | `count*stride` 不越界；`count = raw/stride [- 常数]` 与实测计数一致 | 用"区间铺满"反推步长 |
 | `tables[].side` | `global`（+0x210）/ `startup`（另一块数据）| 值域落在对应块的尺寸内 | — |
@@ -452,9 +461,11 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 | `methodsCount` | `(MHY[0x188] ^ 0x1B58E334) / 26` | 733442 |
 | `methodPointerIndexOffset` | `MHY[0x94] ^ 0x4A4C0A71` | `0xC48E6C` |
 
-**反查闭环**（换版本可全自动）：
+**反查闭环**（**只要值可靠**就能全自动）：
 `relocate.py ⑦` 拿 ② 得到的值 `0x92140` 反查候选表 → 唯一命中
 `slot 0xB4 add 0xEC48AB9F`（补码形式，等价于 `- 0x13B75461`）✓
+—— 7.0 上用 ④ 可靠得到的 `fieldDefaultValues=0x1022CA8` 也成功反查到 `slot 0xC xor 0x720EB389` ✓
+（**前提**：值本身来自跨版本可靠的判据；靠旧 slot 提示得来的值不行 —— 见 §8.6）
 
 ### 5.7.4 哪些是"反解"出来的（不是从代码直接读）
 
@@ -697,41 +708,51 @@ python3 tools/sig.py verify --ref <旧>.exe --new <新>.exe --hits hits.json [--
 
 ```
 ① 魔数 "MHY\0"                              → MHY 表
-② slot_scan 的 (slot,op,key) 候选（tools/slots_cache.json）
+② slot_scan 的 (slot,op,key) 候选（tools/slots_cache.json；--slots 可指定）
 ③ 常量值 blob（AttributeTargets 的 [Flags] 值做字节签名 → 再反推基址）
-④ 数据侧结构自证（numpy 向量化）→ 可独立定位 6 项：
-     typeDefinitions(70B+flags+名字可打印) / nestedTypesTable(铺满+条目两两不同)
-     interfacesTable(+0 全为合法 Il2CppType 索引) / fieldDefaultValues(12B 严格递增)
-     / methodPointerIndex(弱) / blob
+④ 数据侧结构自证（numpy 向量化）→ **跨版本可靠的是 3 项**：
+     fieldDefaultValues(12B,+0 严格递增,+8 全为合法 Il2CppType 索引)
+     methodPointerIndex(4B,值域[-1,79765))
+     blob(常量签名落位)
+   同版本内另可定位：typeDefinitions / nestedTypesTable / interfacesTable
+   （它们依赖 fieldDecode 的密钥 → 跨版本密钥一变就失效）
 ⑤ 与现有 version.json 对照（自测：应全部一致）
-⑥ 旧 JSON slot 提示 → 逐表重新解值（落进元数据范围的候选是否唯一）
-⑦ 反查 slot：结构自证的值 → 唯一 (slot,op,key)（换版本可**全自动**，不依赖旧 JSON）
+⑥ 旧 JSON slot 提示 → 逐表重新解值（⛔ 跨版本不可信，见下）
+⑦ 反查 slot：由④的**值**反查唯一 (slot,op,key)（真正全自动、不依赖旧 JSON）
 ```
 
 ```bash
-# 无缓存时自动跑 slot_scan
-python3 tools/relocate.py version/7.1
-python3 tools/relocate.py version/7.2 --scan
+python3 tools/relocate.py version/7.1                  # 自测
+python3 tools/relocate.py version/7.2 --scan           # 无缓存时自动跑 slot_scan
+python3 tools/relocate.py version/7.0 --slots /tmp/opencode/slots_cache_70.json
 ```
 
-**自测意义**：拿 7.1 跑，④ 能**不需要知道旧 slot/key** 就推出
+**7.1 自测意义**：④ 能**不需要知道旧 slot/key** 就推出
 `typeDefinitions=0x92140`、`nestedTypesTable=0x22800F8`、`interfacesTable=0x4D5AB04`、
 `fieldDefaultValues=0x3D00478`、`blob=0xF1754C`；⑦ 再把这些**值反查回 `(slot,op,key)`**（5/5 唯一）。
-⑥ 给出"其余表靠旧 slot 是否唯一确定"（本版本 30/30 唯一）。
-**⚠️ 未知数：slot 跨版本是否稳定 —— 尚未用第二个样本验证。**
+
+> ⛔ **7.0 跨版本实测（`docs/CROSS70.md`）**：
+> - ④ 只剩 **3 项**（fDV / methodPointerIndex / blob）
+> - ⑥ 打出 16/34 个"✅ 唯一"，**逐个检查全是错值**，且与 ⑦ 自相矛盾
+> - 根因：`slot` 不是跨版本常量（`0x13C→0xC`、`0x94→0x130`）
+> **所以 ⑥ 只能当"同版本内定位"的粗筛，不能当换版本判据。**
 
 ---
 
 ## §8.6 「引导阶梯」—— 让其余表也能自动定位（现状与边界）
 
-**覆盖度总览（本版本实测）**
+**覆盖度总览（7.1 同版本自测 + 7.0 跨版本实测）**
 
-| 能自动定位到什么 | 数量 | 机制 | 依赖旧 JSON？ |
+| 能自动定位到什么 | 7.1（同版本）| 7.0（跨版本）| 依赖旧 JSON？ |
 |---|---|---|---|
-| **表常量（完全独立）** | **6 + blob** | 结构自证值 → ⑦ 反查唯一 slot | ❌ 不依赖 |
-| **表常量（slot 提示）** | **30 / 30 在用的表** | ⓪ 该 slot 的候选是否唯一 | ✅ 依赖（前提：slot 稳定）|
-| **全局地址** | 3（MHY/T0/T1） | ⓪ 魔数 + 构造器 | 部分 |
-| **结构体内部字段偏移+密钥** | ❌ 不能自动定位 | 无通用结构探针（§8.6 末）| — |
+| **表常量（完全独立）** | 6 + blob | **3 + blob** | ❌ 不依赖 |
+| **表常量（slot 提示）** | 30 / 34 | **16 / 34，且值全错** ⛔ | ✅ 且**不可用** |
+| **全局地址** | 3（MHY/T0/T1） | `sig.py` 找回 48/54 函数 | 部分 |
+| **结构体内部字段偏移+密钥** | ❌ 不能自动定位 | ❌ | — |
+
+> ⛔ **`slot` 不是跨版本常量**（7.0：`0x13C→0xC`、`0x94→0x130`）。
+> 所以 §1 里"靠 slot 提示自动换版本"**已被证伪** —— 详见 `docs/CROSS70.md`。
+> 目前唯一跨版本可靠的路径是：**表内部自洽的 3 项** + **语义不变量（累计索引单调）** + **无密钥反解**。
 
 **问题**：那些表的**内容都是逐索引混淆的**（`raw op key(i)`），所以**没有干净的原始指纹** ——
 靠"独特结构"最多只能认出 2~3 张。
@@ -751,6 +772,9 @@ python3 tools/relocate.py version/7.2 --scan
 ⑧ genericContainers 的 argc/parameterStart            ⏳ 待做 -> genericParameters
 ⑨ startup 侧 type args 是合法 Il2CppType 索引         ⏳ 待做 -> genericClassRange/genericTypeArg
 ```
+
+> **编号说明**：上面 ①-⑨ 是**设计阶梯**；`relocate.py` 运行时打印的 ①-⑦ 是**另一套编号**
+> （①魔数 ②候选 ③blob ④结构自证 ⑤对照 ⑥slot提示 ⑦反查）。两者不要混。
 
 三段式：**旧 version.json 当提示 -> 用另一张表/字符串解码做二次证据 -> 任何一步不过就 FAIL（不静默接受）**。
 这样即使指纹不独特，也**不会误报**。
@@ -908,7 +932,7 @@ methodsOffset           slot 0x16C   唯一 ✅
 ```
 
 那 4 张"无"是：`imagesCount`（是**计数** 3000，不是偏移）、`genericTypeArgOffset`（本版本值 0）、
-两张 `*_deprecated`（代码里已不读）。**即：真正在用的表 30/30 全部 slot 唯一确定。**
+两张 `*_deprecated`（代码里已不读）。**即：在 7.1 这个版本内，真正在用的表 30/30 都是 slot 唯一确定。**
 
 > **⛔ 已用 7.0 样本验证：slot 跨版本【不稳定】，这一级基本失效。**
 > 实测（`python3 tools/relocate.py version/7.0`）：
@@ -930,7 +954,7 @@ methodsOffset           slot 0x16C   唯一 ✅
 **⓪ 级做不到的**：如果同一个 slot 被多个读取点用不同 key 读（本版本 slot 0x5C 有 23 种候选），
 就必须靠结构自证（⑤）或人工确认 —— 本版本这种情况**没有发生**（0 张多候选）。
 
-## §9 版本更新时最容易踩的 16 个坑
+## §9 版本更新时最容易踩的 17 个坑
 
 | # | 症状 | 根因 / 修法 |
 |---|---|---|
@@ -950,6 +974,7 @@ methodsOffset           slot 0x16C   唯一 ✅
 | 14 | C 里 `key ^ *(WORD*)` | 结果是 **32 位**（16 位零扩展）；`parameterCount` 是**字节** XOR |
 | 15 | `slot_scan` 漏报某个槽位（候选里查不到真值）| 只匹配了一种指令形态。真实有**四种**（见 §4.1），且**密钥可能被提到函数入口** → 必须数据流追踪，不能用"距离 N 条内" |
 | 16 | 偏移读出"越界"假象 | 从 MHY 槽位解出的偏移都是 **global 相对**的，读 `global-metadata.dat` 要 **+0x210** |
+| 17 | `relocate` ⑥/⓪ 打出一堆"✅ 唯一"，跨版本却全是错值 | **「候选里只有一个落进元数据范围」不是判据**（任何小偏移都满足）。7.0 实测 16/34"唯一"全错，且 ⑥/⑦ 会自相矛盾（同一 slot 既当表基址又当表长度）。**slot 跨版本不稳定**（`0x13C→0xC`、`0x94→0x130`）→ 见 `docs/CROSS70.md` |
 
 ---
 
@@ -994,6 +1019,8 @@ python3 verify.py version/<新版本>   # 换版本后指向新样本目录
 | 泛型参数的 `in`/`out` | 14 字节参数项整体加密，`+8` 实测是 ownerIndex |
 | ~~`typeDef +0x20` 语义~~ | ✅ **已定性**：它是 **`fieldOffset` 表的每类型索引基**（`fieldOffset[(typeDef+0x20 ^ 0x2E8C0EB8) + k]`，k=类型内字段序号）|
 | 结构体**内部字段偏移**的自动定位 | 无通用结构探针；只能靠**反解**（§8 锚点法）/ 语义 / IDA。**但偏移跨版本大概率不变**（变的是密钥，已在 JSON）|
+| ~~`slot` 跨版本稳定~~ | ❌ **已用 7.0 证伪**：`fieldDefaultValues 0x13C→0xC`、`methodPointerIndex 0x94→0x130`。靠旧 slot 得到的"唯一值"16/34 **全错**（`docs/CROSS70.md`）|
+| 7.0 上 `typeDefinitions` 的密钥召回 | ⏳ 7.0 的 `slot_scan` 候选里缺真密钥 → 方向：**语义不变量（累计索引单调）** + **无密钥反解**（`CROSS70.md` §五/§六，7.1 已验证，7.0 待跑） |
 
 ---
 
