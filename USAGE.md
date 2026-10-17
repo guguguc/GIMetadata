@@ -296,3 +296,13 @@ python3 tools/sig.py scan version/7.1/gi.exe --sigs tools/sigs.json   # 自测�
 | [`docs/METHOD.md`](docs/METHOD.md) | 文章方法整理（中文）|
 | [`docs/ANALYSIS.md`](docs/ANALYSIS.md) | 总报告（部分章节已过期，以 `status.md` 为准）|
 | [`docs/mhytab_pairs.md`](docs/mhytab_pairs.md) | MHY 槽位配对表（含「槽位是字节偏移」的更正）|
+
+### `tools/ida_export.py` + `ida_apply.py` —— 在 IDA 里导出常量（替代手抄）
+```bash
+# ① IDA 里：File → Script file… 选 tools/ida_export.py  → /tmp/ida_export.json
+# ② 配对到表名
+python3 tools/ida_apply.py /tmp/ida_export.json --out /tmp/tables.json
+```
+`ida_export.py` 用 Hex-Rays 的表达式（`global + *(MHY+SLOT) OP KEY`）+ IDA 的真实函数边界，
+把 `tables` 的 slot/op/key **连值一起**导出；`ida_apply.py` 按 `tools/table_funcs.json`
+的「函数→表」映射配对，单表函数直接确定，多表函数给候选。

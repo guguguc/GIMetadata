@@ -893,6 +893,63 @@ GIMeta_SetupTypeInfoLocked 里：
 **现实上限**（当前技术）：全自动 **12~15%**，半自动 **~70%**，纯人工 ~15%。
 要真过 50%，必须先攻下 **B**（43 个）→ 才有 `keyFormulas` 去**验证** tables 的候选 ✗。
 
+## §5.12 IDA 脚本导出（**替代手抄**：`tools/ida_export.py` + `ida_apply.py`）
+
+> 手抄那 102 个 `tables` 的时代可以结束了 —— 在 IDA **里面**跑脚本，
+> 直接拿到 Hex-Rays 解出来的表达式 + IDA 的真实函数边界。
+
+### 5.12.1 为什么必须进 IDA
+
+| 外部 capstone 拿不到的 | IDA 里有 |
+|---|---|
+| 真实函数边界（7.0 的 `.pdata` 被混淆 ✗） | `idautils.Functions()` ✓ |
+| 混淆被摊开后的表达式 ✗ | Hex-Rays `str(cfunc)` 直接是 `global + *(MHY+SLOT) OP KEY` ✓ |
+| 全局变量名 ✗ | `qword_145AD52B8` ✓（能按"被当槽位表的次数"认出哪个是 MHY ✓）|
+
+### 5.12.2 用法
+
+```bash
+# ① 在新版本的 IDA 数据库里：File → Script file…  选 tools/ida_export.py
+#    产物：/tmp/ida_export.json
+#      tables      : slot / op / key / **value**（已用 MHY 槽位解出来）/ funcs
+#      fieldDecode : 每个 `*(_DWORD*(a1+K) OP KEY)` 候选
+#      formulas    : 含大常数 + `>>` 的内联表达式原文
+
+# ② 配对到表名（用 §5.10.3 的「函数 -> 表」映射）
+python3 tools/ida_apply.py /tmp/ida_export.json --out /tmp/tables.json
+#    单表函数 -> 直接确定；多表函数 -> 列出候选（带 value，便于按值匹配）
+```
+
+`tools/table_funcs.json` 已内置 13 个函数 → 表的映射（来自 §5.10.3 实测）。
+
+### 5.12.3 实测（样本）
+
+```
+IDA 导出 7 个 (slot,op,key)
+→ 自动确定 3 张：eventsOffset / fieldsOffset / propertiesOffset  ✓
+→ 需消歧 8 张：SetupTypeInfoLocked 读了 5 张、SetupMethodsLocked 读了 3 张 ✗
+```
+
+### 5.12.4 消歧顺序（多表函数）
+
+```
+1. 如果该表的值已被 ④/⑧ 自动检测到  -> 按 value 精确匹配 ✓（最硬）
+2. 如果该表是**计数** -> value/步长 应 ≈ 上一版的计数（§5.10.7 手段 3）✓
+3. 如果该表在多个函数里被读（n_funcs 大）-> 优先给"核心表"（methods/fields…）✓
+4. 都不行 -> 看 value 是否落在元数据范围内 + 人工确认（1 分钟）
+```
+
+### 5.12.5 这对自动化率意味着什么
+
+| 之前 | 现在 |
+|---|---|
+| 102 个全手抄 ✗ | 自动导出 + 自动配对；**单表函数直接得**（约 6~8 张 ✓），多表函数给候选 ✗ |
+| 找不到函数边界 ✗ | IDA 直接给 ✓ |
+| 不知道哪个全局是 MHY ✗ | 按"被当槽位表的次数"自动认 ✓ |
+
+> ⚠️ 仍然**不是 100% 自动**：多表函数（`SetupTypeInfoLocked` 5 张、`RuntimeInit` 7 张）
+> 需要 value/计数 消歧 ✗；而且这要求**跑 IDA**（不是纯离线）✗。
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）

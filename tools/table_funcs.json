@@ -1,0 +1,21 @@
+{
+  "_comment": "IDA 导出里的「函数名」-> 该函数会读哪些表（来自 docs/UPDATE.md §5.10.3 实测）。一个函数读多张表时，用 value / count 公式消歧。",
+  "GIMeta_SetupFieldsLocked": ["fieldsOffset"],
+  "GIMeta_SetupPropertiesLocked": ["propertiesOffset"],
+  "GIMeta_SetupEventsLocked": ["eventsOffset"],
+  "GIMeta_SetupParameters": ["parametersOffset"],
+  "GIMeta_IterNestedTypes": ["nestedTypesTable"],
+  "GIMeta_SetupMethodsLocked": ["methodsOffset", "methodPointerIndexOffset", "methodsCount"],
+  "GIMeta_SetupTypeInfoLocked": ["methodSlotTableOffset", "methodSlotCount", "interfacesTable",
+                                 "attributesInfoOffset", "attributesInfoCount"],
+  "GIMeta_GetFieldDefaultValue": ["fieldDefaultValuesOffset",
+                                  "fieldAndParameterDefaultValueDataOffset"],
+  "GIMeta_GetDefaultParameterValueObject": ["parameterDefaultValuesOffset",
+                                            "parameterDefaultValuesCount"],
+  "GIMeta_AllocTypeInfoArray": ["attributeTypesOffset"],
+  "GIMeta_BuildMethodName": ["genericContainers", "genericParameters"],
+  "GIMeta_RuntimeInit": ["methodSpecs", "genericMethodTable", "genericMethodTableCount",
+                         "imagesOffset", "imagesCount", "genericClassRangeOffset",
+                         "genericTypeArgOffset"],
+  "GIMeta_RegisterTables": ["typeDefinitionsOffset", "typeDefinitionsCount"]
+}
