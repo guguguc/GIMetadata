@@ -223,6 +223,38 @@ def _plausible_start(pe, va):
     return pe.D[off - 1] in (0xCC, 0x90, 0xC3)
 
 
+def _call_targets(pe, md, va, maxbytes=32768):
+    """函数体里所有 `call rel32` 的目标（调用图锚定的原料）。
+
+    注意：**不能**在第一个 ret 处停 —— 大函数（如 RuntimeInit）有多个返回点，
+    早停会漏掉后面几十个 call（实测：早停只能得到 59 个候选）。"""
+    off = pe.va2off(va)
+    if off is None: return []
+    out = []
+    for ins in md.disasm(pe.D[off:off + maxbytes], va):
+        if ins.mnemonic == 'call' and ins.op_str.startswith('0x'):
+            try: out.append(int(ins.op_str, 16))
+            except ValueError: pass
+    return out
+
+
+def _score_at(pe, md, va, sg):
+    """在 va（当作函数头）处按 sg 的 loose/strict token 序列打分，返回 (loose, strict)"""
+    off = pe.va2off(va)
+    if off is None: return None
+    insns = []
+    for ins in md.disasm(pe.D[off:off + 160], va):
+        insns.append(ins)
+        if len(insns) >= sg['skip'] + sg['n'] + len(sg.get('ext_loose') or ()): break
+    if len(insns) < sg['skip'] + sg['n']: return None
+    seg = insns[sg['skip']:sg['skip'] + sg['n']]
+    lo = [toks_of(x, False) for x in seg]
+    st = [toks_of(x, True) for x in seg]
+    return (sum(1 for i in range(sg['n']) if lo[i] == sg['loose'][i]),
+            sum(1 for i in range(sg['n']) if st[i] == sg['strict'][i]),
+            lo, st)
+
+
 MAX_CANDS = 64      # 候选爆炸 -> 签名太弱（固定子串不唯一），直接判不可用
 
 
@@ -246,6 +278,7 @@ def cmd_scan(a):
     hit = miss = amb = 0
     where = {}
     pending = []      # 歧义项（末尾按「同组相对次序」定夺）
+    unmatched = []    # 没定下来的签名（--fuzzy 救援用）
     for sg in sigs:
         pb = binascii.unhexlify(sg['pat']); pm = binascii.unhexlify(sg['pmask'])
         fo, fl = _longest_fixed(pb, pm)
@@ -297,7 +330,8 @@ def cmd_scan(a):
             scored.append((va, sum(1 for i in range(sg['n']) if st[i] == sg['strict'][i]),
                            sum(1 for i in range(sg['n']) if lo[i] == sg['loose'][i]), xs))
         if not scored:
-            miss += 1; print("  %-42s \u2717 未命中" % sg['name']); continue
+            miss += 1; unmatched.append(sg)
+            print("  %-42s \u2717 未命中" % sg['name']); continue
         scored.sort(key=lambda x: (-x[1], -x[2], -x[3]))
         # 只接受**反汇编 token 真的对上**的候选：loose 必须全中（或接近全中）。
         # 教训：字节模式可能碰巧对上，但 token 一条不匹配（loose 0/8）—— 那是假命中。
@@ -305,7 +339,7 @@ def cmd_scan(a):
         near = [t for t in scored if t[2] >= (sg['n'] * 3 + 2) // 4]
         if not keep:
             if not near:
-                miss += 1
+                miss += 1; unmatched.append(sg)
                 print("  %-42s \u2717 未命中（最佳 loose %d/%d，字节巧合而已）"
                       % (sg['name'], scored[0][2], sg['n']))
             else:
@@ -355,19 +389,50 @@ def cmd_scan(a):
     for addrs, items in groups.items():
         items.sort(key=lambda it: int(it[0]['va'], 16))
         if len(items) == len(addrs):
-            for (sg, _), a in zip(items, addrs):
-                resolved[sg['name']] = a
+            for (sg, _), addr in zip(items, addrs):
+                resolved[sg['name']] = addr
     for sg, addrs in pending:
         if sg['name'] in resolved:
-            a = resolved[sg['name']]
+            addr = resolved[sg['name']]
             hit += 1
             print("  %-42s %-12s 函数起点 0x%-10X (原 0x%X)  \u26a0 %d 个并列(同组，按相对次序定夺)"
-                  % (sg['name'], "严格全中" if sg['n'] else "", a, int(sg['va'], 16), len(addrs)))
-            where.setdefault(a, []).append(sg['name'])
+                  % (sg['name'], "严格全中" if sg['n'] else "", addr, int(sg['va'], 16), len(addrs)))
+            where.setdefault(addr, []).append(sg['name'])
         else:
             amb += 1
             print("  %-42s \u26a0 歧义：%d 个并列最高分 %s" % (
                 sg['name'], len(addrs), ", ".join("0x%X" % x for x in addrs[:4])))
+    # ---- 模糊救援（--fuzzy）：用**已定位函数的 call 目标**当候选，对未定下来的签名做 token 打分 ----
+    # 依据：这些函数在新版本里**字节模式完全变了**，但它们的**调用者**是已定位的 ->
+    #       从调用图取候选，比"全 .text 模糊搜"快几个数量级，且不会落到垃圾代码里。
+    if getattr(a, 'fuzzy', False) and unmatched and where:
+        cands = set()
+        for f in list(where):
+            cands.update(_call_targets(pe, md, f))
+        cands = sorted(c for c in cands
+                       if tva <= c < tva + len(tbytes) and c % 16 == 0 and not _is_stub(pe, md, c))
+        print("\n  模糊救援：调用图候选 %d 个（来自 %d 个已定位函数）" % (len(cands), len(where)))
+        for sg in unmatched:
+            sc = []
+            for c in cands:
+                r = _score_at(pe, md, c, sg)
+                if r and r[0] > 0:
+                    sc.append((r[0], r[1], c))
+            if not sc:
+                print("    %-40s -- 调用图里没有候选能对上 token" % sg['name']); continue
+            sc.sort(reverse=True)
+            b0 = sc[0]
+            margin = b0[0] - sc[1][0] if len(sc) > 1 else b0[0]
+            if b0[0] >= 5 and margin >= 2:
+                hit += 1; miss -= 1
+                print("    %-40s 模糊命中 %d/%d (严格 %d) 0x%X  次优 %d"
+                      % (sg['name'], b0[0], sg['n'], b0[1], b0[2],
+                         sc[1][0] if len(sc) > 1 else 0))
+                where.setdefault(b0[2], []).append(sg['name'])
+            else:
+                print("    %-40s -- 最优 %d/%d @0x%X（低于门槛 5 或与次优太近，不采信）"
+                      % (sg['name'], b0[0], sg['n'], b0[2]))
+
     for va, names in where.items():
         if len(names) > 1:
             print("  \u26a0 0x%X 被 %d 条签名同时认领: %s  —— 多半有一条是错的"
@@ -385,6 +450,7 @@ def main():
     g.add_argument('--next', type=int, default=10, help='额外存的参考 token 条数（仅并列时定夺用）')
     g.set_defaults(fn=cmd_gen)
     s = sub.add_parser('scan'); s.add_argument('exe'); s.add_argument('--sigs', default=os.path.join(HERE, 'sigs.json'))
+    s.add_argument('--fuzzy', action='store_true', help='未命中的签名走「调用图 + token 打分」救援')
     s.add_argument('--loose-only', action='store_true'); s.set_defaults(fn=cmd_scan)
     a = ap.parse_args()
     sys.exit(a.fn(a))
