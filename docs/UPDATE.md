@@ -1060,6 +1060,33 @@ tools/ida_headless.sh <新样本.i64 或 exe> /tmp/ida.json /tmp/h.json
 **⚠️ 授权**：脚本调用 Hex-Rays `decompile()` → 需要 **反编译器授权** ✓
 （没有的话 `ida_export.py` 会直接打印 `✗ Hex-Rays 不可用` 并退出 ✓）。
 
+### 5.12.8 多表函数怎么自动消歧（21 张候选的正解方向）
+
+`SetupTypeInfoLocked` 读了 5 张、`RuntimeInit` 读了 7 张 —— 只靠"函数名"分不开 ✗。
+但 **Hex-Rays 的伪代码里有 3 条额外线索**（都能自动抓）：
+
+| 线索 | 长什么样 | 能区分什么 |
+|---|---|---|
+| **步长** | `*(int *)(v25 + 6 * idx)` | 6 字节表（interfaces/methodSlot）vs 8/4 ✓ |
+| **被调函数** | `sub_1404E3CC0(v25 + 8 * idx, ...)` | 交给谁解析 → 用途 ✓ |
+| **常量用法** | `if (v25 == -1) / v25 >= 0x10000` | 哨兵/值域 ✓ |
+
+**实现方式**（还没做）：
+```python
+# 1) 抓 LHS：v25 = ... + *(_DWORD *)(MHY + 452) - 1518027399
+RE_ASSIGN = re.compile(r'(\w+)\s*=\s*[^;\n]*' + RE_TABLE.pattern)
+# 2) 找该变量被怎么用：v25 + <N> * 或 (v25 + ...)
+RE_USE    = re.compile(r'\b(\w+)\b\s*\+\s*(\d+)\s*\*')
+# 3) 输出 {slot,op,key,value,funcs,stride,callee}
+```
+
+然后 `ida_apply.py` 用 **`(stride, callee)` 匹配 §5.10.3 的期望**：
+- `stride == 6` → `interfacesTable` / `methodSlotTable` ✓
+- `callee == GetFieldName` → `fields` ✓
+- 剩下的才落到人工 ✗
+
+> 这是目前**唯一**能把那 21 张候选自动收掉大半的路 ✓（全量抓表达式没用 ✗，因为没有标签来源）。
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
