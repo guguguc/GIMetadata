@@ -1237,6 +1237,35 @@ IDA 独有的 15 张 `relocate` 检测不出 ✓。**两者互补** ✓。
    （`SetupTypeInfoLocked` / `GetFieldDefaultValue` / `GetDefaultParameterValueObject` /
    `BuildMethodName`）→ 那 10 张表会掉 ✗ → 估计 **~44%**
 
+### 5.12.12 试过「纯 capstone 版」（不用 IDA）—— **失败** ✗
+
+`tools/order_apply.py`：用 `PROVENANCE.md` 里 7.1 的**读取指令地址**做锚，
+指令级对齐到 7.0，再按形态取 `(slot,key)`。
+
+**结果（7.0，已知 6 张真值）**：
+
+```
+fieldDefaultValuesOffset  0xC ^ 0x720EB389   ✅（唯一对上的）
+其余 28 张                  ✗ 没推出来
+（宽松版 ±3 条乱抓时能出 9 个，但含明显错的：typeDefinitionsCount 0x6C + 0xFFFFFFFF ✗）
+```
+
+**根因**：**指令形态会变** ✗
+
+```
+7.1: mov esi, 0xec48ab9f ; add esi, [rdx+0xb4]        ← 形态 B
+7.0: movsxd rsi,[rdx+0x1a0] ; xor rsi,0x4ce7b502      ← 形态 A
+```
+
+形态一变 → **token 不同** → `SequenceMatcher` 不认为这两条是"同一位置" ✗
+→ 位置锚失效 ✗ → 只能退回"按函数内第 k 个读取"的**序数**对齐 ✗（脆弱 ✗）
+
+**结论**：**IDA 的 Hex-Rays 不是可选项** ✓ —— 它把不同形态**归一成同一个表达式**
+（`*(DWORD*)(MHY+slot) op key`）✓，这正是 `ida_export` 能 20/20 的原因 ✓。
+
+> 所以「7.0 不跑 IDA」这条路**走不通** ✗；
+> 要么给 7.0 的 `.i64`（分钟级 ✓），要么花几小时让 IDA 分析 7.0 的 exe ✗。
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
