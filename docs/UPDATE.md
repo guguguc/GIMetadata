@@ -542,6 +542,47 @@ python3 tools/sig.py scan version/7.2/gi.exe --sigs tools/sigs.json     # → �
 生成时会打印**弱签名警告**（区分度 <4：说明那 8 条指令太重复，如 `movaps` 刷栈），
 这类函数签名不可靠 → 退回字符串/调用图锚。
 
+### `sig.py` 的另外两个子命令（常量抽取 / 命中验证）
+
+`sig.py` 现在是四合一：`gen`（生成签名）、`scan`（跨版本定位）、`consts`（抽常数）、`verify`（验命中）。
+
+#### `consts` —— 从 sig 定位的函数里**通用抽取** 64 位常量
+
+密钥类常数**每版都变**（实测 7.0 的 5 个字符串解密常数**完全不在 7.1 的 `.text`** ✗），
+但它们就在 `sig` 定位到的那个函数的 `movabs` 立即数里 ✓ —— 可以直接抽出来 ✓
+
+```bash
+python3 tools/sig.py consts <新版本>.exe --func <GIMeta_DecryptString 新地址> --role stringdecrypt
+```
+
+**通用性靠"排除内置常数"**，不依赖任何某版本的观测值：
+函数里混着 **xxHash64 素数、位技巧掩码、SWAR 字节掩码**，它们**跨版本完全相同** ✗ 必须排除。
+标注也靠**算法结构**：排除内置后"地址最靠前的 3 个连续 `movabs`" = `(keyMulB, keySeed, keyMulA)`，
+"出现 ≥3 次的" = `keyStep` ✓
+
+| | 7.1 自测 | 7.0 自动抽出 |
+|---|---|---|
+| `keyMulB` | `0x694418957C890198` ✅ 与 JSON 一致 | `0x552E0DA77096BD68` |
+| `keySeed` | `0x55A357D81EF0E48B` ✅ | `0xD7A8F7865F61DE96` |
+| `keyMulA` | `0x5C2B4E660E2D0544` ✅ | `0x6E06618323D1073A` |
+| `keyStep` | `0x6B0B40C349AE61E5` ✅（出现 3 次）| `0x31BEA5AF4493F187`（也 3 次）|
+
+> 这是目前**第一条真正跨版本自动迁移版本常数**的路：既不依赖 slot 稳定 ✓，也不依赖旧密钥 ✓。
+
+#### `verify` —— 反汇编级验证「命中的到底对不对」
+
+```bash
+python3 tools/sig.py scan <新>.exe --sigs tools/sigs.json --fuzzy --json hits.json
+python3 tools/sig.py verify --ref <旧>.exe --new <新>.exe --hits hits.json [--show 3]
+```
+
+对每个命中比较三样**互相独立**的东西：
+① 函数引用的**字符串集合**（`lea/mov reg,[rip+X]` 指过去的 C 串，最硬的语义证据）
+② **立即数指纹**（窗口内小立即数的交集）③ **指令序列相似度**（`difflib`，前 60 条助记符/完整 token）
+
+7.0 的 48 个命中实测：**强证据 22（字符串完全一致）/ 中等 26 / 弱 0**，
+指令序列相似度 **48/48 ≥78%**（33 个 100%、44 个 ≥92%）✓
+
 ### `tools/relocate.py` —— 自动重定位表常量（numpy 秒级）
 
 只用跨版本稳定的锚，**不给字节签名当判据**。六级，逐级向上借证据：

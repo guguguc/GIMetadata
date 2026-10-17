@@ -605,6 +605,290 @@ def cmd_scan(a):
     return 0 if miss == 0 else 1
 
 
+BUILTIN = {
+    0x9E3779B185EBCA87, 0xC2B2AE3D27D4EB4F, 0x165667B19E3779F9, 0x27D4EB2F165667C9,
+    0x9E3779B97F4A7C15, 0xC2B2AE3D27D4EB4F, 0x165667B19E3779F9,
+    0x1555555555555555, 0x3333333333333333,
+    0x0F0F0F0F0F0F0F0F, 0x1010101010101010,
+    0x5555555555555555, 0xAAAAAAAAAAAAAAAA, 0x00FF00FF00FF00FF, 0xFF00FF00FF00FF00,
+    0x0F0F0F0F0F0F0F0F, 0xF0F0F0F0F0F0F0F0,
+    # SWAR 字节掩码（编译器做字节并行运算用）—— 跨版本不变，必须排除
+    0x0101010101010101, 0xC000000000000000, 0xBFFFFFFFFFFFFFFE, 0x8000000000000001,
+    0xFFFFFFFF00000000, 0x00000000FFFFFFFF, 0x8080808080808080, 0x7F7F7F7F7F7F7F7F,
+}
+
+
+def extract(pe, md, va, maxbytes=0x2000):
+    """返回 [(值, 指令地址)]，只含 **非内置** 的 64 位立即数（按出现顺序）"""
+    off = pe.va2off(va)
+    if off is None:
+        return None
+    out = []
+    shifts = []
+    tva, tbytes = pe.text
+    lo, hi = tva, tva + len(tbytes)
+    for ins in md.disasm(pe.D[off:off + maxbytes], va):
+        for op in ins.operands:
+            if op.type != X86_OP_IMM:
+                continue
+            v = op.imm & 0xFFFFFFFFFFFFFFFF
+            # 只有 movabs 才是「真 64 位立即数」；其余是移位量/栈大小/跳转目标 -> 噪声
+            if ins.mnemonic != 'movabs':
+                if ins.mnemonic in ('rol', 'ror', 'shl', 'shr', 'sar') and 0 < v < 64:
+                    shifts.append((int(v), ins.address, ins.mnemonic))
+                continue
+            if v in BUILTIN or v in (0, 1):
+                continue
+            if lo <= v < hi:            # 其实是代码/数据地址，不是密钥
+                continue
+            out.append((v, ins.address, ins.mnemonic))
+    out.sort(key=lambda x: x[1])
+    return out, shifts
+
+
+
+def label_string_consts(consts):
+    """按**结构模式**标注字符串解密的 4 个 64 位密钥（不含 32 位的 entryXor）。
+
+    模式（7.0/7.1 实测完全一致，因此可用于任意版本）：
+      · 紧跟在 `rol 23 / shr 33 / shr 29 / shr 32` 那个 xorshift 块之后的
+        **3 个连续 movabs**  = (keyMulB, keySeed, keyMulA)
+      · 稍后出现的**同一个值重复 3 次**的 movabs = keyStep（每 8 字节递增一次）
+    这样标注依赖的是**算法结构**而不是某版本的观测值。
+    """
+    from collections import Counter
+    cnt = Counter(v for v, _, _ in consts)
+    # 重复 3 次的那个 = keyStep
+    step = None
+    for v, c in cnt.items():
+        if c >= 3:
+            step = v
+            break
+    # 排除内置后，按地址最靠前的 3 个连续 movabs = (keyMulB, keySeed, keyMulA)
+    # （7.0/7.1 实测：它们就是解密核心，紧跟在 xorshift 块之后）
+    trio = None
+    for i in range(len(consts) - 2):
+        a1, a2, a3 = consts[i], consts[i + 1], consts[i + 2]
+        if a2[1] - a1[1] < 0x40 and a3[1] - a2[1] < 0x40:
+            trio = [a1[0], a2[0], a3[0]]
+            break
+    out = {}
+    if trio:
+        out['keyMulB'], out['keySeed'], out['keyMulA'] = trio
+    if step is not None:
+        out['keyStep'] = step
+    return out
+
+
+
+WIN = 4096          # verify: 函数体取多少字节
+
+
+def body(pe, md, va, nbytes=WIN):
+    off = pe.va2off(va)
+    if off is None:
+        return []
+    return list(md.disasm(pe.D[off:off + nbytes], va))
+
+
+def rip_targets(pe, md, va):
+    """函数体里所有 rip 相对内存操作数解出来的 VA"""
+    out = []
+    for ins in body(pe, md, va):
+        for op in ins.operands:
+            if op.type != X86_OP_MEM:
+                continue
+            m = op.mem
+            if m.base == 0 or m.index != 0:
+                continue
+            # capstone: rip 相对时 base == X86_REG_RIP，我们直接用 disp 还原
+            base_name = ins.reg_name(m.base) if m.base else ''
+            if base_name == 'rip':
+                out.append(ins.address + ins.size + m.disp)
+    return out
+
+
+def read_cstr(pe, va, maxn=200):
+    off = pe.va2off(va)
+    if off is None:
+        return None
+    blob = pe.D[off:off + maxn]
+    i = blob.find(b'\0')
+    if i <= 0:
+        return None
+    s = blob[:i]
+    if len(s) < 4 or not all(32 <= b < 127 or b in (9, 10, 13) for b in s):
+        return None
+    try:
+        return s.decode('ascii')
+    except UnicodeDecodeError:
+        return None
+
+
+def strings_of(pe, md, va):
+    """函数引用到的可打印字符串集合"""
+    out = set()
+    for t in rip_targets(pe, md, va):
+        # 字符串在 .rdata 里；多试几个偏移（有时偏移 8/16 才是串头）
+        for delta in (0, 8, 16, -8, 24):
+            s = read_cstr(pe, t + delta)
+            if s and len(s) >= 6:
+                out.add(s)
+    return out
+
+
+def imms_of(pe, md, va):
+    out = set()
+    for ins in body(pe, md, va):
+        for op in ins.operands:
+            if op.type == 2:      # IMM
+                v = op.imm
+                if 2 <= abs(v) <= 0x7FFFFF:
+                    out.add(v)
+    return out
+
+
+def callees_of(pe, md, va, nbytes=1024):
+    out = set()
+    for ins in body(pe, md, va, nbytes):
+        if ins.mnemonic in ('call', 'jmp') and ins.op_str.startswith('0x'):
+            try:
+                out.add(int(ins.op_str, 16))
+            except ValueError:
+                pass
+    return out
+
+
+def _seq(pe, md, va, n=60, strict=False):
+    """取函数前 n 条的「助记符序列」和「完整 token 序列」"""
+    off = pe.va2off(va)
+    if off is None:
+        return [], []
+    ins = []
+    for x in md.disasm(pe.D[off:off + 8 * n + 64], va):
+        ins.append(x)
+        if len(ins) >= n:
+            break
+    m = [x.mnemonic for x in ins]
+    t = [toks_of(x, strict) for x in ins]
+    return m, t
+
+
+def similarity(pe_r, md, rva, pe_n, md2, nva, n=60):
+    """两版函数的指令序列相似度（助记符 / 完整 token），独立于签名的第三方证据"""
+    from difflib import SequenceMatcher
+    mr, tr = _seq(pe_r, md, rva, n)
+    mn, tn = _seq(pe_n, md2, nva, n)
+    if not mr or not mn:
+        return 0.0, 0.0
+    return (SequenceMatcher(None, mr, mn).ratio(),
+            SequenceMatcher(None, tr, tn).ratio())
+
+
+
+def cmd_consts(a):
+    # 参数由 main() 的子命令解析器提供（exe/--func/--bytes/--json/--role）
+
+    pe = PE(a.exe)
+    md = Cs(CS_ARCH_X86, CS_MODE_64)
+    md.detail = True
+    va = int(a.func, 16)
+    got = extract(pe, md, va, a.bytes)
+    if got is None:
+        print('VA 0x%X 不在文件映射内' % va)
+        return 1
+    consts, shifts = got
+    print('=== 函数 0x%X 的 64 位常量（movabs，排除内置 xxHash/位技巧常数与地址）===' % va)
+    for v, at, m in consts:
+        print('  0x%016X  @0x%-10X %s' % (v, at, m))
+    print('共 %d 个' % len(consts))
+    print('\n=== 循环移位/移位量（算法的一部分，跨版本通常不变）===')
+    print('  ' + '  '.join('%s %d @0x%X' % (m, v, at) for v, at, m in shifts))
+    if consts:
+        print('\n=== 按结构模式自动标注 ===')
+        lab = label_string_consts(consts)
+        if not lab:
+            print('  (模式不匹配 —— 可能是别的函数，或该版本的编译器换了写法)')
+        for k, v in lab.items():
+            print('  %-10s = 0x%016X' % (k, v))
+        if a.role:
+            print('\n=== 可直接写入 version.json 的片段 ===')
+            import json as _j
+            print(_j.dumps({'stringDecrypt_' + k: '0x%X' % v for k, v in lab.items()},
+                           ensure_ascii=False, indent=2))
+    if a.json:
+        import json
+        json.dump({'consts': [{'value': '0x%X' % v, 'va': '0x%X' % at} for v, at, _ in consts],
+                   'shifts': [{'amount': v, 'va': '0x%X' % at, 'op': m} for v, at, m in shifts]},
+                  open(a.json, 'w'), indent=1)
+        print('已写 %s' % a.json)
+    return 0
+
+
+
+def cmd_verify(a):
+    # 参数由 main() 的子命令解析器提供（--ref/--new/--hits/--show）
+
+    d = json.load(open(a.hits))
+    hits, ref = d['hits'], {k: int(v, 16) for k, v in d['ref'].items()}
+    pe_r, pe_n = PE(a.ref), PE(a.new)
+    md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
+
+    rows = []
+    for nm in sorted(hits):
+        rva, nva = ref.get(nm), hits[nm]
+        if rva is None:
+            continue
+        sr, sn = strings_of(pe_r, md, rva), strings_of(pe_n, md, nva)
+        ir, inn = imms_of(pe_r, md, rva), imms_of(pe_n, md, nva)
+        cr, cn = len(callees_of(pe_r, md, rva)), len(callees_of(pe_n, md, nva))
+        common_s = sr & sn
+        only_r = sr - sn
+        # 判据：有共同字符串 -> 强证据；只有共同立即数 -> 中等；都没有 -> 弱
+        if common_s and not only_r:
+            verdict = '✅ 字符串完全一致(%d 条)' % len(common_s)
+        elif common_s:
+            verdict = '🟡 字符串有重合 %d/%d（少了 %d 条）' % (len(common_s), len(sr), len(only_r))
+        elif ir & inn:
+            verdict = '🟡 无字符串，但共同立即数 %d 个' % len(ir & inn)
+        else:
+            verdict = '⚠ 无字符串也无共同立即数（弱证据）'
+        sm, st = similarity(pe_r, md, rva, pe_n, md, nva)
+        rows.append((nm, rva, nva, len(sr), len(common_s), len(only_r),
+                     len(ir & inn), cr, cn, verdict, sorted(common_s)[:2], sm, st))
+
+    print("=== 反汇编级验证：%d 个命中 ===" % len(rows))
+    print("%-40s %-9s %-9s %-13s %-8s %-13s %s"
+          % ("函数", "7.1", "7.0", "共同字符串", "共同立即数", "指令序列相似", "判定"))
+    for nm, rva, nva, ns, nc, no, ni, ccm, cn2, v, cs, sm, st in rows:
+        print("%-40s 0x%-7X 0x%-7X %-13s %-8d %5.0f%%/%3.0f%%  %s"
+              % (nm, rva, nva, "%d/%d" % (nc, ns), ni, sm * 100, st * 100, v))
+
+    strong = sum(1 for r in rows if r[9].startswith('✅'))
+    hi = sum(1 for r in rows if r[12] >= 0.60)
+    print("指令序列相似度 >=60%%(助记符)的: %d / %d 个" % (hi, len(rows)))
+    lo_list = [(r[0], r[11], r[12]) for r in rows if r[12] < 0.50]
+    if lo_list:
+        print("相似度 <50%% 的(需重点复核):")
+        for nm, sm, st in sorted(lo_list, key=lambda x: x[1]):
+            print("   %-40s 助记符 %.0f%%  token %.0f%%" % (nm, sm * 100, st * 100))
+    mid = sum(1 for r in rows if r[9].startswith('🟡'))
+    weak = sum(1 for r in rows if r[9].startswith('⚠'))
+    print("\n汇总: 强证据 %d, 中等 %d, 弱 %d / 共 %d" % (strong, mid, weak, len(rows)))
+
+    for nm, rva, nva, ns, nc, no, ni, ccm, cn2, v, cs, sm, st in rows[:a.show]:
+        print("\n---- %s  7.1@0x%X  vs  7.0@0x%X ----" % (nm, rva, nva))
+        lr = [(i.mnemonic, i.op_str) for i in body(pe_r, md, rva)][:14]
+        ln = [(i.mnemonic, i.op_str) for i in body(pe_n, md, nva)][:14]
+        for i in range(max(len(lr), len(ln))):
+            x = "%-30s" % (' '.join(lr[i]) if i < len(lr) else '')
+            y = "%-30s" % (' '.join(ln[i]) if i < len(ln) else '')
+            print("   %-30s | %s" % (x, y))
+    return 0
+
+
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -619,6 +903,18 @@ def main():
     s.add_argument('--deep', action='store_true', help='深度救援：穷举整个 .text 的函数头（分钟级，收尾用）')
     s.add_argument('--vtable', action='store_true', help='把 .rdata 里全部函数指针(vtable)当候选源（+12s，用于证明搜索空间已穷尽）')
     s.add_argument('--loose-only', action='store_true'); s.set_defaults(fn=cmd_scan)
+
+    c = sub.add_parser('consts', help='从 sig 定位的函数里通用抽取 64 位常量（如字符串解密密钥）')
+    c.add_argument('exe'); c.add_argument('--func', required=True, help='函数起始 VA（来自 scan）')
+    c.add_argument('--bytes', type=lambda x: int(x, 0), default=0x2000)
+    c.add_argument('--role', default=None); c.add_argument('--json', default=None)
+    c.set_defaults(fn=cmd_consts)
+
+    v = sub.add_parser('verify', help='反汇编级验证 scan 的命中对不对')
+    v.add_argument('--ref', required=True); v.add_argument('--new', required=True)
+    v.add_argument('--hits', required=True); v.add_argument('--show', type=int, default=0)
+    v.set_defaults(fn=cmd_verify)
+
     a = ap.parse_args()
     sys.exit(a.fn(a))
 
