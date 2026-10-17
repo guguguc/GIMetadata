@@ -551,6 +551,86 @@ blob                常量签名落在某条 dataIndex 上
 
 
 
+## §5.9 202 个值逐个怎么找（工具映射 · 当前真实自动化程度）
+
+> 只列**每版必改**的 202 项。判据全部实测过；标 ✅ 的是**不需要任何版本常量**的。
+
+### 1) `addresses`（4 项）
+
+| 键 | 怎么找 | 自动化 |
+|---|---|---|
+| `mhyTableVA` | 搜 `.rdata` 魔数 `"MHY\0"`（`relocate ①`） | ✅ |
+| `table0VA` / `table1VA` | 反编译 `GIMeta_RuntimeInit` 末尾的全局赋值（`sig.py scan` 能定位函数） | ✗ 人工 |
+| `codeRegistrationVA` | 同上 | ✗ 人工 |
+
+### 2) `stringDecrypt`（5 项）
+
+```bash
+python3 tools/sig.py consts <exe> --func <DecryptString> --func <RuntimeInit>
+```
+
+| 键 | 判据 | 自动化 |
+|---|---|---|
+| `keyMulA/keyMulB/keySeed/keyStep` | 从 `movabs` 里**按算法结构**标注（xorshift 块后的 3 连 + 重复 3 次那个） | ✅ 4/4（7.0 实测） |
+| `entryXor` | 同一寄存器连续两次 `xor`、第二次 imm32，**且之后 ≤4 条 call 解密函数** | 7.1 ✅ / 7.0 ✗（公式变成 `xor+sub`，用 `sig.py entryexpr` 看形态） |
+
+### 3) `tables[].slot / .op / .key`（102 项 = 34 张 × 3）
+
+按可靠性分三档：
+
+| 档 | 判据 | 覆盖 | 自动化 |
+|---|---|---|---|
+| **A. 结构自证** | 表内部自洽：`12B +0 严格递增` / `6B 第 i 行 +4==i` / `8B +0 递增且 +4 低24位递增` / `4B 值域` / `6B +0 全是合法类型索引` / 常量签名落位 | `fieldDefaultValues`、`methodSlotTable`、`attributesInfo`、`methodPointerIndex`(弱)、blob | ✅ 全自动（`relocate ④`） |
+| **B. 无密钥反解** | `/70` 魔数短名单 → 哨兵反推 key → 全表校验 → **区间铺满** → fDV 覆盖率 | `typeDefinitions`（含**布局**：`fieldStart/field_count`） | ✅ 全自动（`relocate ⑧`，7.1/7.0 都通过） |
+| **C. slot 提示** | 旧 JSON 的 slot → 该 slot 的"唯一合理候选" | 7.1 30/34；**7.0 16/34 且值全错** ⛔ | 🟡 只能当提示（跨版本已证伪） |
+| D. 其余 | 内容逐索引混淆、无原始指纹 | `methods/fields/properties/events/parameters/generic*` | ❌ 人工/IDA |
+
+### 4) `keyFormulas`（43 项）
+
+| 方法 | 效果 |
+|---|---|
+| 反编译 `xxxKey(i)` 函数体，人工抄乘/加/移位/xor | ❌ 唯一可靠 |
+| `tools/port.py` 指令对齐 | 🟡 能给候选；实测**字段密钥 0/4 正确** ✗ 不可单独信任 |
+
+### 5) `fieldDecode`（42 项）
+
+| 字段 | 判据 | 自动化 |
+|---|---|---|
+| `typeDef.fieldStart` / `field_count` | `⑧` 区间铺满 + fDV 覆盖率 + 「N 刚好覆盖 fDV.fieldIndex 最大值」 | ✅ **7.1/7.0 都自动** |
+| `typeDef.methodStart` / `method_count` | `⑧` 区间铺满，N ≈ methodsCount | ✅ 7.1（7.0 该对未铺满） |
+| `typeDef.nameIndex` | `⑧` **字符串解密器裁决**（解出的 `offset\|len<<24` 必须给出可打印名字） | ✅ 7.1（唯一命中 `+0x24 add 0xFBAD8E98`）|
+| `typeDef.flags` | bitmask、取值 4~200 种 | ❌ 83 个候选，不唯一 |
+| `typeDef.parentIndex` | 合法 Il2CppType 索引、-1 占 5%~95% | ❌ 会误命中 `fieldStart` |
+| `typeDef.genericContainerIndex` | 小索引、-1 占多数 | ❌ 3 个候选 |
+| `typeDef.unknown20` | 非负、单调、≤2M | ❌ 真值不在候选里 |
+| 其它结构体（method/field/property/event/parameter/generic*） | `slot_scan --struct` 给候选 + 语义判定（名字可打印 / typeIndex 合法 / argc==N） | 🟡 半自动 |
+
+### 6) 计数公式 `key/op`（6 项）
+
+| 方法 | 自动化 |
+|---|---|
+| 反编译 `RuntimeInit` 里给循环定界/分配的地方，抄 `(T0/T1 字段) op key` | ❌ 人工 |
+
+### 当前自动化率（实测）
+
+| | 全自动 | 半自动 | 人工 |
+|---|---|---|---|
+| **7.1** | ≈26 / 202（13%） | 144 | ~32 |
+| **7.0** | ≈19 / 202（9.4%） | 144 | ~39 |
+
+> 全自动 7.1：MHY + 5 张表×3 + typeDefs 布局(4) + nameIndex + 5 个字符串密钥
+> 全自动 7.0：MHY + 4 张表×3 + typeDefs 布局(2) + 4 个字符串密钥
+
+### 一条命令跑完能自动的部分
+
+```bash
+python3 tools/sig.py scan   <exe> --sigs tools/sigs.json --fuzzy --json /tmp/h.json
+python3 tools/slot_scan.py  <exe> <dat> --out /tmp/slots.json
+python3 tools/slot_scan.py  <exe> <dat> --struct typeDef --hits /tmp/h.json --struct-json /tmp/keys.json
+python3 tools/sig.py consts <exe> --func <DecryptString> --func <RuntimeInit>
+python3 tools/relocate.py   <root> --slots /tmp/slots.json --keys /tmp/keys.json --emit /tmp/layout.json
+```
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）

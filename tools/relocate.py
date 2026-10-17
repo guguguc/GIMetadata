@@ -815,6 +815,13 @@ def main():
     exe = os.path.join(root, 'gi.exe')
     gm = os.path.join(root, 'gi/Managed/Metadata/global-metadata.dat')
     t0 = time.time()
+    _tlast = [t0]
+    TIMES = []
+
+    def _mark(name):
+        now = time.time()
+        TIMES.append((name, now - _tlast[0]))
+        _tlast[0] = now
 
     pe = PE(exe)
     print("== ① 引导锚（魔数，最稳）==")
@@ -830,6 +837,7 @@ def main():
     d = Data(raw)
     print("   global-metadata.dat %.1f MB" % (len(raw) / 1e6))
 
+    _mark('① 锚')
     print("\n== ② 指令证据（slot_scan 的 (slot,op,key) 候选）==")
     cands = []
     cache = args.slots
@@ -873,6 +881,7 @@ def main():
         print("   ⚠ 无候选缓存（--scan 可自动生成）")
     vals = sorted({v for v, *_ in cands})
 
+    _mark('② 候选')
     print("\n== ③ 常量值 blob（AttributeTargets 的 [Flags] 值签名，无需任何锚）==")
     sig = b''.join(struct.pack('<i', v) for v in ATTR_TARGETS)
     hits = []
@@ -954,6 +963,7 @@ def main():
         # ⚠️ 此时 found 还没初始化 -> 存到临时变量，等 ④ 的 found 建好后再并入
         sem_found = found_sem[0] if found_sem else None
 
+    _mark('③ blob/提示')
     print("\n== ④ 数据侧结构自证（numpy 向量化）==")
     found = {}
     exp = None
@@ -1026,6 +1036,7 @@ def main():
                 'interfacesTable', 'fieldOffset', 'methodSlotTableOffset',
                 'attributesInfoOffset'}
 
+    _mark('④ 结构探针')
     # ---- ⑧ 无密钥反解 typeDefinitions（独立于 slot_scan 的候选）----
     if args.keyless or args.typedefs_base:
         try:
@@ -1035,9 +1046,8 @@ def main():
             t_k = time.time()
             kr = KL.find_typedefs(d, kb, layout_search=bool(args.typedefs_base))
             if kr:
-                print("   %-27s   keyless 基址 0x%X  采样连续 %.3f  全表校验 %s (%.1fs)"
-                      % ('[⑧ 无密钥]', kr['base'], kr['continuity'],
-                         '✅' if kr['validated'] else '✗', time.time() - t_k))
+                print("   %-27s   基址 0x%X（%.1fs）"
+                      % ('[⑧ 无密钥]', kr['base'], time.time() - t_k))
                 for row in kr.get('pairs', [])[:4]:
                     sc, dc, wc, oc, kc, mx, dk, wk, ok_, kk = row
                     print("       连续 %.3f 累计+0x%02X %s 0x%-9X max=%-7d  计数+0x%02X %s 0x%X"
@@ -1092,19 +1102,35 @@ def main():
                     else:
                         print("   ⑧ 布局识别: 未找到能铺满的 (累计,计数) 对")
 
+                    # ---- nameIndex：用字符串解密器当裁判（强二次证据）----
+                    if hint.get('dec'):
+                        try:
+                            cc = sorted({(dd, op, imm) for _v, dd, op, imm in cands if dd <= 0x60})
+                            ni = KL.derive_nameindex_by_decoder(d, kr['base'], cc, hint['dec'])
+                            if ni:
+                                print("   ⑧ nameIndex 识别（字符串解密器裁决，%d 个候选）:" % len(ni))
+                                for disp, op, K, sc in ni[:4]:
+                                    print("      +0x%02X %s 0x%-9X  可打印率 %.3f" % (disp, op, K, sc))
+                        except Exception as e:
+                            print("   ⑧ nameIndex 识别失败:", e)
+
                     # ---- 输出可直接填进 version.json 的片段 ----
                     if allp:
                         import struct as _st2
+                        # fDV 各列的最大值只算一次（之前放在 pair 循环里 -> 6400 万次，45s 的元凶）
+                        maxf_by2 = {}
+                        for _ix in (0, 4, 8):
+                            _m = 0
+                            for _i in range(min(fv[1], 80000)):
+                                _x = _st2.unpack_from('<i', d.raw, fdv_off + 12 * _i + _ix)[0]
+                                if _x > _m:
+                                    _m = _x
+                            maxf_by2[_ix] = _m
                         # fDV 覆盖判据先锁 fieldStart，再用表长提示给其它对命名
                         best_by_name = {}
                         for (c, tot, dc, wc, oc, kc, dk, wk, ok_, kk), idx_disp in allp:
                             name = None
-                            # fDV 的 fieldIndex 列最大值的"刚好覆盖" -> fieldStart
-                            m = 0
-                            for _i in range(min(fv[1], 80000)):
-                                _x = _st2.unpack_from('<i', d.raw, fdv_off + 12 * _i + idx_disp)[0]
-                                if _x > m:
-                                    m = _x
+                            m = maxf_by2.get(idx_disp, 0)
                             if m and tot >= m and tot <= m * 1.05:
                                 name = 'fieldStart'
                             else:
@@ -1117,6 +1143,8 @@ def main():
                             if name and name not in best_by_name:
                                 best_by_name[name] = (tot, dc, oc, kc, dk, ok_, kk, c)
                         if best_by_name:
+                            print("   ⑧ 基址 0x%X 已被「区间铺满 + fDV 覆盖率」确认 ✅"
+                                  % kr['base'])
                             print("   ⑧ 可直接填进 version.json 的片段:")
                             frag = {'typeDefinitionsOffset': '0x%X' % kr['base'],
                                     'fieldDecode.typeDef': {}}
@@ -1141,6 +1169,7 @@ def main():
         except Exception as e:
             print("   keyless 失败:", e)
 
+    _mark('⑧ 无密钥/布局')
     for k, (val, n, why, _) in sorted(found.items()):
         tag = '已验收' if k in VERIFIED else '未验收(仅参考)'
         print("   %-28s = 0x%-9X (%d 项) [%s] ← %s" % (k, val, n, tag, why))
@@ -1157,6 +1186,7 @@ def main():
                       % ('blob(fieldAndParameterDefaultValueData)', val, s, op, key))
     print("   （探测耗时 %.1fs）" % (time.time() - t1))
 
+    _mark('④b 打印')
     print("\n== ⑤ 与现有 version.json 对照（自测：应全部一致）==")
     vj = os.path.join(ROOTDIR, 'version.json')
     if os.path.exists(vj):
@@ -1176,6 +1206,7 @@ def main():
             print("   %-42s slot 0x%03X %s 0x%-10X -> 0x%-9X%s" % (k, s, op, key, val, mark))
         print("\n   可被结构探测交叉验证的表：一致 %d, 不一致 %d" % (ok, bad))
 
+    _mark('⑤ 对照')
     print("\n== ⑥ 旧 JSON slot 提示：逐表重新解值（检验「slot 跨版本稳定」假设）==")
     if os.path.exists(vj):
         J = load_json_with_comments(vj)
@@ -1208,6 +1239,7 @@ def main():
         print("   ⚠ 已用 7.0 样本**证伪**「slot 跨版本稳定」：见下方实际落到多少张。")
         print("     换版本时这 %d 张只是初值，必须靠 ④ 结构自证或人工确认。" % uniq_n)
 
+    _mark('⑥ slot 提示')
     print("\n== ⑦ 反查 slot：结构自证得到的值 → 唯一 (slot,op,key)（换版本可全自动）==")
     byval = {}
     for val, s, op, key in cands:
@@ -1225,6 +1257,10 @@ def main():
     if auto:
         print("   ★ 这 %d 张表换版本可全自动：结构自证出值 → 反查唯一 (slot,op,key)，不需要旧 JSON" % auto)
 
+    _mark('⑦ 反查')
+    print("\n== 耗时明细 ==")
+    for _nm, _dt in TIMES:
+        print("   %-16s %6.2fs" % (_nm, _dt))
     print("\n总耗时 %.1fs" % (time.time() - t0))
     return 0
 

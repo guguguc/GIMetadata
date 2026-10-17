@@ -434,13 +434,13 @@ def layout_search_fdv(d, base, fdv_off, fdv_idx_disp=8, fdv_n=73818,
         for w in (4, 2):
             if disp % w:
                 continue
-            for op, K, _sp, _v in derive_for_field(d, off, disp, w, n, topk=topk):
-                cums.append((disp, w, op, K))
+            for op, K, _sp, v in derive_for_field(d, off, disp, w, n, topk=topk):
+                cums.append((disp, w, op, K, v))
         for w in (1, 2):
             if disp % w:
                 continue
-            for op, K, _sp, _v in derive_for_field(d, off, disp, w, n, kind='count', topk=topk):
-                cnts.append((disp, w, op, K))
+            for op, K, _sp, v in derive_for_field(d, off, disp, w, n, kind='count', topk=topk):
+                cnts.append((disp, w, op, K, v))
     fidx = sorted({struct.unpack_from('<i', d.raw, fdv_off + 12 * i + fdv_idx_disp)[0]
                    for i in range(fdv_n)} - {-1})
 
@@ -457,22 +457,26 @@ def layout_search_fdv(d, base, fdv_off, fdv_idx_disp=8, fdv_n=73818,
         return float(covered[arr].mean()) if len(arr) else 1.0
 
     pairs = []
-    for dc, wc, oc, kc in cums:
-        for dk, wk, ok_, kk in cnts:
+    for dc, wc, oc, kc, vc in cums:
+        for dk, wk, ok_, kk, vk in cnts:
             if dc == dk:
+                continue
+            # ★ 预筛：**采样级**铺满（4096 行，毫秒级）——不做的话 800 对全表解码要 40s
+            if ranges_tile(vc, vk, maxn=3_000_000) is None:
                 continue
             fs = _decode_full(d, off, dc, wc, oc, kc, full)
             fc = _decode_full(d, off, dk, wk, ok_, kk, full)
             if fs is None or fc is None:
                 continue
-            tot = ranges_tile(fs, fc)          # ★ 铺满（全表）
+            tot = ranges_tile(fs, fc, maxn=3_000_000)      # ★ 铺满（全表）
             if tot is None:
                 continue
             c = cov_of(fs, fc)
             if c >= min_cov:
                 pairs.append((round(c, 5), tot, dc, wc, oc, kc, dk, wk, ok_, kk))
     pairs.sort(key=lambda x: (-x[0], -x[1]))
-    return {'cums': cums, 'cnts': cnts, 'pairs': pairs}
+    return {'cums': [(a, b, c_, d_) for a, b, c_, d_, _e in cums],
+            'cnts': [(a, b, c_, d_) for a, b, c_, d_, _e in cnts], 'pairs': pairs}
 
 
 def ranges_tile(fs, fc, maxn=3_000_000):
@@ -602,3 +606,52 @@ def derive_other_fields(d, base, cands, n=88902, typesCount=683574):
     for f in out:
         out[f].sort(key=lambda x: -x[3])
     return out
+
+
+_NI = {}
+
+
+def _ni_worker(chunk):
+    d = _NI['d']; base = _NI['base']; dec = _NI['dec']
+    n = _NI['n']; mr = _NI['mr']
+    off = d.hdr + base
+    rows = []
+    for disp, op, K in chunk:
+        if disp > 0x60 or disp % 4:
+            continue
+        v = _decode_full(d, off, disp, 4, op, K, n)
+        if v is None or int(v.min()) < 0:
+            continue
+        ok = tot = 0
+        for x in v.tolist():
+            tot += 1
+            s = dec(x & 0xFFFFFFFF)
+            if s and all(32 <= ord(c) < 127 for c in s):
+                ok += 1
+        if tot and ok / tot >= mr:
+            rows.append((disp, op, K, round(ok / tot, 4)))
+    return rows
+
+
+def derive_nameindex_by_decoder(d, base, cands, dec, n=512, min_ratio=0.9, jobs=None):
+    """`nameIndex`/`namespaceIndex`：用**字符串解密器**当裁判（强二次证据）。
+
+    解出的 `offset|len<<24` 必须能在字符串块里解出**可打印**的名字。
+    2779 个候选是纯 Python 的字符串解密，**必须并行**（fork + 全局状态）。
+    """
+    global _NI
+    import os as _os
+    jobs = jobs or min(24, _os.cpu_count() or 8)
+    cands = list(cands)
+    if jobs <= 1 or len(cands) < 200:
+        _NI = {'d': d, 'base': base, 'dec': dec, 'n': n, 'mr': min_ratio}
+        rows = _ni_worker(cands)
+    else:
+        from multiprocessing import get_context
+        _NI = {'d': d, 'base': base, 'dec': dec, 'n': n, 'mr': min_ratio}
+        chunks = [cands[i::jobs] for i in range(jobs)]
+        with get_context('fork').Pool(jobs) as pool:
+            parts = pool.map(_ni_worker, chunks)
+        rows = [r for part in parts for r in part]
+    rows.sort(key=lambda x: -x[3])
+    return rows
