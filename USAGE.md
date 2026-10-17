@@ -175,15 +175,22 @@ fieldDefaultValuesOffset = 0x3D00478   ✅ 与 version.json 一致
 blob                     = 0xF1754C    ✅
 ```
 
-### `tools/sig.py` —— 结构签名（找函数）
+### `tools/sig.py` —— 结构签名（找函数）+ 常量迁移
 ```bash
+# 1) 生成 / 扫描签名
 python3 tools/sig.py gen  version/7.1/gi.exe --names tools/sig_names.txt -o tools/sigs.json
-python3 tools/sig.py scan version/7.2/gi.exe --sigs tools/sigs.json
+python3 tools/sig.py scan version/7.2/gi.exe --sigs tools/sigs.json --fuzzy --json /tmp/h72.json
+
+# 2) 从定位到的函数里自动迁移「字符串解密常量」
+python3 tools/sig.py consts version/7.2/gi.exe \
+    --func <DecryptString> --func <RuntimeInit>
 ```
 - `gen` 会**跳过序言**、从函数中部取 8 条指令；寄存器全通配、精确保留小立即数/偏移
-- `scan` 走**字节优先**（最长固定子串 `bytes.find` → 只在候选处反汇编核对）→ **0.6 秒 / 36 条**
-- 自测：`36/36 命中，函数起点全部精确复原`
-- 生成时打印**弱签名警告**（区分度 <4 的函数，如 `movaps` 刷栈的）—— 那些不可靠，换版本时该退回字符串/调用图锚
+- `scan` 走**字节优先**（最长固定子串 `bytes.find` → 只在候选处反汇编核对）→ **0.8 秒 / 54 条**
+- 自测：**54/54 命中，函数起点全部精确复原**
+- `consts` 自动解出 **4/5** 个字符串密钥（`keyMulA/keyMulB/keySeed/keyStep`），
+  并用「`xor reg,reg` 紧跟 `xor reg,imm32` **且之后 call 解密函数**」解出 `entryXor`
+  —— 7.1 自测 **5/5**；7.0 只出 4/5（它把 entry 解码换成了 `xor K; sub key`，结构变了）
 
 ### `tools/gen_version.py` —— 生成版本头
 ```bash

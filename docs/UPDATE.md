@@ -510,7 +510,7 @@ python3 tools/provenance.py version/7.0/gi.exe --out /tmp/P70.md
 | 类别 | 必改 | 稳定/不改 | 说明 |
 |---|---|---|---|
 | `addresses`（MHY/T0/T1 等） | **5** | 0 | 7.0 实测会变 |
-| `stringDecrypt` | **5** | 2 | 5 个密钥必变；`offsetMask`/`lengthShift` 是打包格式，稳定 |
+| `stringDecrypt` | **5** | 2 | 5 个密钥必变；其中 **4 个可用 `sig.py consts` 自动解出**（7.0 实测），第 5 个 `entryXor` 结构会变；`offsetMask`/`lengthShift` 是打包格式，稳定 |
 | `tables[].slot / .op / .key` | **102**（34×3） | 0 | slot 实测变；**op 也变**（7.1 `methodPointerIndex` 是 `xor`，7.0 是 `add`） |
 | `tables[].stride / .side / .role / countBias` | 0 | 103 | `stride` 在 7.0 上**未验证** |
 | `keyFormulas`（8 个公式的全部系数） | **43** | 0 | 每版重解 |
@@ -533,7 +533,7 @@ python3 tools/provenance.py version/7.0/gi.exe --out /tmp/P70.md
 | `fieldDecode` 字段密钥 | 42 | `slot_scan --struct` 候选 + 语义判定（累计索引单调 / 名字可打印 / count 很小） | 7.0：5/18 → **15/18**（`CROSS70.md`） |
 | `keyFormulas` 系数 | 43 | 反编译 `xxxKey(i)` 函数体，人工抄 | 未自动 |
 | `addresses` | 5 | 魔数 + `sig.py` 找 `RuntimeInit` | `sig.py` 7.0 找回 48/54 |
-| `stringDecrypt` 密钥 | 5 | 反编译字符串解密函数 | 未自动 |
+| `stringDecrypt` 密钥 | 5 | **`sig.py consts`**（4/5 自动；`entryXor` 需 call 校验） | 7.0 自动得 4/5 |
 | `*CountFormula` 的 key/op | 6 | 反编译消费者（`RuntimeInit`） | 未自动 |
 
 **结论：真正要人工盯的只有「`keyFormulas` 43 + 字符串密钥 5 + 公式 6 + 地址 5 = 59 个」；

@@ -647,6 +647,59 @@ def extract(pe, md, va, maxbytes=0x2000):
 
 
 
+def extract_entry_xor(pe, md, va, maxbytes=0x2000, call_targets=None):
+    """找字符串条目的 `entryXor`（32 位）。
+
+    实测形态（7.1 RuntimeInit，7.0 同构）：
+        mov ecx, [rdi + rcx*8 + 0x20]   ; 读表项
+        xor ecx, r14d                   ; 每索引 key
+        xor ecx, 0x772FA51E             ; ← entryXor ★
+    判据（两条同时满足）：
+      1. **同一目的寄存器连续两次 xor，第二次是 imm32（>0xFFFF）**
+      2. 且之后 ≤4 条指令内出现 `call <解密函数>`（`call_targets` 给定时）
+         —— 这是**语义判据**：这个值确实被送进 DecryptString。
+    只给 1 会得到假候选（实测 7.0 上 2 个，且都不是真 entryXor）。
+    返回 [(imm32, 指令地址)]。
+    """
+    off = pe.va2off(va)
+    if off is None:
+        return []
+    out = []
+    hist = []                       # 最近两条指令的 operands
+    for ins in md.disasm(pe.D[off:off + maxbytes], va):
+        ops = ins.operands
+        if (ins.mnemonic == 'xor' and len(ops) == 2
+                and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_IMM
+                and (ops[1].imm & 0xFFFFFFFF) > 0xFFFF and len(hist) >= 2):
+            pr0, pr1 = hist[-1]     # 上一条：xor R, R2
+            q0, q1 = hist[-2]       # 上上条：mov R, [base + idx*scale + disp]
+            ok = (pr0.type == X86_OP_REG and pr0.reg == ops[0].reg
+                  and pr1.type == X86_OP_REG)
+            # ★ 关键区分：必须是**带比例索引**的表项读取（字符串字面量 8 字节项）
+            ok = ok and q0.type == X86_OP_REG and q1.type == X86_OP_MEM \
+                    and q0.reg == ops[0].reg and q1.mem.index != 0
+            if ok:
+                out.append((ops[1].imm & 0xFFFFFFFF, ins.address))
+        hist = (hist + [(ops[0], ops[1])])[-2:] if len(ops) == 2 else []
+    if call_targets:
+        # 语义校验：候选之后 ≤4 条内必须 call 到解密函数
+        targets = set(call_targets)
+        ins_list = list(md.disasm(pe.D[off:off + maxbytes], va))
+        verified = []
+        for imm, at in out:
+            idx = next((i for i, x in enumerate(ins_list) if x.address == at), None)
+            if idx is None:
+                continue
+            for k in ins_list[idx + 1: idx + 5]:
+                if (k.mnemonic == 'call' and len(k.operands) == 1
+                        and k.operands[0].type == X86_OP_IMM
+                        and (k.operands[0].imm & 0xFFFFFFFFFFFFFFFF) in targets):
+                    verified.append((imm, at))
+                    break
+        return verified
+    return out
+
+
 def label_string_consts(consts):
     """按**结构模式**标注字符串解密的 4 个 64 位密钥（不含 32 位的 entryXor）。
 
@@ -792,21 +845,43 @@ def cmd_consts(a):
     pe = PE(a.exe)
     md = Cs(CS_ARCH_X86, CS_MODE_64)
     md.detail = True
-    va = int(a.func, 16)
-    got = extract(pe, md, va, a.bytes)
-    if got is None:
-        print('VA 0x%X 不在文件映射内' % va)
-        return 1
-    consts, shifts = got
+    funcs = a.func if isinstance(a.func, list) else [a.func]
+    va = int(funcs[0], 16)
+    consts, shifts = [], []
+    entry_cands = []                 # [(imm32, va, func_va)]
+    for fv in funcs:
+        fva = int(fv, 16)
+        got = extract(pe, md, fva, a.bytes)
+        if got is None:
+            print('VA 0x%X 不在文件映射内' % fva)
+            continue
+        c_, s_ = got
+        consts += c_
+        if fva == va:
+            shifts = s_              # 只展示第一个函数的移位序列
+        cts = {int(x, 16) for x in funcs} - {fva}
+        for imm, at in extract_entry_xor(pe, md, fva, a.bytes, cts):
+            entry_cands.append((imm, at, fva))
+    consts.sort(key=lambda x: x[1])
     print('=== 函数 0x%X 的 64 位常量（movabs，排除内置 xxHash/位技巧常数与地址）===' % va)
     for v, at, m in consts:
         print('  0x%016X  @0x%-10X %s' % (v, at, m))
     print('共 %d 个' % len(consts))
     print('\n=== 循环移位/移位量（算法的一部分，跨版本通常不变）===')
     print('  ' + '  '.join('%s %d @0x%X' % (m, v, at) for v, at, m in shifts))
+    print('\n=== entryXor 候选（xor reg,reg2 紧跟 xor reg,imm32）===')
+    if not entry_cands:
+        print('  (无)')
+    for imm, at, fva in entry_cands:
+        print('  0x%08X  @0x%-10X (在函数 0x%X 内)' % (imm, at, fva))
+
     if consts:
         print('\n=== 按结构模式自动标注 ===')
         lab = label_string_consts(consts)
+        if len(entry_cands) == 1:
+            lab['entryXor'] = entry_cands[0][0]
+        elif len(entry_cands) > 1:
+            print('  entryXor    = ⚠ %d 个候选，需人工挑一个（见上）' % len(entry_cands))
         if not lab:
             print('  (模式不匹配 —— 可能是别的函数，或该版本的编译器换了写法)')
         for k, v in lab.items():
@@ -905,7 +980,8 @@ def main():
     s.add_argument('--loose-only', action='store_true'); s.set_defaults(fn=cmd_scan)
 
     c = sub.add_parser('consts', help='从 sig 定位的函数里通用抽取 64 位常量（如字符串解密密钥）')
-    c.add_argument('exe'); c.add_argument('--func', required=True, help='函数起始 VA（来自 scan）')
+    c.add_argument('exe'); c.add_argument('--func', required=True, action='append',
+                   help='函数起始 VA（可给多次；如 DecryptString + RuntimeInit）')
     c.add_argument('--bytes', type=lambda x: int(x, 0), default=0x2000)
     c.add_argument('--role', default=None); c.add_argument('--json', default=None)
     c.set_defaults(fn=cmd_consts)
