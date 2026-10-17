@@ -336,8 +336,12 @@ def probe_pdv(d, off, typeCount, maxn=80000):
 
 
 def probe_attrinfo(d, off, maxn=40000):
-    """attributesInfo：8B {start@+0, token@+4}。**+0 严格递增**且 +4 高字节受限
-    （实测 token 的高字节在 1..0x54 之间，低 24 位单调）。完全无版本常量。"""
+    """attributesInfo：8B {start@+0, token@+4}。三个**互相独立**的条件：
+       1) +0 严格递增
+       2) +4 的**高字节**有界（实测 1..0x54）
+       3) +4 的**低 24 位单调不减**（token 重映射后仍保序）
+    ⚠️ 只用条件 1+2 会**误报**（实测 7.0 上 0x260A7F8 假命中 12513 项，真值只有 ~1000）。
+    加上条件 3 后判据足够强，且完全不依赖任何旧版本常量。"""
     v0 = d.f32(off, 8, maxn, 0)
     if v0 is None: return None
     good = d.np.diff(v0) > 0
@@ -350,8 +354,11 @@ def probe_attrinfo(d, off, maxn=40000):
     if v4 is None: return None
     hi = (v4 >> 24) & 0xFF
     if int(hi.min()) < 1 or int(hi.max()) > 0x60: return None
+    lo = v4 & 0xFFFFFF
+    if int(d.np.diff(lo).min()) < 0: return None          # 条件 3：低 24 位单调不减
+    if run > 20000: return None                            # 真实表只有千级，12513 那种是误报
     return ('attributesInfoOffset', run,
-            "8B, +0 严格递增 %d 项, +4 高字节 ∈[1,0x%X]" % (run, int(hi.max())))
+            "8B, +0 严格递增 %d 项, +4 高字节 ∈[1,0x%X] 且低 24 位单调" % (run, int(hi.max())))
 
 
 def probe_typedefs_hintfree(d, off, maxn=6000):
