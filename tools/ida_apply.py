@@ -30,6 +30,10 @@ def main():
     ap.add_argument('--funcs', default=os.path.join(HERE, 'table_funcs.json'))
     ap.add_argument('--detected', default=None)
     ap.add_argument('--hits', default=None, help='sig.py scan --json（地址 -> 名字），用于补名字')
+    ap.add_argument('--version-json', default=os.path.join(os.path.dirname(HERE), 'version.json'),
+                    help='用它的 tables[].stride 做消歧（步长跨版本稳定）')
+    ap.add_argument('--allow-guess', action='store_true',
+                    help='允许"只剩一个候选就采用"（默认关：实测会张冠李戴 ✗）')
     ap.add_argument('--out', default=None)
     a = ap.parse_args()
 
@@ -56,6 +60,35 @@ def main():
             if va in ea2name:
                 names.append(ea2name[va])
         return sorted(set(names))
+
+    # 每张表的期望步长（跨版本稳定）。IDA 导出里带了 strides/callees。
+    stride_of = {}
+    try:
+        from gen_version import load_json_with_comments as _L
+        _J = _L(a.version_json)
+        for k, cfg in _J.get('tables', {}).items():
+            if cfg.get('stride'):
+                stride_of[k] = cfg['stride']
+    except Exception as e:
+        print('⚠ 读 version.json 的 stride 失败:', e)
+
+    def fits_stride(name, c):
+        st = stride_of.get(name)
+        if not st:
+            return None                       # 未知 -> 不参与判断
+        return st in (c.get('strides') or [])
+
+    def value_divisible(name, c):
+        """count 表：value 必须能被步长整除"""
+        if not name.lower().endswith('count'):
+            return None
+        st = stride_of.get(name)
+        if not st or not c.get('value'):
+            return None
+        try:
+            return int(c['value'], 16) % st == 0
+        except Exception:
+            return None
 
     tables = exp.get('tables', [])
     print('IDA 导出：%d 个 (slot,op,key)，MHY 全局 = %s' % (len(tables), exp.get('mhy_global')))
@@ -91,11 +124,23 @@ def main():
             continue
         uniq = {(c['slot'], c['op'], c['key']): c for c in cands}
         free = {k: c for k, c in uniq.items() if k not in used}
-        if len(free) == 1:
+        # ★ 步长消歧（跨版本稳定）：只留 stride 对得上的
+        by_stride = {k: c for k, c in free.items() if fits_stride(name, c) is not False}
+        if by_stride and len(by_stride) < len(free):
+            free = by_stride
+            for c in free.values():
+                c.setdefault('how', 'stride-match')
+        # ★ count 表：再要求 value 能被步长整除
+        by_div = {k: c for k, c in free.items() if value_divisible(name, c) is not False}
+        if by_div and len(by_div) < len(free):
+            free = by_div
+        if len(free) == 1 and a.allow_guess:
             c = list(free.values())[0]
-            c['how'] = 'single-candidate(中)'
+            c['how'] = 'single-candidate(猜)'
             result[name] = c
             used.add(key_of(c))
+        elif len(free) == 1:
+            unresolved[name] = list(free.values())   # 有且仅有一个候选 -> 仍然只是**候选**
         else:
             unresolved[name] = list(free.values()) if free else list(uniq.values())
 

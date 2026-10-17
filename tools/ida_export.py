@@ -97,6 +97,7 @@ def main():
     print('MHY 表 = %s' % (hex(mhy) if mhy else '未找到'))
 
     tables = {}        # (global, slot, op, key) -> [func...]
+    tbl_meta = {}      # (global, slot, op, key) -> {strides, callees, lhs}
     fields = {}        # (width, local, disp, op, key) -> [func...]
     formulas = []
     nfunc = 0
@@ -130,7 +131,25 @@ def main():
                 continue
             if key < 0x100:             # 太小的常数多半不是 key
                 continue
-            tables.setdefault((g, slot, op, key), []).append((name, hex(fstart)))
+            # ★ 取 LHS 变量（同一个赋值语句里），再找它被怎么用
+            ls = text.rfind('\n', 0, m.start()) + 1
+            pre = text[ls:m.start()]
+            lm = re.search(r'(\w+)\s*=\s*[^=]*$', pre)
+            lhs = lm.group(1) if lm else None
+            strides, callees = set(), set()
+            if lhs:
+                for sm in re.finditer(r'\b' + re.escape(lhs) + r'\b\s*\+\s*(\d+)\s*\*', text):
+                    strides.add(int(sm.group(1)))
+                for cm in re.finditer(r'(\w+)\s*\([^);]*\b' + re.escape(lhs) + r'\b[^);]*\)', text):
+                    if cm.group(1) not in ('if', 'while', 'for', 'switch', 'sizeof', 'return'):
+                        callees.add(cm.group(1))
+            ent = (name, hex(fstart))
+            tables.setdefault((g, slot, op, key), []).append(ent)
+            tbl_meta.setdefault((g, slot, op, key), {'strides': set(), 'callees': set(), 'lhs': set()})
+            tbl_meta[(g, slot, op, key)]['strides'] |= strides
+            tbl_meta[(g, slot, op, key)]['callees'] |= callees
+            if lhs:
+                tbl_meta[(g, slot, op, key)]['lhs'].add(lhs)
 
         for m in RE_FIELD.finditer(text):
             w, loc, disp, op, key = m.group(1), m.group(2), K(m.group(3)), m.group(4), K(m.group(5))
@@ -173,7 +192,9 @@ def main():
                                'value': ('0x%X' % val) if val is not None else None,
                                'n_funcs': len(fns),
                                'funcs': [n for n, _ in fns[:4]],
-                               'func_eas': [e for _, e in fns[:4]]})
+                               'func_eas': [e for _, e in fns[:4]],
+                               'strides': sorted(tbl_meta.get((g, slot, op, key), {}).get('strides', [])),
+                               'callees': sorted(tbl_meta.get((g, slot, op, key), {}).get('callees', []))[:6]})
 
     out_fields = []
     for (w, loc, disp, op, key), fns in sorted(fields.items(), key=lambda kv: (kv[0][2], kv[0][0])):

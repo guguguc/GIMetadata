@@ -952,9 +952,9 @@ IDA 导出 7 个 (slot,op,key)
 
 ### 5.12.5 这对自动化率意味着什么
 
-| 之前 | 现在 |
+| 之前 | 现在（**实测后更正**）|
 |---|---|
-| 102 个全手抄 ✗ | 自动导出 + 自动配对；**单表函数直接得**（约 6~8 张 ✓），多表函数给候选 ✗ |
+| 102 个全手抄 ✗ | 导出 **69%** 的表常量 ✓；但**自动配对 = 0 张** ✗（见 §5.12.9）|
 | 找不到函数边界 ✗ | IDA 直接给 ✓ |
 | 不知道哪个全局是 MHY ✗ | 按"被当槽位表的次数"自动认 ✓ |
 
@@ -1086,6 +1086,43 @@ RE_USE    = re.compile(r'\b(\w+)\b\s*\+\s*(\d+)\s*\*')
 - 剩下的才落到人工 ✗
 
 > 这是目前**唯一**能把那 21 张候选自动收掉大半的路 ✓（全量抓表达式没用 ✗，因为没有标签来源）。
+
+### 5.12.9 实测结果（7.1，IDA 9.4，`--fast`）—— 诚实版
+
+```
+输入: ida/gi.exe.i64 + /tmp/h71.json
+输出: /tmp/opencode/ida71.json（55 KB）
+      mhy = 0x1427D4BD0   mhy_global = p_MHY_Table
+      tables 32 条 / fieldDecode 68 条 / formulas 182 条
+```
+
+| 指标 | 实测 |
+|---|---|
+| **召回** | **20 / 29 张表 = 69.0%** ✓（slot/op/key **20/20 全对** ✓）|
+| 未导出 | 9 张：`events` `fDV` `genericClassRange` `genericContainers` `genericParameters` `methodPointerIndex` `methodSpecs` `pDV` `parameters` ✗ |
+| 误报 | 12 条（多数是 **version.json 没登记的真表**，如 `stringLiteralDataOffset` 0x444C1E8 ✓）|
+| **自动配对（安全模式）** | **0 张** ✗ |
+| 自动配对（允许"只剩一个候选"） | 7~9 张，但**实测有错** ✗（见下）|
+
+**"只剩一个候选就采用"为什么会张冠李戴**（实测）：
+
+```
+fieldDefaultValuesOffset  真值 slot 0x13C，但该读取点没被导出
+                          -> 只剩一个错候选 slot 0x54 -> 被"自信地"采用 ✗
+interfacesTable           真值 slot 0x1C4
+                          -> 被分到 slot 0x140（那是 methodSlotTable）✗
+parametersOffset          -> 被分到 slot 0x16C（那是 methodsOffset）✗
+```
+
+**结论（必须写清）**：
+
+1. `ida_export.py` 的**价值**是：**确认** `relocate ④/⑧` 已找到的表 ✓ + 提供**带 value 的候选** ✓
+2. 它**不能**单独把 `tables` 自动化 ✗ —— 因为**"这是哪张表"必须来自第二个独立证据**（结构自证/语义），
+   而"函数名 + 只剩一个候选"**不是独立证据** ✗
+3. 所以**全自动率没有提高**（仍是 7.1 ≈13%、7.0 ≈9.4%）✗
+4. `ida_apply.py` 默认 **`--allow-guess` 关闭** ✓ —— 只输出候选，不冒充"已确定" ✓
+
+> 这一节是**负结果**，但它避免了一个更坏的结局：**静默写错 5~7 张表** ✗。
 
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
