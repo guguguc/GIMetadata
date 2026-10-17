@@ -81,7 +81,7 @@ _GP.update({'r8d':'r8','r8w':'r8','r8b':'r8','r9d':'r9','r9w':'r9','r9b':'r9',
             'r14d':'r14','r14w':'r14','r14b':'r14','r15d':'r15','r15w':'r15','r15b':'r15'})
 
 
-def scan_text(D, secs):
+def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT):
     """返回 [(slot, op, key, 出现次数, 首个VA)]
 
     匹配**三种**形态：
@@ -90,8 +90,16 @@ def scan_text(D, secs):
       C) mov reg,[mhy+slot] / mov reg2,imm / op reg,reg2 寄存器对寄存器 ← v2 漏掉
     寄存器按族归一（eax/rax 视为同一），窗口 8 条指令。
     """
-    tname, tva, tvsz, toff, trsz = secs[0]
-    text = D[toff:toff + trsz]
+    if va0 is None:
+        tname, tva, tvsz, toff, trsz = secs[0]
+        text = D[toff:toff + trsz]
+    else:
+        # 只扫指定函数区域（--func）：结构体字段读取点就在这些函数里
+        tva = va0
+        off0 = va2off(secs, va0)
+        if off0 is None:
+            return []
+        text = D[off0:off0 + (size or 0x4000)]
     md = Cs(CS_ARCH_X86, CS_MODE_64)
     md.detail = True
     md.skipdata = True
@@ -118,7 +126,7 @@ def scan_text(D, secs):
         if m in ('mov', 'movsxd', 'movsx', 'movzx') and len(ops) == 2 \
            and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_MEM:
             mem = ops[1].mem
-            if mem.index == 0 and 0 <= mem.disp < NSLOT and mem.base != 0:
+            if mem.index == 0 and 0 <= mem.disp < maxdisp and mem.base != 0:
                 last_load[fam(ops[0].reg)] = (mem.disp, idx)
             else:
                 last_load.pop(fam(ops[0].reg), None)
@@ -143,7 +151,7 @@ def scan_text(D, secs):
         if m in OPS and len(ops) == 2 and ops[0].type == X86_OP_REG and ops[1].type == X86_OP_MEM:
             k = fam(ops[0].reg)
             mem = ops[1].mem
-            if k in last_imm and mem.index == 0 and 0 <= mem.disp < NSLOT and mem.base != 0:
+            if k in last_imm and mem.index == 0 and 0 <= mem.disp < maxdisp and mem.base != 0:
                 records.append((mem.disp, m, last_imm[k][0], insn.address))
             last_load.pop(k, None); last_imm.pop(k, None)
             continue
@@ -187,15 +195,118 @@ def scan_text(D, secs):
     return [(d, op, imm, len(v), v[0]) for (d, op, imm), v in uniq.items()]
 
 
+
+# 结构体字段偏移 -> 字段名（镜像 src/il2cpp_image.hpp 的 struct；**布局跨版本稳定**，
+# 变的只有解码密钥，所以这张表可以长期复用）
+STRUCT_LAYOUT = {
+    'typeDef': (0x46, {
+        0x00: 'namespaceIndex', 0x08: 'propertyStart', 0x0C: 'methodStart',
+        0x18: 'parentIndex', 0x1C: 'fieldStart', 0x20: 'unknown20',
+        0x24: 'nameIndex', 0x28: 'flags', 0x30: 'method_count',
+        0x34: 'eventStart', 0x36: 'nestedTypesStart', 0x38: 'field_count',
+        0x3C: 'interfacesStart', 0x3E: 'genericContainerIndex',
+        0x40: 'interfaces_count', 0x43: 'property_count',
+        0x44: 'event_count', 0x45: 'nestedTypesCount',
+    }),
+}
+
+
+def cmd_struct(D, secs, name, funcs):
+    """扫描给定函数，解出「结构体字段的 (位移, op, 密钥)」并与 version.json 自检。"""
+    if name not in STRUCT_LAYOUT:
+        print('✗ 未知结构体 %r；可用: %s' % (name, ', '.join(STRUCT_LAYOUT)))
+        return 1
+    size, layout = STRUCT_LAYOUT[name]
+    print('=== 扫描结构体 %s（%d 字节，%d 个已知字段）于 %d 个函数 ==='
+          % (name, size, len(layout), len(funcs)))
+    got = {}
+    for va in funcs:
+        for disp, op, key, cnt, first in scan_text(D, secs, va0=va, size=0x6000, maxdisp=size):
+            got.setdefault(disp, []).append((op, key, cnt, first))
+    uniq = 0
+    for disp in sorted(layout):
+        seen = sorted({(op, key) for op, key, _, _ in got.get(disp, [])})
+        if len(seen) == 1:
+            uniq += 1
+            mark = '\u2705 \u552f\u4e00  '
+        elif seen:
+            mark = '  %d \u5019' % len(seen)
+        else:
+            mark = '  \u2014'
+        print('  +0x%02X  %-22s %s: %s'
+              % (disp, layout[disp], mark,
+                 ', '.join('%s 0x%X' % t for t in seen[:3]) or '(没扫到)'))
+    print('\n  \u552f\u4e00\u786e\u5b9a %d/%d \u4e2a\u5b57\u6bb5\uff08\u5176\u4f59\u9700\u8981\u5224\u5b9a\uff1a\u5019\u9009\u91cc\u9009\uff0c\u6216\u626b\u66f4\u591a\u51fd\u6570\uff09' % (uniq, len(layout)))
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from gen_version import load_json_with_comments as L
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        J = L(os.path.join(root, 'version.json'))
+        fd = J['fieldDecode'][name]
+        print('\n=== 与 version.json 的 fieldDecode.%s 自检 ===' % name)
+        ok = miss = 0
+        for disp, fld in sorted(layout.items()):
+            spec = fd.get(fld)
+            if not spec:
+                continue
+            op, _, key = spec.partition(':')
+            key = int(key.strip(), 0)
+            cands = {(o, k) for o, k, _, _ in got.get(disp, [])}
+            # 编译器会把「减 K」折成「加 -K 的补码」，位宽按**字段宽度**截断（8/16/32）
+            alt = {(op, key)}
+            for w in (8, 16, 32):
+                m = (1 << w) - 1
+                # 注意是 (-key) & m，不是 key + 2^w（后者 & m 后会绕回自身）
+                if op == 'sub':
+                    alt.add(('add', (-key) & m))
+                elif op == 'add':
+                    alt.add(('sub', (-key) & m))
+            if cands & alt:
+                ok += 1
+                print('  \u2705 %-22s +0x%02X  %s' % (fld, disp, spec))
+            else:
+                miss += 1
+                print('  \u2717 %-22s +0x%02X  期望 %s，本轮没扫到' % (fld, disp, spec))
+        print('  覆盖: %d/%d' % (ok, ok + miss))
+    except Exception as e:
+        print('（自检跳过: %s）' % e)
+    return 0
+
+
 def main():
     argv = sys.argv[1:]
     out_path = None
     if '--out' in argv:
         i = argv.index('--out'); out_path = argv[i + 1]; del argv[i:i + 2]
+    funcs = []
+    while '--func' in argv:
+        i = argv.index('--func'); funcs.append(int(argv[i + 1], 16)); del argv[i:i + 2]
+    struct_name = None
+    if '--struct' in argv:
+        i = argv.index('--struct'); struct_name = argv[i + 1]; del argv[i:i + 2]
+    hits_path = None
+    if '--hits' in argv:
+        i = argv.index('--hits'); hits_path = argv[i + 1]; del argv[i:i + 2]
     exe = argv[0]
-    dat = argv[1] if len(argv) > 1 else None
+    dat = argv[1] if len(argv) > 1 and not argv[1].startswith('-') else None
     D = open(exe, 'rb').read()
     secs = load_sections(D)
+    if struct_name:
+        if hits_path:
+            # 函数地址来自 sig.py scan 的产物 -> **跨版本自动**，不用手抄地址
+            import json as _j
+            H = _j.load(open(hits_path))
+            hv = H['hits'] if isinstance(H, dict) and 'hits' in H else H
+            names = sorted(hv)
+            funcs = [hv[n] for n in names]
+            print('从 %s 取到 %d 个函数地址（sig.py scan 产物，跨版本自动）'
+                  % (os.path.basename(hits_path), len(funcs)))
+            print('  ' + ', '.join('%s@0x%X' % (n, hv[n]) for n in names[:6])
+                  + (' ...' if len(names) > 6 else ''))
+        if not funcs:
+            print('\u2717 需要 --hits <sig scan 的 json> 或 --func <VA>')
+            return 1
+        return cmd_struct(D, secs, struct_name, funcs)
     MHY_VA = find_mhy(D, secs)
     if MHY_VA is None:
         print("✗ 未找到 b'MHY\\0' 魔数 —— 这不像 Genshin 的 gi.exe？")
