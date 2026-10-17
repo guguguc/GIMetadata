@@ -451,6 +451,30 @@ def find_string_block(d, win=1 << 16, step=1 << 13):
     return lo, int(hi - lo)
 
 
+def _plausible_key(op, k, disp=None):
+    """判断 (op,key) 像不像**真的解码密钥**（而不是位运算/平凡值）。
+
+    实测噪声：`and 0x4` / `or 0x2` / `add 0xFFFFFFFF` 这些会让"单调"判据全过 ✗。
+    """
+    if op not in ('add', 'sub', 'xor'):
+        return False
+    k &= 0xFFFFFFFF
+    if k in (0, 1, 0xFFFFFFFF, 0xFFFFFFFE, 0xFFFFFFFD):
+        return False
+    if k and (k & (k - 1)) == 0:          # 2 的幂（掩码）
+        return False
+    if bin(k).count('1') < 3:
+        return False
+    # 按字段位宽：int32 字段（+0x08/+0x0C/+0x1C）的 key 是随机 32 位；
+    # int16 字段（+0x34/+0x36/+0x3C）允许小 key（如 nestedTypesStart add 0x19E7）
+    # 真密钥是随机 32 位：既不能太小，也不该是`加一个很小的负数`（0xFFFFxxxx）
+    if disp in (0x08, 0x0C, 0x1C) and not (0x1000000 <= k <= 0xFFFFFFFF - 0x1000000):
+        return False
+    if disp in (0x34, 0x36, 0x3C) and 0x10000 <= k < 0xFFFF0000:
+        return False
+    return True
+
+
 def _decode(v, op, key, mask=0xFFFFFFFF):
     if op == 'xor': return (v ^ key) & mask
     if op == 'sub': return (v - key) & mask
@@ -592,7 +616,7 @@ _FIELD_WIDTH = {0x30: 2, 0x34: 2, 0x36: 2, 0x38: 2, 0x3C: 2, 0x3E: 2,
                 0x40: 1, 0x43: 1, 0x44: 1, 0x45: 1}
 
 
-def probe_typedefs_semantic(d, off, keycands, n=512):
+def probe_typedefs_semantic(d, off, keycands, n=4096):
     """**语义判定**（不是候选排序）：70 字节步长 + 「累计索引字段跨类型单调」。
 
     `methodStart(+0x0C)` / `fieldStart(+0x1C)` / `propertyStart(+0x08)` 解出的是
@@ -647,6 +671,10 @@ def probe_typedefs_semantic(d, off, keycands, n=512):
         return None
     # 至少要有一个字段解出**非零**累计索引，否则全是被动哨兵，证据不足
     if not any(h[4] > 0 for h in hits):
+        return None
+    # ⚠️ 还要有**足够跨度**：真表的累计索引会跨到几万~几十万；
+    #    常数/噪声列在 4096 行里几乎没有跨度 -> 拒掉（实测 7.0 的假候选栽在这）
+    if max(h[4] for h in hits) < 1000:
         return None
     return hits
 
@@ -784,20 +812,29 @@ def main():
         KC = {int(k, 16): v for k, v in KJ['cands'].items()}
         # 只用「累计索引」类字段（methodStart/fieldStart/propertyStart/...）做锚
         CUM = [d for d in (0x08, 0x0C, 0x1C, 0x34, 0x36, 0x3C) if d in KC]
-        KC2 = {d: KC[d] for d in CUM}
+
+        def _pl(spec, d0):
+            op, _, kv = spec.partition(' ')
+            return _plausible_key(op, int(kv, 0), d0)
+
+        KC2 = {d: [c for c in KC[d] if _pl(c, d)] for d in CUM}
+        # 并进**全量缓存**里的同位移候选（--struct 只扫 48 个函数，召回不够）
+        for _v, dd, op, imm in cands:
+            if dd in CUM and _plausible_key(op, imm, dd):
+                KC2.setdefault(dd, []).append('%s 0x%X' % (op, imm))
+        for kk in list(KC2):
+            KC2[kk] = sorted(set(KC2[kk]))
         t0s = time.time()
         found_sem = []
-        for val in vals:
-            if not (0x1000 <= val < len(raw) - 0x210):
-                continue
-            r = probe_typedefs_semantic(d, d.hdr + val, KC2)
-            # ⚠️ 已验证范围：**7.1 上通过自测**（真表 0x92140 命中 5 个字段，与字符串法一致）。
-            #    7.0 上实测 0 候选 —— 因为 slot_scan 给的候选**没包含真密钥**
-            #    （「多函数一致性」排序实测只有 12/18 正确），瓶颈在**候选召回**不在判定。
-            if r and len(r) >= 2:            # >=2 个累计索引字段同时成立 = 强证据
-                found_sem.append((val, r))
+        if KC2:
+            for val in vals:
+                if not (0x1000 <= val < len(raw) - 0x210):
+                    continue
+                r = probe_typedefs_semantic(d, d.hdr + val, KC2)
+                if r and len(r) >= 2:          # >=2 个累计索引字段同时单调 = 强证据
+                    found_sem.append((val, r))
         found_sem.sort(key=lambda x: -len(x[1]))
-        print("   语义判定(累计索引单调, >=2 字段同时成立): %d 个候选，用时 %.1fs"
+        print("   语义判定(累计索引单调, >=2 字段): %d 个候选，用时 %.1fs"
               % (len(found_sem), time.time() - t0s))
         for val, r in found_sem[:5]:
             print("      0x%-9X  命中 %d 个字段: %s"
