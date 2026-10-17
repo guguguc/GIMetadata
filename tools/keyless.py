@@ -157,8 +157,12 @@ def derive_for_field(d, base, disp, width, n, kind='cum'):
     return list(best.values())
 
 
-def continuity_score(fs, fc):
-    """fieldStart 的相邻差 == field_count"""
+def continuity_score(fs, fc, min_rows=100):
+    """fieldStart 的相邻差 == field_count —— **只在 count>0 的行上统计**
+
+    ⚠️ 若两边大量是哨兵/0，`diff==count` 会**平凡成立**（实测 0.99 的假阳性）。
+    所以必须限定在 count>0 的行，且要求这种行足够多。
+    """
     if fs is None or fc is None:
         return 0.0
     n = min(len(fs), len(fc)) - 1
@@ -166,8 +170,11 @@ def continuity_score(fs, fc):
         return 0.0
     d = np.diff(fs[:n + 1])
     c = fc[:n]
-    ok = int((d == c).sum())
-    return ok / n
+    mask = c > 0
+    if int(mask.sum()) < min_rows:
+        return 0.0
+    ok = int(((d == c) & mask).sum())
+    return ok / int(mask.sum())
 
 
 def main():
@@ -176,6 +183,9 @@ def main():
     ap.add_argument('--slots', required=True, help='slot_scan 的缓存（提供候选表基址）')
     ap.add_argument('--n', type=int, default=N)
     ap.add_argument('--top', type=int, default=8)
+    ap.add_argument('--base', default=None, help='直接指定基址（十六进制），跳过搜索')
+    ap.add_argument('--all-disps', action='store_true',
+                    help='不知道字段布局时：扫 0x00..0x60 所有位移，并做 (累计,计数) 配对')
     a = ap.parse_args()
 
     root = a.root if os.path.isabs(a.root) else os.path.join(ROOT, a.root)
@@ -189,6 +199,9 @@ def main():
     bases = [b for b in bases if 0x1000 <= b < len(raw) - STRIDE * a.n]
     print("候选基址 %d 个，采样 %d 行" % (len(bases), a.n))
 
+    if a.base:
+        bases = [int(a.base, 16)]
+        print("直接指定基址 0x%X" % bases[0])
     results = []
     for bi, base in enumerate(bases):
         off = d.hdr + base
@@ -197,7 +210,7 @@ def main():
             r = derive_for_field(d, off, disp, width, a.n)
             if r:
                 fk[disp] = r
-        if len(fk) < 2:
+        if len(fk) < 2 and not a.base:
             continue
         # 连续性：fieldStart x field_count
         cont = 0.0
@@ -211,6 +224,37 @@ def main():
         results.append((base, fk, cont))
     results.sort(key=lambda x: (-x[2], -len(x[1])))
     print("通过 >=2 字段的候选: %d 个\n" % len(results))
+    if a.all_disps and results:
+        base0 = results[0][0]
+        off0 = d.hdr + base0
+        print("=== [--all-disps] 基址 0x%X：所有能解出累计索引的位移 ===" % base0)
+        cums, cnts = [], []
+        for disp in range(0x00, 0x61):
+            for w in (4, 2):
+                if disp % w:
+                    continue
+                for op, K, span, v in derive_for_field(d, off0, disp, w, a.n):
+                    cums.append((disp, w, op, K, span, v))
+            for w in (1, 2):
+                if disp % w:
+                    continue
+                for op, K, _, v in derive_for_field(d, off0, disp, w, a.n, kind='count'):
+                    cnts.append((disp, w, op, K, v))
+        for disp, w, op, K, span, _ in sorted(cums):
+            print("  +0x%02X w=%d %-4s 0x%-9X span=%d" % (disp, w, op, K, span))
+        pairs = []
+        for dc, wc, oc, kc, sp, vc in cums:
+            for dk, wk, ok_, kk, vk in cnts:
+                if dc == dk:
+                    continue
+                sc = continuity_score(vc, vk)
+                if sc > 0.3:
+                    pairs.append((round(sc, 3), dc, wc, oc, kc, sp, dk, wk, ok_, kk))
+        pairs.sort(reverse=True)
+        print("\n  (累计,计数) 配对（连续性 >0.3）:")
+        for r in pairs[:10]:
+            print("    %.3f  累计 +0x%02X(w%d) %-4s 0x%-9X span=%-6d  计数 +0x%02X(w%d) %-4s 0x%X" % r)
+        print()
     for base, fk, cont in results[:a.top]:
         print("=== 基址 0x%X  字段 %d  连续性 %.3f ===" % (base, len(fk), cont))
         for disp in sorted(fk):

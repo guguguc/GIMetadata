@@ -63,3 +63,60 @@ fieldStart[i+1] - fieldStart[i] == field_count[i]
 3. 从 `RuntimeInit` 的 typeDef 注册循环反推基址（消费者锚）
 
 基址一旦进候选，`keyless.py` 在 7.1 上已验证的推导链就能直接复用 ✓
+
+---
+
+## 五、7.0 复盘（2026-10-17 追加）：**基址找到了，布局没解开**
+
+### ✅ 7.0 的 `typeDefinitions` 基址 = `0x1986BEC`
+
+用"最近签名算局部偏移"定位到 7.0 的对应代码（`0x140481F31`）：
+
+```asm
+mov   rdx, [rip + 0x5415220]          ; MHY 指针
+movsxd rsi, dword ptr [rdx + 0x1a0]   ; ← slot 0x1A0
+xor   rsi, 0x4ce7b502                 ; ← key
+```
+
+```
+MHY[0x1A0] = 0x4D7FDEEE
+^ 0x4CE7B502 = 0x1986BEC   ← typeDefinitionsOffset（7.0）
+```
+
+该值**确实在** `slot_scan` 的 645 个候选里 ✓，`keyless.py --base 0x1986BEC` 也能解出
+`fieldStart add 0x98B73D5B`（span 442911）和 `eventStart add 0x66EC`（span 1085）✓
+
+### ✗ 但 typeDef 的**字段布局变了**
+
+按 4096 行采样做跨度匹配，初步映射像是：
+
+```
+propertyStart   0x08 -> 0x20
+methodStart     0x0C -> 0x24
+fieldStart      0x1C -> 0x2C
+eventStart      0x34 -> 0x34   （未变）
+interfacesStart 0x3C -> 0x3E
+```
+
+**但 fDV 交叉校验否决了它**：fDV 的 `fieldIndex`（7.0 在 `+8`，共 73818 个、范围 155..430272）
+应全部落在某个类型的 `[fieldStart, fieldStart+field_count)` 内（预期 ~100%），实测：
+
+| 候选 (累计,计数) | fDV 覆盖率 |
+|---|---|
+| `+0x2C / +0x3C` | **16.95%** |
+| `+0x2C / +0x36` | 5.12% |
+| `+0x24 / +0x36` | 20.90% |
+
+→ 都远低于 100%，所以上面那张映射表**是错的**。
+
+### 结论与下一步
+
+- **基址已解决**（这是之前最大的堵点）✓
+- **字段位移映射未解决** ✗ —— `fieldDecode.typeDef` 在 7.0 上不能沿用 7.1 的位移
+
+下一步（明确）：
+1. 用 IDA 在 `0x140481F31` 所在函数里看 `typeDef` 的**真实字段读取顺序**
+   （7.1 是 +0x00/+0x08/+0x0C/+0x18/+0x1C/+0x20/+0x24/+0x28/+0x30/... ；
+   7.0 很可能整体重排，需要逐字段确认）
+2. 或者用 **`--all-disps` + fDV 覆盖率**做全组合搜索（累计位移 × 计数位移 × key 形式），
+   覆盖率 ~100% 的那组就是 `fieldStart/field_count`
