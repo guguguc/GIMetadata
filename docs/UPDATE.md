@@ -1211,6 +1211,32 @@ python3 tools/ida_apply.py <新导出.json> --hits <新hits.json> \
 多表函数能自动配 → 全自动从 **0/20** 提到 **~20/29** ✓
 → 按值算 ≈ **+60 个**，全自动率 **13% → ~43%** ✓（接近目标 50% ✓）
 
+### 5.12.11 合并账（relocate ∪ IDA）—— 7.1 实测 **107 / 202 = 53.0%**
+
+| 来源 | 内容 | 数量 |
+|---|---|---|
+| `relocate ④/⑧/⑦` | 9 张表（fDV / methodPtr / methodSlot / attrinfo / blob / typeDefs / nestedTypes / interfaces / pDV） | 9 |
+| `ida_apply --order` | 20 张表（含 5 张与上重叠） | 20 |
+| **并集** | **24 张 × 3 = 72** ✓ | 72 |
+| `relocate ①` | MHY 地址 | 1 |
+| `sig.py consts` | 字符串密钥 5 | 5 |
+| `relocate ⑧` | typeDef 字段 6（fieldStart/count、methodStart/count、nameIndex、namespaceIndex） | 6 |
+| `ida_formulas` | keyFormulas **5/8** 公式的系数（method3+field5+property5+event3+container7） | 23 |
+| **合计** | | **107 / 202 = 53.0%** ✓ |
+
+**重叠只有 5 张**（`attrinfo` / `interfaces` / `methodSlot` / `nestedTypes` / `typeDefs`）——
+`relocate` 独有的 4 张（fDV / methodPtr / pDV / **blob**）IDA 没导出 ✗；
+IDA 独有的 15 张 `relocate` 检测不出 ✓。**两者互补** ✓。
+
+**⚠️ 这个 53% 的前提**（必须写在旁边）：
+
+1. `ida_apply --order` 的**跨版本顺序稳定** —— capstone 已验证 **9/9 单调** ✓，
+   但 **7.1→7.0 的端到端**还要一次 7.0 导出才能拍板 ✗
+2. `keyFormulas` 只覆盖 **5/8** 公式（23 系数）✗
+3. **7.0 的实际数字未知** ✗ —— 因为 4 个读表函数在 7.0 上 sig 没定位
+   （`SetupTypeInfoLocked` / `GetFieldDefaultValue` / `GetDefaultParameterValueObject` /
+   `BuildMethodName`）→ 那 10 张表会掉 ✗ → 估计 **~44%**
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
