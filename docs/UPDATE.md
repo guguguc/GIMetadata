@@ -759,6 +759,59 @@ xor   rsi, 0x4ce7b502          ; KEY
 □ 区间类：区间必须铺满 [0,N)（§KEYLESS §六）
 ```
 
+### 5.10.7 ⚠️ 换版本时，§5.10.3 那张表**够用吗？—— 不够**
+
+实测结论（7.1 → 7.0）：
+
+| 表里给的 | 换版本后还能用吗 |
+|---|---|
+| **函数名**（`GIMeta_SetupFieldsLocked` 等） | ✅ 能，`sig.py scan` 重新定位（7.0: 48/54） |
+| **代码形状**（A/B/C/D 四种） | ✅ 能，形状没变 |
+| **slot / key** | ❌ **每版都变**，只能当"上一版的答案" |
+| **步长**（26/10/14/8…） | ⚠️ 只有部分能用（见下） |
+
+**步长锚实测**（在函数里找 `imul/lea/shl/add` 带该立即数）：
+
+```
+✓ GIMeta_SetupFieldsLocked     步长 8   出现 11 次
+✓ GIMeta_IterNestedTypes       步长 4   出现 8 次
+✓ GIMeta_SetupTypeInfoLocked   步长 6   出现 2 次
+✗ GIMeta_SetupMethodsLocked    步长 26  一次都没有
+✗ GIMeta_SetupPropertiesLocked 步长 10  一次都没有
+✗ GIMeta_SetupEventsLocked     步长 14  一次都没有
+✗ GIMeta_SetupParameters       步长 8   一次都没有
+```
+
+原因：很多函数走的是 `[base + i]`（i 已预乘），**根本不出现步长常数** ✗。
+
+### 所以"函数内定位"要靠这四条（按可靠性排序）
+
+| # | 手段 | 说明 |
+|---|---|---|
+| 1 | **上一版的指令地址** | `docs/PROVENANCE.md` 给了每张表的**读取指令地址**；用 `tools/port.py` 的对齐把它映射到新版，再核对结构 |
+| 2 | **消费者**（base 被传给谁） | 例如 base 后面紧跟 `call GIMeta_GetFieldName` → 那就是 `fields`；被拿去 `[base + 4*i]` → 4 字节表（`attributeTypes`/`fieldOffset`/`nestedTypes`/`methodPointerIndex`） |
+| 3 | **计数公式反推** | 该 base 的值 `raw op key` 解出后 ÷ 步长（±修正）必须等于**已知计数**（typeDefs 88902 / methods 733442 / fields 440172…）。**这条最硬** |
+| 4 | **步长出现次数** | 只在少数函数里可用（上表 ✓ 的三行） |
+
+### 实际换版本的推荐顺序
+
+```bash
+# 1) 先让工具把能自动的做完（大多数表会在这步被确认或给出候选）
+python3 tools/relocate.py <root> --slots slots.json --keys keys.json --emit layout.json
+
+# 2) 剩下的表：用 PROVENANCE 的地址 + port.py 对齐，拿到"候选读取点"
+python3 tools/port.py --old <旧版本> --new <新版本> --sigs-old h_old.json --sigs-new h_new.json
+
+# 3) 对每个候选读取点，用「计数公式」(手段 3) 一拍：除以步长 == 已知计数？
+#    对不上就换下一个候选 —— 这一步不需要 IDA，纯算术
+
+# 4) 只有 1~3 都失败的，才进 IDA 看伪代码（§5.10.1 的 4 步）
+```
+
+> **一句话**：§5.10.3 是**索引**（告诉你"去哪张函数找"），不是**答案**（slot/key 每版都变）。
+> 真正把"函数 → 具体读取点"钉死的是 **PROVENANCE 的地址 + 计数公式**，
+> 而这一步目前还**没有完全自动化**（`port.py` 只能给候选）。
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
