@@ -24,8 +24,13 @@ import ida_hexrays
 import ida_segment
 import idautils
 
-OUT = '/tmp/ida_export.json'
-HITS_JSON = '/tmp/h.json'      # sig.py scan --json 的产物（地址 -> GIMeta_* 名字）
+IDA_HEADLESS = any(a in sys.argv for a in ('-A', '--headless'))
+
+import sys
+
+# 无头模式：idat64 -A -S"ida_export.py <out.json> [hits.json]" <target>
+OUT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/ida_export.json'
+HITS_JSON = sys.argv[2] if len(sys.argv) > 2 else '/tmp/h.json'
 
 HITS = {}                      # ea -> name
 
@@ -196,3 +201,10 @@ def main():
 
 if __name__ == '__main__':
     main()
+    # 无头（idat64 -A）时自动退出；GUI 里跑则保持打开
+    try:
+        import idaapi
+        if getattr(idaapi.cvar, 'batch', False) or IDA_HEADLESS:
+            idaapi.qexit(0)
+    except Exception:
+        pass

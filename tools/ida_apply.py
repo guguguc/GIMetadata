@@ -67,24 +67,37 @@ def main():
             for name in fmap.get(fn, []):
                 by_table.setdefault(name, []).append(t)
 
-    # ---- 2) 消歧 ----
+    # ---- 2) 消歧（**一对一**：一个候选只能给一张表）----
     result, unresolved = {}, {}
+    used = set()
+
+    def key_of(c):
+        return (c['slot'], c['op'], c['key'])
+
+    # 2a) 先用 --detected 做精确 value 匹配（最硬，允许同值不同表：按 stride/名字再分）
+    for name in sorted(by_table):
+        if name not in detected:
+            continue
+        hit = [c for c in by_table[name]
+               if c.get('value') and int(c['value'], 16) == detected[name]]
+        if len(hit) == 1:
+            hit[0]['how'] = 'value-match(最强)'
+            result[name] = hit[0]
+            used.add(key_of(hit[0]))
+
+    # 2b) 单候选 + 未被占用
     for name, cands in sorted(by_table.items()):
-        # 2a) 已知值（④/⑧ 检测到） -> 直接按 value 匹配
-        if name in detected:
-            hit = [c for c in cands if c.get('value') and int(c['value'], 16) == detected[name]]
-            if len(hit) == 1:
-                hit[0]['how'] = 'value-match(最强)'
-                result[name] = hit[0]
-                continue
-        # 2b) 只有一个候选 -> 直接用
+        if name in result:
+            continue
         uniq = {(c['slot'], c['op'], c['key']): c for c in cands}
-        if len(uniq) == 1:
-            c = list(uniq.values())[0]
+        free = {k: c for k, c in uniq.items() if k not in used}
+        if len(free) == 1:
+            c = list(free.values())[0]
             c['how'] = 'single-candidate(中)'
             result[name] = c
+            used.add(key_of(c))
         else:
-            unresolved[name] = list(uniq.values())
+            unresolved[name] = list(free.values()) if free else list(uniq.values())
 
     print('\n=== 已确定 %d 张表 ===' % len(result))
     for name, t in sorted(result.items()):
