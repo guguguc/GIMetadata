@@ -222,20 +222,29 @@ def cmd_struct(D, secs, name, funcs):
     got = {}
     for va in funcs:
         for disp, op, key, cnt, first in scan_text(D, secs, va0=va, size=0x6000, maxdisp=size):
-            got.setdefault(disp, []).append((op, key, cnt, first))
+            got.setdefault(disp, []).append((op, key, cnt, first, va))
     uniq = 0
     for disp in sorted(layout):
-        seen = sorted({(op, key) for op, key, _, _ in got.get(disp, [])})
-        if len(seen) == 1:
+        rows = got.get(disp, [])
+        # 按「几个**不同函数**用到」聚合：编译器会在多处内联同一表达式，
+        # 真密钥必然出现在 >=2 个函数里；偶然的字节巧合只在一处 ✗
+        agg = {}
+        for op, key, cnt, first, va in rows:
+            e = agg.setdefault((op, key), {'fns': set(), 'n': 0})
+            e['fns'].add(va)
+            e['n'] += cnt
+        seen = sorted(agg.items(), key=lambda kv: (-len(kv[1]['fns']), -kv[1]['n']))
+        if not seen:
+            print('  +0x%02X  %-22s \u2014 (没扫到)' % (disp, layout[disp]))
+            continue
+        if len(seen) == 1 or (len(seen[0][1]['fns']) > len(seen[1][1]['fns'])):
             uniq += 1
-            mark = '\u2705 \u552f\u4e00  '
-        elif seen:
-            mark = '  %d \u5019' % len(seen)
+            mark = '\u2705 \u552f\u4e00'
         else:
-            mark = '  \u2014'
-        print('  +0x%02X  %-22s %s: %s'
-              % (disp, layout[disp], mark,
-                 ', '.join('%s 0x%X' % t for t in seen[:3]) or '(没扫到)'))
+            mark = '  %d \u5019' % len(seen)
+        txt = '  '.join('%s 0x%X(%d\u51fd/%d\u6b21)'
+                        % (op, key, len(e['fns']), e['n']) for (op, key), e in seen[:4])
+        print('  +0x%02X  %-22s %s: %s' % (disp, layout[disp], mark, txt))
     print('\n  \u552f\u4e00\u786e\u5b9a %d/%d \u4e2a\u5b57\u6bb5\uff08\u5176\u4f59\u9700\u8981\u5224\u5b9a\uff1a\u5019\u9009\u91cc\u9009\uff0c\u6216\u626b\u66f4\u591a\u51fd\u6570\uff09' % (uniq, len(layout)))
     try:
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -251,7 +260,7 @@ def cmd_struct(D, secs, name, funcs):
                 continue
             op, _, key = spec.partition(':')
             key = int(key.strip(), 0)
-            cands = {(o, k) for o, k, _, _ in got.get(disp, [])}
+            cands = {(o, k) for o, k, _, _, _ in got.get(disp, [])}
             # 编译器会把「减 K」折成「加 -K 的补码」，位宽按**字段宽度**截断（8/16/32）
             alt = {(op, key)}
             for w in (8, 16, 32):
