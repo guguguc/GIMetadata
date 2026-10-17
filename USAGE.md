@@ -306,3 +306,11 @@ python3 tools/ida_apply.py /tmp/ida_export.json --out /tmp/tables.json
 `ida_export.py` 用 Hex-Rays 的表达式（`global + *(MHY+SLOT) OP KEY`）+ IDA 的真实函数边界，
 把 `tables` 的 slot/op/key **连值一起**导出；`ida_apply.py` 按 `tools/table_funcs.json`
 的「函数→表」映射配对，单表函数直接确定，多表函数给候选。
+
+### 无头模式（不打开 IDA 界面）
+```bash
+tools/ida_headless.sh version/7.0/gi.exe /tmp/ida70.json /tmp/h70.json
+# 等价：idat64 -A -S"tools/ida_export.py <out> <hits>" <exe>
+```
+`-A` 自动跑完退出；**首次自动分析 431MB 的 gi.exe 是小时级**，有分析好的 `.i64` 才快。
+需要 Hex-Rays 授权（脚本要调 `decompile()`）。

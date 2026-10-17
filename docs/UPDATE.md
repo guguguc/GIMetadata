@@ -982,6 +982,31 @@ python3 tools/relocate.py <root>  # ⑤ 会把「探测值 vs version.json」逐
 **原则**：`ida_apply.py` **只输出建议**（带置信度），**从不直接改 `version.json`** ✓ ——
 宁可多一步人工确认，也不静默写错 ✗。
 
+### 5.12.7 无头模式（不需要 GUI）：`idat64 -A -S`
+
+```bash
+# 直接跑（IDAT 默认 idat64，可用环境变量覆盖）
+tools/ida_headless.sh version/7.0/gi.exe /tmp/ida70.json /tmp/h70.json
+# 等价于：
+idat64 -A -S"tools/ida_export.py /tmp/ida70.json /tmp/h70.json" version/7.0/gi.exe
+```
+
+- `-A` = autonomous（不弹对话框）✓
+- `ida_export.py` 检测到批处理模式会 `qexit(0)` 自动退出 ✓
+- 输出路径 / sig 命中表都由 `-S` 的参数传进去 ✓
+
+**⚠️ 时间陷阱**
+
+| 情况 | 耗时 |
+|---|---|
+| 首次对 `gi.exe`（431MB）自动分析 | **小时级** ✗ |
+| 已有分析好的 `.i64` / `.idb` | 分钟级 ✓ |
+
+建议：**先手动分析一次并存库**，之后每次换代只对新样本跑一次（或让 IDA 用 `-B` 批处理并等待）。
+
+**⚠️ 授权**：脚本调用 Hex-Rays `decompile()` → 需要 **反编译器授权** ✓
+（没有的话 `ida_export.py` 会直接打印 `✗ Hex-Rays 不可用` 并退出 ✓）。
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
