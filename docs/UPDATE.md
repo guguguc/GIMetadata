@@ -631,6 +631,133 @@ python3 tools/sig.py consts <exe> --func <DecryptString> --func <RuntimeInit>
 python3 tools/relocate.py   <root> --slots /tmp/slots.json --keys /tmp/keys.json --emit /tmp/layout.json
 ```
 
+## §5.10 IDA 手抄指南（剩下那 ~80% 到底怎么抄）
+
+> 适用：④/⑧ 自动不了的项 —— 剩余表常量、`keyFormulas`、`fieldDecode` 的其余字段。
+> **不要凭记忆填**；每一步都要落在一个具体表达式上。
+
+### 5.10.1 通用套路（4 步，任何表都一样）
+
+```
+① 入口：python3 tools/provenance.py <exe>   → docs/PROVENANCE.md
+        里面有每张表的「读取指令地址 + 函数名」（实测证据）
+② IDA 里跳过去（G 键输入地址），看 **Hex-Rays 伪代码**（F5）
+③ 找这张形态（混淆被摊开后一定是这个形状）：
+        *(DWORD*)(global + *(_DWORD*)(MHY + SLOT) OP KEY + STRIDE * i)
+   抄 3 个东西：SLOT（位移）、OP（+ - ^）、KEY（常数）
+④ 用数据验：按 (SLOT,OP,KEY) 算出偏移 → 检查表结构（步长/计数/值域/平铺）
+```
+
+### 5.10.2 三种代码形态（认得出就不用翻伪代码）
+
+```asm
+; 形态 B（key 在寄存器、槽位在第二操作数）—— 7.1 的 typeDefs
+mov   esi, 0xec48ab9f          ; KEY（补码 = -0x13B75461）
+add   esi, [rdx + 0xb4]        ; SLOT = 0xB4
+
+; 形态 A（槽位先、key 后）
+mov   ecx, [rdx + 0x1c4]       ; SLOT = 0x1C4
+add   ecx, r15d                ; KEY 在 r15d（入口处 mov r15d, imm）
+
+; 形态 D（key 在数据段常量池）
+movsxd rsi, [rdx + 0x1a0]      ; SLOT = 0x1A0
+xor   rsi, 0x4ce7b502          ; KEY
+```
+
+> **补码**：`add 0xE33589AC` 就是 `sub 0x1CCA7654` —— 抄的时候按 `version.json` 的
+> `op` 约定换算（`-` 配正数），或者直接抄 `add` 形式。
+
+### 5.10.3 每张表该去哪个函数找（7.1 实测）
+
+| 表 | 函数（`GIMeta_*`） | 7.1 slot | 7.1 key | 形状 |
+|---|---|---|---|---|
+| typeDefinitions | *(不在 RegisterTables！)* 见 §5.7.4 | `0xB4` | `-0x13B75461` | B |
+| fieldDefaultValues | `GetFieldDefaultValue` | `0x13C` | `^0x593DE464` | A |
+| fieldAndParameterDefaultValueData(blob) | `GetFieldDefaultValue` 附近 | `0xA0` | `^0x3F525210` | — |
+| methods | `SetupMethodsLocked` | `0x16C` | `-0x1CCA7654` | B |
+| methodPointerIndex | `SetupMethodsLocked` | `0x094` | `^0x4A4C0A71` | A |
+| methodSlotTable | `SetupTypeInfoLocked` | `0x140` | `-0x6D3AAA4E` | B |
+| fields | `SetupFieldsLocked` | `0x18C` | `-0x140FC6D4` | B |
+| properties | `SetupPropertiesLocked` | `0x150` | `-0x1C3D5389` | B |
+| events | `SetupEventsLocked` | `0x1E8` | `^0x100547B1` | A |
+| parameters | `SetupParameters` | `0x114` | `^0x3E5D33E6` | A |
+| interfaces | `SetupTypeInfoLocked` | `0x1C4` | `-0x5A7B4287` | B |
+| nestedTypes | `IterNestedTypes` | `0x05C` | `-0x16C292F3` | B |
+| attributesInfo | `SetupTypeInfoLocked` | `0x024` | `-0x5C185C67` | B |
+| attributeTypes | `AllocTypeInfoArray` | `0x0D8` | `-0x72E93284` | B |
+| genericContainers | `BuildMethodName` | `0x028` | `^0x774A3BA6` | A |
+| genericParameters | `BuildMethodName` | `0x170` | `^0x7B3B96A2` | A |
+| methodSpecs | `RuntimeInit` | `0x1D8` | `^0x1F85ABE5` | A |
+| genericMethodTable | `RuntimeInit` | `0x0C0` | `-0x612A764D` | B |
+| parameterDefaultValues | `GetDefaultParameterValueObject` | `0x104` | `^0x094C42AB` | A |
+| imagesOffset / imagesCount | `RuntimeInit` | `0x20C` / `0x02C` | `-0x0ECB27F5` / `-0x2465B023` | B |
+| genericClassRange | `RuntimeInit` | `0x134` | `^0x558E11EC` | A |
+
+> 换版本时**只换 SLOT/KEY，函数名不变**（`sig.py scan` 能重新定位函数）。
+> 所以流程是：`sig.py scan` → 表的函数 → 在函数里找 `[MHY+slot]` 的读取 → 抄新的 slot/key。
+
+### 5.10.4 `keyFormulas`（43 个）怎么抄
+
+这些是**逐索引 key**：`key(i)` 的公式，藏在"解名字/解 typeIndex"的地方。
+
+```
+① 找消费者：比如方法名 → GIMeta_BuildMethodName / GetMethodNameFromIndex
+            参数名 → SetupParameters
+            字段名 → GetFieldName
+② 伪代码里会看到：
+     nameIndex = (raw ^ xxxKey(i))       或   (raw - xxxKey(i))
+   而 xxxKey(i) 被内联成一段乘/加/移位/xor：
+     ((1457992407*((41617*i+1219887025)^0x19E1D47A))>>21)+2068375556
+③ 把这段**原样**抄进 version.json 的 keyFormulas.<name>（按 A/B/xor/add/shift 拆）
+④ 验收：解出的名字必须可打印 / typeIndex 必须合法（见 §5.9 的字段表）
+```
+
+> 7 个公式共用同一个 `methodKey`（在 `methodNameIndex/methodFlags/methodIFlags/
+> methodReturnType/methodDeclaringType/methodParamStart/methodParamCount` 七处）——
+> 换版本时**七处必须同步**（JSON 里已合并成一个键 ✓）。
+
+### 5.10.5 `fieldDecode` 的其余字段怎么抄
+
+在**读结构体的函数**里，每个字段都是同一形状：
+
+```c
+*(DWORD*)(obj + 0x18) - 0x3D74901F      // typeDef.parentIndex
+*(WORD*)(obj + 0x3E)  - 26230           // typeDef.genericContainerIndex
+*(DWORD*)(obj + 0x28) - 0x4159BB8E      // typeDef.flags
+```
+
+步骤：
+
+```
+① 打开该结构体的主读取函数（typeDef → SetupTypeInfoLocked / SetupFieldsLocked 等；
+   method → SetupMethodsLocked；field → SetupFieldsLocked；property → SetupPropertiesLocked；
+   event → SetupEventsLocked；parameter → SetupParameters）
+② 在伪代码里搜 `obj + 0x??` 的用法，看它后面跟的是 `- K` / `^ K` / `+ K`
+③ 抄 位移 + op + key
+④ 判宽度：`*(BYTE*)` / `*(WORD*)` / `*(DWORD*)` —— `+N` 型**必须按位宽截断**
+```
+
+**几个难字段的额外提示**（判据不唯一，必须靠语义）：
+
+| 字段 | 怎么确认 |
+|---|---|
+| `nameIndex` | 解出的值必须是 `offset\|len<<24`，且解密后是可打印名字（**用字符串解密器裁决**，`relocate ⑧` 已自动化） |
+| `flags` | 解码后只有几十种取值，且是 bitmask（`TYPE_ATTRIBUTE`） |
+| `parentIndex` | 解码后必须是 **Il2CppType 索引**（`-1` = 无父类）；用 `System.Enum`/`System.ValueType` 的已知父类反解（见 §8 Worked example A） |
+| `genericContainerIndex` | 解码后是**容器表**索引；用名字里的 `` `N `` 反解（argc 必须等于 N） |
+| `unknown20` | 它是 **`fieldOffset` 表的每类型索引基**（`fieldOffset[(typeDef+0x20 ^ K) + k]`） |
+
+### 5.10.6 抄完的验收清单
+
+```
+□ verify.py 28/28 PASS
+□ 该表的 count 与「实际元素数」一致（§5.5）
+□ 名字类字段：抽 200 个看可打印率 ≥ 95%
+□ 索引类字段：typeIndex 100% < typesCount
+□ 计数类字段：8/16 位截断后 ≤ 表长
+□ 区间类：区间必须铺满 [0,N)（§KEYLESS §六）
+```
+
 ## §6 结构体字段表（含 typeDef 内的隐藏字段）
 
 ### 6.1 Il2CppTypeDefinition（70 字节）
