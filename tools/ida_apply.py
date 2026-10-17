@@ -126,9 +126,8 @@ def main():
             for t in olde.get('tables', []):
                 v = t.get('value')
                 nm = old_truth.get(int(v, 16)) if v else None
-                if not nm:
-                    continue
-                for fn in (t.get('funcs') or []):
+                # ★ 保留 None 占位！跳过会让"新导出"的位置整体偏移 ✗
+                for fn in set(t.get('funcs') or []):      # ★ 去重！否则同一条目被加两次 -> 位置翻倍
                     byf.setdefault(fn, []).append((t.get('seq', 0), nm))
             for fn, rows in byf.items():
                 rows.sort()
@@ -153,18 +152,18 @@ def main():
     # ★ 按「学到的函数内顺序」逐位分配（最可能正确的自动方式）
     if learned:
         for t in tables:
-            for fn in (t.get('funcs') or []):
+            for fn in set(t.get('funcs') or []):
                 names = learned.get(fn)
                 if not names:
                     continue
                 # 该函数导出的所有条目按 seq 排序
-                sibs = sorted([x for x in tables if fn in (x.get('funcs') or [])],
+                sibs = sorted([x for x in tables if fn in set(x.get('funcs') or [])],
                               key=lambda x: x.get('seq', 0))
                 i = sibs.index(t)
                 if i < len(names):
                     nm = names[i]
                     k = (t['slot'], t['op'], t['key'])
-                    if nm not in result and k not in used:
+                    if nm and nm not in result and k not in used:
                         t['how'] = 'order-match(学自旧版顺序)'
                         result[nm] = t
                         used.add(k)

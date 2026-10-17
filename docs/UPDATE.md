@@ -1147,7 +1147,30 @@ python3 tools/ida_apply.py <新导出.json> --hits <新hits.json> \
 2. 得到 `{函数: [表名...]}` ✓
 3. 对新版本：把同一函数导出的条目**按 seq 排序**，**逐位**赋给学到的表名 ✓
 
-**实测（机制自测）**：用 7.1 自己当"旧版本"→ 应能**全部分配正确** ✓（trivial，但验证了机制 ✓）
+**实测（机制自测，2026-10-17）**
+
+用 7.1 自己当"旧版本"学顺序 → 再对 7.1 自己分配：
+
+```
+=== 已确定 20 张表 ===   （全部 [order-match(学自旧版顺序)]）
+  attributeTypesOffset  0xD8   ✓      methodsCount        0x188 ✓
+  attributesInfoCount   0x198  ✓      methodsOffset       0x16C ✓
+  attributesInfoOffset  0x24   ✓      nestedTypesTable    0x5C  ✓
+  fieldOffset           0x204  ✓      parameterDefaultValuesCount 0x9C ✓
+  fieldsOffset          0x18C  ✓      propertiesOffset    0x150 ✓
+  genericMethodTable    0xC0   ✓      typeDefinitionsCount 0xE0 ✓
+  genericMethodTableCount 0x130 ✓     typeDefinitionsOffset 0xB4 ✓
+  genericTypeArgOffset  0x180  ✓      imagesCount         0x2C  ✓
+  imagesOffset          0x20C  ✓      interfacesTable     0x1C4 ✓
+  methodSlotCount       0x1FC  ✓      methodSlotTableOffset 0x140 ✓
+→ 20 / 20 全对 ✓✓
+```
+
+**踩过的两个坑**（都已修）：
+1. 学习顺序时**跳过**"没有真值"的条目 → 位置整体错位 ✗ → 必须保留 `None` 占位 ✓
+2. `funcs` 里有**重复函数名**（`['A','A']`）→ 同一条目被加两次 → 位置翻倍 ✗ → 必须 `set()` 去重 ✓
+
+**剩下的唯一风险**：`seq` 顺序**跨版本**是否稳定 ✗（需要 7.0 的导出才能验 ✗）
 
 **⚠️ 未验证的关键假设**：**跨版本时 `seq` 顺序是否稳定** ✗
 - 支持：源码逻辑顺序不变 ✓、代码结构相似（48/54 函数 8/8 命中）✓
