@@ -78,7 +78,7 @@ def decode(col, op, K, width):
     return np.where(v >= (1 << (wb - 1)), v - (1 << wb), v)
 
 
-def check_cumulative(v):
+def check_cumulative(v, min_span=1000):
     """累计索引判据：哨兵 carry-forward 后单调不减、跨度够大、值域合理"""
     if v is None or len(v) < 16:
         return None
@@ -94,7 +94,7 @@ def check_cumulative(v):
     if int(d.min()) < 0:
         return None
     span = int(v2.max()) - int(v2.min())
-    if span < 1000:
+    if span < min_span:
         return None
     return v2, span
 
@@ -146,7 +146,7 @@ def derive_for_field(d, base, disp, width, n, kind='cum', topk=1):
                 if r is not None:
                     out.append((op, K, r, 1))
             else:
-                r = check_cumulative(v)
+                r = check_cumulative(v, min_span=10 if width == 2 else 1000)
                 if r:
                     out.append((op, K, r[0], r[1]))
     # 同 (op) 只留跨度最大的
@@ -471,9 +471,10 @@ def layout_search_fdv(d, base, fdv_off, fdv_idx_disp=8, fdv_n=73818,
             tot = ranges_tile(fs, fc, maxn=3_000_000)      # ★ 铺满（全表）
             if tot is None:
                 continue
+            # fDV 覆盖率只对「fieldStart」有意义；其它表（events 等）N 小、覆盖不到
+            # fDV 的 fieldIndex 是**正常的**，不能因此丢弃 -> 只记录覆盖率，不设门槛
             c = cov_of(fs, fc)
-            if c >= min_cov:
-                pairs.append((round(c, 5), tot, dc, wc, oc, kc, dk, wk, ok_, kk))
+            pairs.append((round(c, 5), tot, dc, wc, oc, kc, dk, wk, ok_, kk))
     pairs.sort(key=lambda x: (-x[0], -x[1]))
     return {'cums': [(a, b, c_, d_) for a, b, c_, d_, _e in cums],
             'cnts': [(a, b, c_, d_) for a, b, c_, d_, _e in cnts], 'pairs': pairs}
@@ -626,10 +627,13 @@ def _ni_worker(chunk):
         for x in v.tolist():
             tot += 1
             s = dec(x & 0xFFFFFFFF)
+            if s is None and ((x >> 24) & 0xFF) == 0:
+                ok += 1                      # len==0 = 空命名空间，合法
+                continue
             if s and all(32 <= ord(c) < 127 for c in s):
                 ok += 1
         if tot and ok / tot >= mr:
-            rows.append((disp, op, K, round(ok / tot, 4)))
+            rows.append((disp, op, K, round(ok / tot, 4), len(set(v.tolist()))))
     return rows
 
 

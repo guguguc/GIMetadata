@@ -1109,8 +1109,10 @@ def main():
                             ni = KL.derive_nameindex_by_decoder(d, kr['base'], cc, hint['dec'])
                             if ni:
                                 print("   ⑧ nameIndex 识别（字符串解密器裁决，%d 个候选）:" % len(ni))
-                                for disp, op, K, sc in ni[:4]:
-                                    print("      +0x%02X %s 0x%-9X  可打印率 %.3f" % (disp, op, K, sc))
+                                for disp, op, K, sc, nd in ni[:6]:
+                                    kind = ('namespaceIndex' if nd < 200 else 'nameIndex')
+                                    print("      +0x%02X %s 0x%-9X  可打印率 %.3f  不同值 %d  -> 疑似 %s"
+                                          % (disp, op, K, sc, nd, kind))
                         except Exception as e:
                             print("   ⑧ nameIndex 识别失败:", e)
 
