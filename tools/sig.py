@@ -232,9 +232,28 @@ def _call_targets(pe, md, va, maxbytes=32768):
     if off is None: return []
     out = []
     for ins in md.disasm(pe.D[off:off + maxbytes], va):
-        if ins.mnemonic == 'call' and ins.op_str.startswith('0x'):
+        if ins.mnemonic in ('call', 'jmp') and ins.op_str.startswith('0x'):
             try: out.append(int(ins.op_str, 16))
             except ValueError: pass
+    return out
+
+
+def _ptr_targets(pe, md, va, maxbytes=32768):
+    """函数体里 `lea/mov reg,[rip+X]` 指向 .text 的目标（函数指针 / 跳板 / 局部跳转）"""
+    off = pe.va2off(va)
+    if off is None: return []
+    tva, tbytes = pe.text
+    out = []
+    for ins in md.disasm(pe.D[off:off + maxbytes], va):
+        if ins.mnemonic not in ('lea', 'mov'): continue
+        op = ins.op_str
+        if 'rip +' not in op: continue
+        try:
+            tgt = ins.address + ins.size + int(op.split('rip + ')[1].split(']')[0], 16)
+        except ValueError:
+            continue
+        if tva <= tgt < tva + len(tbytes) and tgt % 4 == 0:
+            out.append(tgt)
     return out
 
 
@@ -279,6 +298,7 @@ def cmd_scan(a):
     where = {}
     pending = []      # 歧义项（末尾按「同组相对次序」定夺）
     unmatched = []    # 没定下来的签名（--fuzzy 救援用）
+    fuzzy_names = {}   # 模糊命中的名字（标记用）
     for sg in sigs:
         pb = binascii.unhexlify(sg['pat']); pm = binascii.unhexlify(sg['pmask'])
         fo, fl = _longest_fixed(pb, pm)
@@ -406,12 +426,17 @@ def cmd_scan(a):
     # 依据：这些函数在新版本里**字节模式完全变了**，但它们的**调用者**是已定位的 ->
     #       从调用图取候选，比"全 .text 模糊搜"快几个数量级，且不会落到垃圾代码里。
     if getattr(a, 'fuzzy', False) and unmatched and where:
+      # 迭代两轮：第 2 轮用第 1 轮新找到的函数当新锚 -> 等价于 2 跳调用图
+      for rnd in (1, 2):
+        if not unmatched: break
         cands = set()
         for f in list(where):
             cands.update(_call_targets(pe, md, f))
+            cands.update(_ptr_targets(pe, md, f))
         cands = sorted(c for c in cands
-                       if tva <= c < tva + len(tbytes) and c % 16 == 0 and not _is_stub(pe, md, c))
-        print("\n  模糊救援：调用图候选 %d 个（来自 %d 个已定位函数）" % (len(cands), len(where)))
+                       if tva <= c < tva + len(tbytes) and c % 4 == 0 and not _is_stub(pe, md, c))
+        print("\n  模糊救援 第%d轮：调用图候选 %d 个（锚点 %d 个已定位函数）" % (rnd, len(cands), len(where)))
+        still = []
         for sg in unmatched:
             sc = []
             for c in cands:
@@ -419,19 +444,50 @@ def cmd_scan(a):
                 if r and r[0] > 0:
                     sc.append((r[0], r[1], c))
             if not sc:
-                print("    %-40s -- 调用图里没有候选能对上 token" % sg['name']); continue
+                print("      %-40s -- 调用图里没有候选能对上 token" % sg['name']); still.append(sg); continue
             sc.sort(reverse=True)
             b0 = sc[0]
             margin = b0[0] - sc[1][0] if len(sc) > 1 else b0[0]
             if b0[0] >= 5 and margin >= 2:
                 hit += 1; miss -= 1
-                print("    %-40s 模糊命中 %d/%d (严格 %d) 0x%X  次优 %d"
+                print("      %-40s 模糊命中 %d/%d (严格 %d) 0x%X  次优 %d"
                       % (sg['name'], b0[0], sg['n'], b0[1], b0[2],
                          sc[1][0] if len(sc) > 1 else 0))
-                where.setdefault(b0[2], []).append(sg['name'])
+                where.setdefault(b0[2], []).append(sg['name']); fuzzy_names[sg['name']] = b0[1]
             else:
-                print("    %-40s -- 最优 %d/%d @0x%X（低于门槛 5 或与次优太近，不采信）"
-                      % (sg['name'], b0[0], sg['n'], b0[2]))
+                print("      %-40s -- 最优 %d/%d @0x%X（低于门槛 5 或与次优太近，不采信）"
+                      % (sg['name'], b0[0], sg['n'], b0[2])); still.append(sg)
+        unmatched = still
+
+    # ---- 置信度分档（回答「命中的是不是对的」）----
+    #   loose 8/8  = 8 条指令的 **指令形状**（助记符+操作数种类）全对
+    #   strict    = 其中「助记符+操作数种类+小立即数」也全对的条数
+    #   loose token 不看立即数，所以「常量改了但结构没改」仍然 loose 8/8 —— 这是我们要的
+    conf = {'严格 8/8': 0, '严格 6-7/8': 0, '严格 <6/8': 0}
+    ref = {sg2['name']: int(sg2['va'], 16) for sg2 in sigs}
+    addr_of = {}
+    for va, names in where.items():
+        for nm in names: addr_of[nm] = va
+    for nm, va in addr_of.items():
+        if nm in fuzzy_names:
+            fuzzy_names[nm] = None      # 稍后统一算
+    for nm, va in addr_of.items():
+        st = None
+        for sg2 in sigs:
+            if sg2['name'] == nm:
+                r = _score_at(pe, md, va, sg2); st = r[1] if r else None
+        if st is None: continue
+        conf['严格 8/8' if st >= 8 else ('严格 6-7/8' if st >= 6 else '严格 <6/8')] += 1
+    print("\n  置信度：严格 8/8 = %d 个, 严格 6-7/8 = %d 个, 严格 <6/8 = %d 个"
+          % (conf['严格 8/8'], conf['严格 6-7/8'], conf['严格 <6/8']))
+    # 相对次序：把命中按新地址排序，与 sigs.json 记录的次序比，反转的对数
+    pairs = inv = 0
+    items = sorted(((v, ref[n], n) for n, v in addr_of.items() if n in ref))
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            pairs += 1
+            if (items[i][0] - items[j][0]) * (items[i][1] - items[j][1]) < 0: inv += 1
+    print("  相对次序校验：%d 对中 %d 对反转（反转会让人工复核，但不等于错）" % (pairs, inv))
 
     for va, names in where.items():
         if len(names) > 1:
