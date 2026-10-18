@@ -16,6 +16,8 @@
 #include <capstone/capstone.h>
 #include <capstone/x86.h>
 #include <algorithm>
+#include <chrono>
+#include <iostream>
 #include <unordered_set>
 #include <cstring>
 #include <format>
@@ -31,17 +33,34 @@
 
 class Dumper {
 public:
-    Dumper(Il2CppImage& img, MetadataFiles& files, const std::string& outDir)
-        : img_(img), files_(files),
+    Dumper(Il2CppImage& img, MetadataFiles& files, const std::string& outDir,
+           bool trace = false)
+        : img_(img), files_(files), trace_(trace),
           dumpOut_(outDir + "/dump.cs"),
           stringLiteralOut_(outDir + "/stringliteral.json") {}
 
     // 各输出段，顺序与原 main() 一致
     void run() {
-        string_Literal();
-        customAttr();
-        imageDef();
-        typeDef();
+        using Clock = std::chrono::steady_clock;
+        const auto tAll = Clock::now();
+
+        auto stage = [&](const char* name, auto&& fn) {
+            const auto t0 = Clock::now();
+            fn();
+            const double sec = std::chrono::duration<double>(Clock::now() - t0).count();
+            std::cerr << std::format("[dump] stage {:<18} {:8.3f}s\n", name, sec);
+        };
+
+        stage("stringLiteral", [&] { string_Literal(); });
+        stage("customAttr",    [&] { customAttr(); });
+        stage("imageDef",      [&] { imageDef(); });
+        stage("typeDef",       [&] { typeDef(); });
+
+        const double total = std::chrono::duration<double>(Clock::now() - tAll).count();
+        std::cerr << std::format(
+            "[dump] stats images={} types={} methods={} fields={} properties={} events={}\n",
+            nImages_, nTypes_, methods.size(), nFields_, nProperties_, nEvents_);
+        std::cerr << std::format("[dump] stage {:<18} {:8.3f}s\n", "total", total);
     }
 
 private:
@@ -49,6 +68,12 @@ private:
     MetadataFiles& files_;
     std::ofstream  dumpOut_;
     std::ofstream  stringLiteralOut_;
+    bool           trace_ = false;
+    uint64_t nImages_ = 0;
+    uint64_t nTypes_ = 0;
+    uint64_t nFields_ = 0;
+    uint64_t nProperties_ = 0;
+    uint64_t nEvents_ = 0;
     using Il2CppTypeEnum = Il2CppImage::Il2CppTypeEnum;
     using Il2CppArrayType = Il2CppImage::Il2CppArrayType;
     using Il2CppCustomAttributeTypeRange = Il2CppImage::Il2CppCustomAttributeTypeRange;
@@ -112,6 +137,7 @@ void imageDef()
         std::string name{img_.GetStringFromIndex(nameIndex)};
 
         dumpOut_ << "// Image " << imageIndex << ": " << name << " - " << typeStart << std::endl;
+        ++nImages_;
     }
     dumpOut_ << std::endl;
 }
@@ -259,6 +285,7 @@ std::string fieldDef(const Il2CppTypeDefinition* typeDefinition)
         }
 
         full += getcustomattr(0x04000000 | field.index, true) + "\t" + flags + field.typeName + " " + field.name + (constValue.empty() ? "" : " = " + constValue) + "; // 0x" + std::format("{:X}", field.offset) + "\n";
+        ++nFields_;
     }
 
     return "\t// Fields\n" + full + "\n";
@@ -664,7 +691,7 @@ std::string propDef(const Il2CppTypeDefinition* typeDefinition)
         if (hasGet) acc += " // Getter: " + getterName;
         if (hasSet) acc += (acc.empty() ? " // " : "; ") + std::string("Setter: ") + setterName;
         full += getcustomattr(0x17000000 | propertyIndex, true) + "\t" + propAttrs + propType + " " + name + " { " + (hasGet ? "get; " : "") + (hasSet ? "set; " : "") + "}" + acc + "\n";
-
+        ++nProperties_;
     }
 
     return "\t// Properties\n" + full + "\n";
@@ -733,6 +760,7 @@ std::string eventDef(const Il2CppTypeDefinition* typeDefinition)
             acc += (acc.empty() ? " // " : "; ") + std::string("Raise: ") + e.name;
         }
         full += getcustomattr(0x14000000 | eventIndex, true) + "\t" + evAttrs + "event " + type_name + " " + name + " {" + (hasAdd ? "add; " : "") + (hasRemove ? "remove; " : "") + (hasRaise ? "raise; " : "") + " }" + acc + "\n";
+        ++nEvents_;
     }
 
     return "\t// Events\n" + full + "\n";
@@ -774,16 +802,22 @@ void typeDef()
     const auto childToParent = buildNestingMap();   // 一次预扫，供声明前缀使用
     for (int32_t typeIndex = 0; typeIndex < typeDefinitionsCount; typeIndex++)
     {
+        ++nTypes_;
+        if (trace_)
+            std::cerr << "[dump] type " << typeIndex << "/" << typeDefinitionsCount << std::endl;
         const Il2CppTypeDefinition* typeDefinition = typeDefinitions + typeIndex;
         std::string name{ img_.GetStringFromIndex(
             img_.typeNameIndex((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionNameIndexOffset))) };
         if (size_t p = name.find('`'); p != std::string::npos) name.resize(p);
+        if (trace_)
+            std::cerr << "[dump]   name=" << name << std::endl;
 
         // [V] flags = +0x28 - 0x4159BB8E（TYPE_ATTRIBUTE）。
-        //   bitfield = +0x3A（见 utils::typeIsValueType / typeIsEnum）
+        //   type kind 由 version.json 的 bitfield offset/decode 决定。
         uint32_t flags = img_.typeFlags((uint32_t)img_.tdU32(typeDefinition, ver::kIl2CppTypeDefinitionFlagsOffset));
         uint8_t valuetype = img_.typeIsValueType(img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionBitfieldOffset));
         uint8_t enumtype  = img_.typeIsEnum(img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionBitfieldOffset));
+
         uint32_t token = 0x02000000 | typeIndex;
 
         std::string serializableAttr{};

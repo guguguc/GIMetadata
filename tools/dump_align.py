@@ -142,7 +142,14 @@ def parse_dump(path):
     for i, line in enumerate(lines):
         if line.startswith('// FullName: '):
             full = line[12:].strip()
-            cur = types.setdefault(full, {'full': full, 'methods': []})
+            cur = types.setdefault(full, {'full': full, 'methods': [], 'kind': ''})
+        # Capture the declaration kind (class/struct/enum/interface) while
+        # scanning the type body.  This is used as a hard sanity check when
+        # matching across obfuscated versions.
+        if cur is not None and not line.lstrip().startswith('//'):
+            km = re.search(r'\b(class|struct|interface|enum)\s+', line)
+            if km:
+                cur['kind'] = km.group(1)
         m = re.match(r'// RVA: (0x[0-9A-Fa-f]+)\b', line)
         if not m or cur is None:
             continue

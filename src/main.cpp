@@ -16,20 +16,28 @@
 #include <string>
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::cerr << "usage: " << argv[0] << " <game_root_dir>\n"
+    bool trace = false;
+    std::string root;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--trace") trace = true;
+        else if (std::string(argv[i]) == "--no-trace") trace = false;
+        else if (root.empty()) root = argv[i];
+    }
+    if (root.empty()) {
+        std::cerr << "usage: " << argv[0] << " [--trace] <game_root_dir>\n"
                      "  expects <game_root_dir>/gi/Managed/Metadata/global-metadata.dat\n"
                      "          <game_root_dir>/gi/Managed/Metadata/startup-metadata.dat\n"
-                     "          <game_root_dir>/gi.exe\n";
+                     "          <game_root_dir>/gi.exe\n"
+                     "  --trace: print TypeDefIndex/name checkpoints to stderr\n";
         return 1;
     }
 
-    MetadataFiles files{argv[1]};   // 读文件 + 解析 PE
+    MetadataFiles files{root};      // 读文件 + 解析 PE
     Il2CppImage   image{files};     // 视图
     image.decryptHeader();          // 装载版本常量（version.json -> src/version.hpp）
 
     std::filesystem::create_directories("out");   // 输出统一放 out/
-    Dumper dumper{image, files, "out"};
+    Dumper dumper{image, files, "out", trace};
     dumper.run();
 
     return 0;

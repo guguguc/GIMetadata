@@ -340,16 +340,23 @@ methodSlotTableOffset = 0x5EF25C
 +0x2C  unknown20                 sub:0x3727654B
 +0x30  nestedTypesStart          add:0x7E42
 +0x34  genericContainerIndex     xor:0x1BD3
++0x36  bitfield                  raw（bit0 valuetype / bit1 enumtype）
 +0x38  method_count              sub:0x5B59
 +0x3A  field_count               xor:0xA791
 +0x3C  eventStart                xor:0xBAE7
 +0x3E  interfacesStart           xor:0xFB6C
 +0x40  property_count            xor:0xE9
 +0x41  interfaces_count          xor:0x48
-+0x42  bitfield                  xor:0xE7
 +0x44  event_count               add:0x4D
 +0x45  nestedTypesCount          add:0x19
 ```
+
+> **更正（2026-10-18）**：旧版把 `+0x42` 标成 `bitfield xor:0xE7`，这是误判。
+> `+0x42` 的原始字节不满足 class/struct/enum 的 bit 语义；真正的 bitfield 是
+> **`+0x36`**，原始低两位直接表示 `00=class / 01=struct / 11=enum`。
+> 用 `Il2CppType` 的 `0x11=VALUETYPE / 0x12=CLASS` 建权威标签，对 83,755 个
+> TypeDef 全量核对，`+0x36` 零 mismatch。文章里的 6.7 反编译也读
+> `*(_BYTE *)(v34 + 54)`，即 `+0x36`。
 
 交叉验证：
 

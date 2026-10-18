@@ -661,7 +661,7 @@ void decryptHeader()
         //   BeforeFieldInit 87%、Public 84%、Sealed 50%、NestedPublic 29%、Abstract 8.8%、
         //   Serializable 5.7%、Interface 1.8%、**SpecialName 0%**（该标志本就罕见，用错常量时是 54%）。
         inline uint32_t typeFlags(uint32_t raw) { return ver::decTypeFlags(raw); }
-        // [V] bitfield = +0x3A。验收：valuetype 全量 88884/88884；enum 用 13 枚举 + 11 struct 锚点全对。
+        // [V] type kind bitfield：7.x +0x3A；6.7 +0x36（decode 见 version.json）。
         inline uint8_t typeIsValueType(uint8_t raw) { return (uint8_t)(ver::decTypeBitfield(raw) & 1u); }
         inline uint8_t typeIsEnum(uint8_t raw)      { uint8_t b = ver::decTypeBitfield(raw); return (uint8_t)((~b >> 1) & 1u); }
         inline uint16_t typeInterfacesStart(uint16_t raw){ return ver::decTypeInterfacesStart(raw); }

@@ -434,7 +434,8 @@ def load_dump_cached(path, cache_dir):
     st = os.stat(path)
     key = hashlib.sha1(("%s:%s:%s" % (os.path.abspath(path), st.st_size, st.st_mtime_ns)).encode()).hexdigest()[:16]
     os.makedirs(cache_dir, exist_ok=True)
-    cp = os.path.join(cache_dir, "dump_%s_%s.pkl" % (os.path.basename(path).replace(".", "_"), key))
+    # bump this when the parsed dump schema changes (e.g. class kind)
+    cp = os.path.join(cache_dir, "dump_v2_%s_%s.pkl" % (os.path.basename(path).replace(".", "_"), key))
     if os.path.exists(cp):
         try:
             return pickle.load(open(cp, "rb"))
@@ -599,6 +600,13 @@ def _score_job(item, src_xrefs, dst_xrefs, smap, tmap,
             ms = 1.0 if m["shape"] == sm["shape"] else 0.0
             mod = mod_score(method_mods(sm["decl"]), method_mods(m["decl"]))
             sig_issues = signature_issues(sm["decl"], m["decl"])
+            # Class kind is a hard structural constraint.  It catches cases
+            # where the method signature happens to match but the candidate
+            # class is a struct/enum instead of a class (or vice versa).
+            sk = scls.get("kind")
+            tk = c.get("kind")
+            if sk and tk and sk != tk:
+                sig_issues.append("class kind %s != %s" % (sk, tk))
             name_hit = 1.0 if m["name"] == sm["name"] else 0.0
             al, why = DA.align_method(scls, c, sm)
             align = 1.0 if al is not None and al["rva"] == m["rva"] else 0.0
@@ -733,7 +741,7 @@ def main():
         if not job:
             continue
         jobs[name] = job
-        all_addrs.update(job["addrs"])
+        all_addrs.update(a.lower() for a in job["addrs"])
     tick("candidate-generation")
 
     # Optional: create a reusable --dst-export cache from the live target IDA.
@@ -761,6 +769,8 @@ def main():
                 dst_xrefs[k.lower()] = v
         except Exception as e:
             print("warning: target xrefs unavailable:", e, file=sys.stderr)
+    if os.environ.get("HOOK_DEBUG_XREFS"):
+        print("DBG dst_xrefs=%d all_addrs=%d missing=%d" % (len(dst_xrefs), len(all_addrs), len(missing)), file=sys.stderr)
     # normalize export xrefs and add caller bounds
     for k, xs in dst_xrefs.items():
         for x in xs:
