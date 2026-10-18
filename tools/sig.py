@@ -102,6 +102,73 @@ def mask_bytes(insn):
     return pat.hex(), mask.hex()
 
 
+def mask_bytes_disp(insn):
+    """跨版本种子掩码：**只通配 disp**，立即数全部保留。
+
+    为什么：`mov qword [rbp], -2` 的 -2 是语义常量，跨版本不变；
+    而寄存器分配变了。只通配 disp 能把 `48 c7 45 ?? fe ff ff ff` 这种
+    "结构 + 语义常量"完整留下 —— 比 mask_bytes 稳得多。
+    """
+    n = insn.size
+    pat = bytearray(insn.bytes)
+    mask = bytearray(b'\xff' * n)
+    try:
+        enc = insn.encoding
+        if enc.disp_size:
+            for i in range(enc.disp_offset, min(n, enc.disp_offset + enc.disp_size)):
+                mask[i] = 0
+    except Exception:
+        pass
+    return pat.hex(), mask.hex()
+
+
+def mask_bytes_regs(insn):
+    """**寄存器通配**：保留 opcode / disp / imm，只把 ModRM/REX/SIB 的寄存器位通配。
+
+    为什么需要它：`mov byte ptr [r9], 0` 在 7.1 是 `41 c6 00 00`、7.0 是 `41 c6 01 00` ——
+    只差在 ModRM 的 rm 位（r8 vs r9）。寄存器一换，普通字节签名就全灭 ✗。
+    通配寄存器后，`41 c6 ?? 00` 两版都对上 ✓，而语义常量（0）和偏移（0x2f）仍然保留。
+    """
+    n = insn.size
+    pat = bytearray(insn.bytes)
+    mask = bytearray(b'\xff' * n)
+    try:
+        enc = insn.encoding
+        mo = getattr(enc, 'modrm_offset', 0)
+        if 0 < mo < n:
+            mask[mo] &= 0xC0                     # ModRM: 保留 mod，通配 reg/rm
+            for i in range(mo):                  # REX: 保留 W，通配 R/X/B
+                if 0x40 <= pat[i] <= 0x4F:
+                    mask[i] &= 0xF8
+            mod = pat[mo] >> 6
+            rm = pat[mo] & 7
+            if mod != 3 and rm == 4 and mo + 1 < n:
+                mask[mo + 1] &= 0xC0             # SIB: 保留 scale
+    except Exception:
+        pass
+    return pat.hex(), mask.hex()
+
+
+def mask_bytes_rm(insn):
+    """**基址通配**：保留 reg/mod/disp/imm，只通配 ModRM 的 rm 位（基址寄存器）。
+
+    为什么单独要这一档：`mov byte ptr [r8], 0` -> `[r9], 0` 只改了 rm；
+    而 `movzx eax, [rcx+0x2f]` 全程没变，能保留 **4 字节连续锚** `0f b6 41 2f` ✓。
+    比"整个 ModRM 通配"稳得多（后者会把锚打碎成 2 字节，误报爆炸）。
+    """
+    n = insn.size
+    pat = bytearray(insn.bytes)
+    mask = bytearray(b'\xff' * n)
+    try:
+        enc = insn.encoding
+        mo = getattr(enc, 'modrm_offset', 0)
+        if 0 < mo < n:
+            mask[mo] &= 0xF8          # ModRM: 保留 mod + reg，通配 rm
+    except Exception:
+        pass
+    return pat.hex(), mask.hex()
+
+
 def _interesting(t):
     """有信息量：含内存操作数 / 立即数 / call"""
     return ('M' in t) or ('I' in t) or t.startswith('call') or t.startswith('cmp')
@@ -137,17 +204,42 @@ def gen_sig(md, pe, va, name, ninstr=8, skip=0, next_=0):
     loose = [toks_of(x, False) for x in insns]
     strict = [toks_of(x, True) for x in insns]
     bl = [mask_bytes(x) for x in insns]
+    bdl = [mask_bytes_disp(x) for x in insns]
+    brl = [mask_bytes_regs(x) for x in insns]
+    bml = [mask_bytes_rm(x) for x in insns]
     # 扩展参考：紧接其后的更多指令。**只用于并列时定夺**，搜索仍用上面 ninstr 条模式
-    ext_loose = ext_strict = []
+    ext_loose = ext_strict = ext_bytes = ext_mask = []
+    ext_bytes_disp = ext_mask_disp = []
+    ext_bytes_regs = ext_mask_regs = []
+    ext_bytes_rm = ext_mask_rm = []
     if next_:
         tail = insns_all[i:i + ninstr + next_]
         if len(tail) > ninstr:
             more = tail[ninstr:]
             ext_loose = [toks_of(x, False) for x in more]
             ext_strict = [toks_of(x, True) for x in more]
+            bm = [mask_bytes(x) for x in more]
+            ext_bytes = [b[0] for b in bm]
+            ext_mask = [b[1] for b in bm]
+            bdm = [mask_bytes_disp(x) for x in more]
+            ext_bytes_disp = [b[0] for b in bdm]
+            ext_mask_disp = [b[1] for b in bdm]
+            brm = [mask_bytes_regs(x) for x in more]
+            ext_bytes_regs = [b[0] for b in brm]
+            ext_mask_regs = [b[1] for b in brm]
+            bmm = [mask_bytes_rm(x) for x in more]
+            ext_bytes_rm = [b[0] for b in bmm]
+            ext_mask_rm = [b[1] for b in bmm]
     return {'name': name, 'va': '0x%X' % va, 'skip': i, 'skip_bytes': skip_bytes, 'n': len(insns),
             'loose': loose, 'strict': strict,
             'ext_loose': ext_loose, 'ext_strict': ext_strict,
+            'ext_bytes': ext_bytes, 'ext_mask': ext_mask,
+            'bytes_disp': [b[0] for b in bdl], 'mask_disp': [b[1] for b in bdl],
+            'ext_bytes_disp': ext_bytes_disp, 'ext_mask_disp': ext_mask_disp,
+            'bytes_regs': [b[0] for b in brl], 'mask_regs': [b[1] for b in brl],
+            'ext_bytes_regs': ext_bytes_regs, 'ext_mask_regs': ext_mask_regs,
+            'bytes_rm': [b[0] for b in bml], 'mask_rm': [b[1] for b in bml],
+            'ext_bytes_rm': ext_bytes_rm, 'ext_mask_rm': ext_mask_rm,
             'bytes': [b[0] for b in bl], 'mask': [b[1] for b in bl],
             'pat': ''.join(b[0] for b in bl), 'pmask': ''.join(b[1] for b in bl),
             'distinct': len(set(loose)),
@@ -179,11 +271,16 @@ def cmd_gen(a):
                 tgt = ' (jmp %s)' % ins[0].op_str
             print("  SKIP %s (0x%X) 是跳板/填充，不是函数体%s" % (name, va, tgt))
             continue
-        s = gen_sig(md, pe, va, name, a.ninstr, a.skip, a.next)
+        s = gen_sig(md, pe, va, name, a.ninstr, a.skip, max(a.next, 4))
         if s:
             sigs.append(s)
             if s['distinct'] < 4: print("  ⚠ 弱签名(区分度低): %s" % name)
         else: print("  SKIP %s (0x%X) 反汇编不足" % (name, va))
+    # 语义指纹：本函数调用了哪些**已知名字**的函数（gen 时在参考版本里算好）
+    nm_by_va = {va: name for va, name in load_names(a.names)}
+    for sg in sigs:
+        v = int(sg['va'], 16)
+        sg['callees'] = sorted({nm_by_va[t] for t in _call_targets(pe, md, v) if t in nm_by_va})
     json.dump(sigs, open(a.out, 'w'), indent=1)
     print("生成 %d 条签名 -> %s" % (len(sigs), a.out))
 
@@ -274,6 +371,39 @@ def _score_at(pe, md, va, sg):
             lo, st)
 
 
+def _lcs(a, b):
+    n, m = len(a), len(b)
+    if not n or not m:
+        return 0
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n):
+        for j in range(m):
+            dp[i + 1][j + 1] = dp[i][j] + 1 if a[i] == b[j] else max(dp[i][j + 1], dp[i + 1][j])
+    return dp[n][m]
+
+
+def _score_at_gap(pe, md, va, sg, slack=8):
+    """**允许 gap** 的打分（只给 --deep 用）：编译器插入/删除一条指令不再全错。
+
+    返回 (strict_lcs, loose_lcs)；用 strict（带立即数）当判据，误报低。
+    """
+    off = pe.va2off(va)
+    if off is None:
+        return None
+    need = sg['skip'] + sg['n'] + slack
+    insns = []
+    for ins in md.disasm(pe.D[off:off + 400], va):
+        insns.append(ins)
+        if len(insns) >= need:
+            break
+    if len(insns) < sg['skip'] + sg['n']:
+        return None
+    seg = insns[sg['skip']:sg['skip'] + sg['n'] + slack]
+    lo = [toks_of(x, False) for x in seg]
+    st = [toks_of(x, True) for x in seg]
+    return _lcs(sg['strict'], st), _lcs(sg['loose'], lo)
+
+
 def _enum_func_starts(pe, tva, tbytes, limit=None):
     """字节级枚举 .text 里所有"像函数头"的位置：前一个字节是填充(int3/nop)或 ret。
     不需要反汇编，比全量 disasm 快两个数量级。"""
@@ -303,15 +433,15 @@ def deep_rescue(pe, md, sigs, unmatched, tva, tbytes, verbose=True):
         for st in starts:
             if _is_stub(pe, md, st):
                 continue
-            r = _score_at(pe, md, st, sg)
-            if not r or r[0] < 4:
+            r = _score_at_gap(pe, md, st, sg)
+            if not r or r[0] < sg['n'] - 2:      # strict LCS >= 6/8
                 continue
             if b0 is None or (r[0], r[1]) > (b0[0], b0[1]):
                 b0 = (r[0], r[1], st)
         if b0:
             best[sg['name']] = b0
             if verbose:
-                print("      %-40s 最优 %d/%d (严格 %d) @0x%X" % (sg['name'], b0[0], sg['n'], b0[1], b0[2]))
+                print("      %-40s strict LCS %d (门槛 %d) / loose %d @0x%X" % (sg['name'], b0[1], sg['n']-2, b0[0], b0[2]))
         else:
             if verbose:
                 print("      %-40s -- 没有任何函数头能到 4/8" % sg['name'])
@@ -344,6 +474,269 @@ def _vtable_ptrs(pe, limit=None):
 MAX_CANDS = 64      # 候选爆炸 -> 签名太弱（固定子串不唯一），直接判不可用
 
 
+def _find_masked(tbytes, pb, pm, min_anchor=3):
+    """带中间通配的字节搜索：用最长固定段做 bytes.find，再按掩码整体核对。"""
+    fo, fl = _longest_fixed(pb, pm)
+    if fl < min_anchor:
+        return []
+    needle = pb[fo:fo + fl]
+    out = []
+    pos = 0
+    while True:
+        k = tbytes.find(needle, pos)
+        if k < 0:
+            break
+        pos = k + 1
+        b = k - fo
+        if b < 0 or b + len(pb) > len(tbytes):
+            continue
+        if all((not pm[i]) or tbytes[b + i] == pb[i] for i in range(len(pb))):
+            out.append(b)
+    return out
+
+
+def _imm_candidates(pe, sg, tbytes, tva, minfix=6, max_idx=6):
+    """用 **保留立即数、只通配 disp** 的指令字节当种子，搜候选的**签名窗口起点**。
+
+    为什么保留立即数：`mov qword [rbp], -2` 这类语义常量跨版本不变；
+    寄存器分配变化不影响它。插入的指令也不会破坏种子本身。
+    只取前 max_idx 条 —— 越靠前，被插入指令顶偏的累积误差越小。
+    """
+    import binascii
+    by = list(sg.get('bytes_disp') or []) + list(sg.get('ext_bytes_disp') or [])
+    mk = list(sg.get('mask_disp') or []) + list(sg.get('ext_mask_disp') or [])
+    if len(by) < 4:
+        return []
+    sizes = [len(b) // 2 for b in by]
+    out = []
+    for idx in range(min(max_idx, len(by))):
+        pb = binascii.unhexlify(by[idx]); pm = binascii.unhexlify(mk[idx])
+        if sum(1 for x in pm if x) < minfix:
+            continue
+        base_off = sum(sizes[:idx])
+        for b in _find_masked(tbytes, pb, pm):
+            if b >= base_off:
+                out.append(tva + b - base_off)
+    return sorted(set(out))
+
+
+def _score_full_at(pe, md, va, sg):
+    """在**签名窗口起点** va 处打分（skip 已经含在 va 里，不再跳）。
+
+    返回 (loose8, strict8, loose_ext, strict_ext)；窗口给 +8 条余量吸收插入。
+    """
+    off = pe.va2off(va)
+    if off is None:
+        return None
+    n = sg['n']
+    en = len(sg.get('ext_loose') or [])
+    ins = []
+    for x in md.disasm(pe.D[off:off + 600], va):
+        ins.append(x)
+        if len(ins) >= n + en + 8:
+            break
+    if len(ins) < n:
+        return None
+    lo = [toks_of(x, False) for x in ins]
+    st = [toks_of(x, True) for x in ins]
+    ea = eb = 0
+    if en and len(ins) >= n + en:
+        ea = _lcs(sg['ext_loose'], lo[n:])
+        eb = _lcs(sg['ext_strict'], st[n:])
+    return _lcs(sg['loose'], lo), _lcs(sg['strict'], st), ea, eb
+
+
+def _imm_fallback(pe, md, sg, tbytes, tva, verbose=False):
+    """保留立即数种子 → 候选 → **8 条 + ext 10 条全序列**打分 → 需明显领先第二名。
+
+    返回 (sig_start, loose8, strict8, ext_loose, ext_strict, 领先分) 或 None。
+    """
+    cands = _imm_candidates(pe, sg, tbytes, tva)
+    if verbose:
+        print("      [imm] %s 候选 %d" % (sg['name'], len(cands)))
+    n = sg['n']
+    en = len(sg.get('ext_loose') or [])
+    scored = []
+    for c in cands:
+        r = _score_full_at(pe, md, c, sg)
+        if not r:
+            continue
+        lo, st, ea, eb = r
+        # 8 条必须全中（loose）；strict 允许差 2；ext 允许差 3
+        if lo < n or st < n - 2 or (en and ea < en - 3):
+            continue
+        scored.append((lo + ea, st + eb, c, r))
+    if not scored:
+        return None
+    scored.sort(reverse=True)
+    best = scored[0]
+    second = scored[1][0] if len(scored) > 1 else -1
+    margin = best[0] - second
+    if margin < 2:
+        if verbose:
+            print("      [imm] %s 最高 %d，次高 %d，差距不足" % (sg['name'], best[0], second))
+        return None
+    lo, st, ea, eb = best[3]
+    return best[2], lo, st, ea, eb, margin
+
+
+def _snap_start(pe, md, va, limit=0x100):
+    """把"签名窗口起点"回退到**函数起点**。
+
+    判据（缺一不可）：
+      1. 前面是 **>=2 个连续 0xCC**（不足再退到 1 个）—— 排除指令内部的 0xCC 字节
+      2. 从候选起点反汇编，**能正好走到窗口起点**（指令边界对齐）
+    """
+    off = pe.va2off(va)
+    if off is None:
+        return va
+    for need in (2, 1):
+        for k in range(1, limit):
+            p = off - k
+            if p - need < 0:
+                break
+            if pe.D[p] == 0xCC:
+                continue
+            if not all(pe.D[p - j] == 0xCC for j in range(1, need + 1)):
+                continue
+            addrs = set()
+            for ins in md.disasm(pe.D[p:p + limit], va - k):
+                addrs.add(ins.address)
+                if ins.address >= va:
+                    break
+            if va in addrs:
+                return va - k
+    return va
+
+
+def _struct_candidates(pe, sg, tbytes, tva, maxi=6, minrun=4):
+    """用**原始字节**的每一条指令当种子（最长固定段 >= minrun），推候选签名窗口起点。
+
+    为什么 raw 反而好：像 `0f b6 41 2f`（movzx eax,[rcx+0x2f]）这种**没变**的指令，
+    原始 4 字节就是最强的锚；寄存器变了的指令则由别的窗口补上。
+    """
+    import binascii
+    by = list(sg.get('bytes') or []) + list(sg.get('ext_bytes') or [])
+    if not by:
+        return []
+    sizes = [len(b) // 2 for b in by]
+    out = set()
+    for i in range(min(maxi, len(by))):
+        pb = binascii.unhexlify(by[i])
+        pm = b'\xff' * len(pb)
+        fo, fl = _longest_fixed(pb, pm)
+        if fl < minrun:
+            continue
+        off = sum(sizes[:i]) + fo
+        for b in _find_masked(tbytes, pb, pm, min_anchor=minrun):
+            out.add(tva + b - off)
+    return out
+
+
+def _struct_fallback(pe, md, sg, tbytes, tva):
+    """结构种子 -> 窗口打分 -> 按函数起点去重 -> 需明显领先。
+
+    返回 (函数起点, loose, ext_loose, margin) 或 None。
+    """
+    cands = _struct_candidates(pe, sg, tbytes, tva)
+    scored = []
+    for w in cands:
+        r = _score_full_at(pe, md, w, sg)
+        if not r:
+            continue
+        lo, st, ea, eb = r
+        scored.append((lo + ea, st + eb, lo, ea, w))
+    if not scored:
+        return None
+    scored.sort(reverse=True)
+    best = {}
+    for t in scored:
+        st = _snap_start(pe, md, t[4])
+        if st not in best:
+            best[st] = t
+    ranked = sorted(best.items(), key=lambda kv: (-kv[1][0], -kv[1][1]))
+    if not ranked:
+        return None
+    fstart, t = ranked[0]
+    second = ranked[1][1][0] if len(ranked) > 1 else -1
+    margin = t[0] - second
+    n = sg['n']; en = len(sg.get('ext_loose') or [])
+    if t[0] >= n + en - 6 and t[2] >= n - 2 and margin >= 2:
+        return fstart, t[2], t[3], margin
+    return None
+
+
+def _seg_fallback(pe, md, sg, tbytes, tva):
+    """三段投票 + LCS 复核（允许插入）。返回函数起点或 None。"""
+    r = _seg_vote(pe, sg, tbytes, tva)
+    if not r:
+        return None
+    start, votes = r
+    off = pe.va2off(start + sg.get('skip_bytes', 0))
+    if off is None:
+        return None
+    ins = []
+    for x in md.disasm(pe.D[off:off + 400], start + sg.get('skip_bytes', 0)):
+        ins.append(x)
+        if len(ins) >= sg['n'] + 8:
+            break
+    if len(ins) < sg['n']:
+        return None
+    lo = [toks_of(x, False) for x in ins]
+    st = [toks_of(x, True) for x in ins]
+    if _lcs(sg['loose'], lo) < sg['n'] - 1:     # loose LCS >= 7/8
+        return None
+    return start, votes, _lcs(sg['strict'], st)
+
+
+def _seg_vote(pe, sg, tbytes, tva, tol=0x100):
+    """**三段锚**：把 12 条（8+4）拆成 3 段，每段**独立**用字节模式找，
+    再按「函数起点」聚类投票（±tol）。允许中间插入/删除。
+
+    返回 (起点, 票数) 或 None。
+    """
+    import binascii
+    by = list(sg.get('bytes') or []) + list(sg.get('ext_bytes') or [])
+    mk = list(sg.get('mask') or []) + list(sg.get('ext_mask') or [])
+    if len(by) < 8:
+        return None
+    sizes = [len(b) // 2 for b in by]
+    votes = []
+    for wi in range(0, len(by) - 3, 4):
+        seg_b = ''.join(by[wi:wi + 4]); seg_m = ''.join(mk[wi:wi + 4])
+        if len(seg_b) < 8:
+            continue
+        pb = binascii.unhexlify(seg_b); pm = binascii.unhexlify(seg_m)
+        fo, fl = _longest_fixed(pb, pm)
+        if fl < 3:
+            continue
+        needle = pb[fo:fo + fl]
+        off_start = sum(sizes[:wi])          # 段首相对函数头的字节偏移
+        pos = 0
+        while True:
+            k = tbytes.find(needle, pos)
+            if k < 0:
+                break
+            pos = k + 1
+            base = k - fo
+            if base < 0 or base + len(pb) > len(tbytes):
+                continue
+            if any(pm[i] and tbytes[base + i] != pb[i] for i in range(len(pb))):
+                continue
+            votes.append(tva + base - off_start)
+    if not votes:
+        return None
+    votes.sort()
+    best = None
+    for v in votes:
+        near = [x for x in votes if abs(x - v) <= tol]
+        if best is None or len(near) > len(best):
+            best = near
+    if best and len(best) >= 2:
+        return min(best), len(best)
+    return None
+
+
 def cmd_scan(a):
     """字节模式优先：先按最长固定子串 bytes.find 找候选，只在候选处反汇编核对。秒级。
 
@@ -362,11 +755,32 @@ def cmd_scan(a):
     print("扫描 .text（%.1f MB，字节模式优先）…" % (len(tbytes) / 1e6))
     md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
     hit = miss = amb = 0
+    # ---- 同目录缓存：version/<ver>/sig_hits.json 里是**已人工/工具确认过**的地址 ----
+    #   换版本时缓存不存在 -> 正常扫描；扫完确认后写回缓存 -> 以后默认就是 100% 覆盖。
+    cache_path = os.path.join(os.path.dirname(os.path.abspath(a.exe)), 'sig_hits.json')
+    cache = {}
+    if os.path.exists(cache_path):
+        try:
+            _c = json.load(open(cache_path))
+            cache = {k: int(v) for k, v in (_c.get('hits') or {}).items()}
+            print("读取缓存 %s（%d 条）" % (cache_path, len(cache)))
+        except Exception as e:
+            print("⚠ 缓存读取失败（忽略）: %s" % e)
+    from_cache = 0
     where = {}
     pending = []      # 歧义项（末尾按「同组相对次序」定夺）
     unmatched = []    # 没定下来的签名（--fuzzy 救援用）
     fuzzy_names = {}   # 模糊命中的名字（标记用）
     for sg in sigs:
+        nm = sg['name']
+        if nm in cache:
+            va = cache[nm]
+            if tva <= va < tva + len(tbytes) and not _is_stub(pe, md, va):
+                hit += 1; from_cache += 1
+                where.setdefault(va, []).append(nm)
+                print("  %-42s %-12s 0x%-10X （缓存）" % (nm, '缓存', va))
+                continue
+            print("  %-42s ⚠ 缓存地址 0x%X 不在 .text/是跳板，重新扫描" % (nm, va))
         pb = binascii.unhexlify(sg['pat']); pm = binascii.unhexlify(sg['pmask'])
         fo, fl = _longest_fixed(pb, pm)
         if fl < 3:
@@ -417,6 +831,29 @@ def cmd_scan(a):
             scored.append((va, sum(1 for i in range(sg['n']) if st[i] == sg['strict'][i]),
                            sum(1 for i in range(sg['n']) if lo[i] == sg['loose'][i]), xs))
         if not scored:
+            fb = _seg_fallback(pe, md, sg, tbytes, tva)
+            if not fb:
+                sb = _struct_fallback(pe, md, sg, tbytes, tva)
+                if sb:
+                    hit += 1
+                    print("  %-42s %-12s 函数起点 0x%-10X （结构种子 loose %d/ext %d, 领先 %d）"
+                          % (sg['name'], '结构锚', sb[0], sb[1], sb[2], sb[3]))
+                    where.setdefault(sb[0], []).append(sg['name'])
+                    continue
+            if not fb and getattr(a, 'slow', False):
+                ib = _imm_fallback(pe, md, sg, tbytes, tva)
+                if ib:
+                    hit += 1
+                    print("  %-42s %-12s 签名窗口 0x%-10X （立即数种子 8/8+ext %d/%d, 领先 %d）"
+                          % (sg['name'], '立即数锚', ib[0], ib[3], len(sg.get('ext_loose') or []), ib[5]))
+                    where.setdefault(ib[0], []).append(sg['name'])
+                    continue
+            if fb:
+                hit += 1
+                print("  %-42s %-12s 函数起点 0x%-10X （三段投票 %d 票, strict LCS %d）"
+                      % (sg['name'], '三段锚', fb[0], fb[1], fb[2]))
+                where.setdefault(fb[0], []).append(sg['name'])
+                continue
             miss += 1; unmatched.append(sg)
             print("  %-42s \u2717 未命中" % sg['name']); continue
         scored.sort(key=lambda x: (-x[1], -x[2], -x[3]))
@@ -426,6 +863,29 @@ def cmd_scan(a):
         near = [t for t in scored if t[2] >= (sg['n'] * 3 + 2) // 4]
         if not keep:
             if not near:
+                fb = _seg_fallback(pe, md, sg, tbytes, tva)
+                if not fb:
+                    sb = _struct_fallback(pe, md, sg, tbytes, tva)
+                    if sb:
+                        hit += 1
+                        print("  %-42s %-12s 函数起点 0x%-10X （结构种子 loose %d/ext %d, 领先 %d）"
+                              % (sg['name'], '结构锚', sb[0], sb[1], sb[2], sb[3]))
+                        where.setdefault(sb[0], []).append(sg['name'])
+                        continue
+                if not fb and getattr(a, 'slow', False):
+                    ib = _imm_fallback(pe, md, sg, tbytes, tva)
+                    if ib:
+                        hit += 1
+                        print("  %-42s %-12s 签名窗口 0x%-10X （立即数种子 8/8+ext %d/%d, 领先 %d）"
+                              % (sg['name'], '立即数锚', ib[0], ib[3], len(sg.get('ext_loose') or []), ib[5]))
+                        where.setdefault(ib[0], []).append(sg['name'])
+                        continue
+                if fb:
+                    hit += 1
+                    print("  %-42s %-12s 函数起点 0x%-10X （三段投票 %d 票, strict LCS %d）"
+                          % (sg['name'], '三段锚', fb[0], fb[1], fb[2]))
+                    where.setdefault(fb[0], []).append(sg['name'])
+                    continue
                 miss += 1; unmatched.append(sg)
                 print("  %-42s \u2717 未命中（最佳 loose %d/%d，字节巧合而已）"
                       % (sg['name'], scored[0][2], sg['n']))
@@ -546,6 +1006,63 @@ def cmd_scan(a):
             else:
                 print("      %-40s -- 最优 %d/%d @0x%X（低于门槛 5 或与次优太近，不采信）"
                       % (sg['name'], b0[0], sg['n'], b0[2])); still.append(sg)
+        unmatched = still
+
+    # ---- 第三轮：**callee 指纹**（语义锚，跨编译器优化最稳）----
+    #   拿 7.1 里该函数调用的「已命名函数集合」当指纹；
+    #   在 7.0 里找「调用同样那批函数」的候选。寄存器/指令形态全变了也不怕 ✓
+    if getattr(a, 'slow', False) and unmatched and where and sigs:
+        name71 = {int(x['va'], 16): x['name'] for x in sigs}
+        name70 = {}
+        for va, names in where.items():
+            name70[va] = names[0]
+        ccands = set()
+        for f in list(where):
+            ccands.update(_call_targets(pe, md, f))
+            ccands.update(_ptr_targets(pe, md, f))
+        ccands = [c for c in ccands if tva <= c < tva + len(tbytes) and c % 4 == 0]
+        cal = {}
+        for c in ccands:
+            g = set()
+            for t in _call_targets(pe, md, c):
+                nm = name70.get(t)
+                if nm:
+                    g.add(nm)
+            cal[c] = g
+        print("\n  第三轮 callee 指纹：候选 %d 个（指纹源 %d 个已命名函数）"
+              % (len(ccands), len(name70)))
+        still = []
+        for sg in unmatched:
+            want = set(sg.get('callees') or [])
+            if not want:
+                print("      %-40s -- 7.1 里没有已命名 callee，指纹不可用" % sg['name'])
+                still.append(sg); continue
+            sc = []
+            for c, got in cal.items():
+                ov = want & got
+                if not ov:
+                    continue
+                jac = len(ov) / float(len(want | got) or 1)
+                sc.append((len(ov), jac, c, sorted(ov)))
+            if not sc:
+                print("      %-40s -- 没有候选调用相同的函数" % sg['name'])
+                still.append(sg); continue
+            sc.sort(reverse=True)
+            b0 = sc[0]
+            margin = b0[0] - sc[1][0] if len(sc) > 1 else b0[0]
+            r = _score_at(pe, md, b0[2], sg)
+            tok = r[0] if r else 0
+            # 指纹至少 2 个共同 callee，且明显领先；token 至少 4/8 兜底
+            if b0[0] >= 2 and margin >= 1 and tok >= 4:
+                hit += 1; miss -= 1
+                print("      %-40s callee 命中 0x%X（共同 %d 个: %s；领先 %d；token %d/%d）"
+                      % (sg['name'], b0[2], b0[0], ','.join(b0[3][:5]), margin, tok, sg['n']))
+                where.setdefault(b0[2], []).append(sg['name'])
+                fuzzy_names[sg['name']] = (r[1] if r else 0)
+            else:
+                print("      %-40s -- 最佳 %d 共同 callee @0x%X（领先 %d, token %d/%d，不采信）"
+                      % (sg['name'], b0[0], b0[2], margin, tok, sg['n']))
+                still.append(sg)
         unmatched = still
 
     if getattr(a, 'deep', False) and unmatched:
@@ -698,6 +1215,47 @@ def extract_entry_xor(pe, md, va, maxbytes=0x2000, call_targets=None):
                     break
         return verified
     return out
+
+
+def check_string_keys(dat_path, str_base, lab, limit=4_000_000):
+    """用 `mscorlib` 当已知明文，自检 4 个密钥 + 公式形状。
+
+    7.1 形状: key = A * ((B*offset) ^ C)
+    7.0 形状: key = A ^ ((B*offset) + C)
+    """
+    import numpy as np
+    H = 0x210
+    data = open(dat_path, 'rb').read()
+    buf = np.frombuffer(data, dtype=np.uint8)
+    A = np.uint64(lab['keyMulA']); B = np.uint64(lab['keyMulB']); C = np.uint64(lab['keySeed'])
+    tgt = int.from_bytes(b'mscorlib', 'little')
+    N = min(limit, len(data) - H - str_base - 16)
+
+    def scan(fn):
+        for start in range(0, max(N, 1) - 8, 2_000_000):
+            end = min(start + 2_000_000, N - 8)
+            idx = np.arange(start, end, dtype=np.uint64)
+            keys = fn(idx)
+            b = H + str_base + start
+            chunk = np.zeros(end - start, dtype=np.uint64)
+            for k in range(8):
+                chunk |= buf[b + k:b + k + (end - start)].astype(np.uint64) << np.uint64(8 * k)
+            hits = np.where((chunk ^ keys) == np.uint64(tgt))[0]
+            if len(hits):
+                return str_base + start + int(idx[hits[0]])
+        return None
+
+    shapes = {
+        '7.1 A*((B*off)^C)': lambda i: A * ((B * i) ^ C),
+        '7.0 A^((B*off)+C)': lambda i: A ^ (B * i + C),
+    }
+    ok = None
+    for name, fn in shapes.items():
+        at = scan(fn)
+        print('  自检 %-20s -> %s' % (name, ('OK @0x%X' % at) if at is not None else 'FAIL'))
+        if at is not None:
+            ok = name
+    return ok
 
 
 def label_string_consts(consts):
@@ -891,6 +1449,9 @@ def cmd_consts(a):
             import json as _j
             print(_j.dumps({'stringDecrypt_' + k: '0x%X' % v for k, v in lab.items()},
                            ensure_ascii=False, indent=2))
+    if getattr(a, 'dat', None) and getattr(a, 'str_base', None) and consts:
+        print('\n=== 字符串密钥自检（已知明文 mscorlib）===')
+        check_string_keys(a.dat, int(a.str_base, 0), label_string_consts(consts))
     if a.json:
         import json
         json.dump({'consts': [{'value': '0x%X' % v, 'va': '0x%X' % at} for v, at, _ in consts],
@@ -1135,6 +1696,8 @@ def main():
     s.add_argument('--json', default=None, help='把命中表 name -> 新地址 写成 JSON（给 sig_verify.py 用）')
     s.add_argument('--deep', action='store_true', help='深度救援：穷举整个 .text 的函数头（分钟级，收尾用）')
     s.add_argument('--vtable', action='store_true', help='把 .rdata 里全部函数指针(vtable)当候选源（+12s，用于证明搜索空间已穷尽）')
+    s.add_argument('--slow', action='store_true',
+                   help='启用「立即数种子 + callee 指纹」两轮重救援（+20s；7.0 实测 48→50/54）')
     s.add_argument('--loose-only', action='store_true'); s.set_defaults(fn=cmd_scan)
 
     c = sub.add_parser('consts', help='从 sig 定位的函数里通用抽取 64 位常量（如字符串解密密钥）')
@@ -1142,6 +1705,8 @@ def main():
                    help='函数起始 VA（可给多次；如 DecryptString + RuntimeInit）')
     c.add_argument('--bytes', type=lambda x: int(x, 0), default=0x2000)
     c.add_argument('--role', default=None); c.add_argument('--json', default=None)
+    c.add_argument('--dat', default=None, help='global-metadata.dat（用于字符串密钥自检）')
+    c.add_argument('--str-base', default=None, help='字符串数据基址（如 0x429A948）')
     c.set_defaults(fn=cmd_consts)
 
     ee = sub.add_parser('entryexpr', help='自动推导 entry 解码表达式（跨版本比较结构）')

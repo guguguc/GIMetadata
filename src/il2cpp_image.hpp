@@ -16,11 +16,25 @@
 
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 #include <format>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
+
+// 泛型参数名兜底：本版本的 genericParamKey 公式未完全验证，个别参数名会解出控制字符。
+// 这不是真实名字，但比输出 \x01 安全：按 IL2CPP 惯例回落为 T / T1 / T2 ...
+inline std::string SanitizeGenericName(const std::string& s, uint32_t idx)
+{
+    bool bad = s.empty();
+    for (unsigned char c : s) {
+        if (c < 0x20 || c == 0x7F) { bad = true; break; }
+    }
+    if (!bad) return s;
+    return idx ? ("T" + std::to_string(idx)) : std::string("T");
+}
 
 class Il2CppImage {
 public:
@@ -57,6 +71,8 @@ void decryptHeader()
     header.fieldsOffset     = tableOffset(ver::kFieldsOffset);
     header.eventsOffset     = tableOffset(ver::kEventsOffset);
     header.fieldOffset      = tableOffset(ver::kFieldOffset);
+    header.fieldOffsetBaseTable = (uint32_t)ver::kFieldOffsetBaseTable;
+    header.fieldIndexTable      = (uint32_t)ver::kFieldIndexTable;
     header.interfacesTable  = tableOffset(ver::kInterfacesTable);
     header.nestedTypesTable = tableOffset(ver::kNestedTypesTable);
     header.genericContainers = tableOffset(ver::kGenericContainers);
@@ -74,7 +90,8 @@ void decryptHeader()
         const uint8_t* fdv = s_GlobalMetadataHeader + fdvOff;
         int32_t prev = -1;
         while ((uint64_t)fdvOff + 12ull * (header.fieldDefaultValuesCount + 1) <= metadataSize) {
-            const int32_t v = *(const int32_t*)(fdv + 12ull * header.fieldDefaultValuesCount);
+            const auto* ent = (const Il2CppFieldDefaultValue*)(fdv + 12ull * header.fieldDefaultValuesCount);
+            const int32_t v = fdvFieldIndex(ent);
             if (v <= prev) break;
             prev = v;
             header.fieldDefaultValuesCount++;
@@ -107,6 +124,8 @@ void decryptHeader()
     header.genericTypeArgOffset    = tableOffset(ver::kGenericTypeArgOffset);
     // ✅ 也是公式（T0 侧）：消费者是 RuntimeInit 的泛型注册循环（init_534B80.c:2064）
     header.genericClassRangeCount  = (uint32_t)tableRawAt(s_Table0, ver::kGenericClassRangeCountFormula);
+    header.genericClasses          = (uint32_t)ver::kGenericClassesOffset;
+    header.genericClassesCount     = (uint32_t)ver::kGenericClassesCount;
     header.genericMethodTable      = tableOffset(ver::kGenericMethodTable);
     header.genericMethodTableCount = tableCount(ver::kGenericMethodTableCount);
     s_Il2CppMetadataRegistration = s_Table1;   // == T1
@@ -250,6 +269,13 @@ void decryptHeader()
         uint8_t  nestedTypesCount; // 0x45 [V] ^ (uint32_t)ver::kTypeDefNestedTypesCount.key（(uint32_t)ver::kTypeDefNestedTypesCount.key 编码 0）
     };
 
+    // 字段统一按 version.json 的 structOffsets 读取（7.0/7.1 偏移不同，不要直接用成员）
+    static int32_t  tdI32(const Il2CppTypeDefinition* td, uint32_t off) { return *(const int32_t*)((const uint8_t*)td + off); }
+    static uint32_t tdU32(const Il2CppTypeDefinition* td, uint32_t off) { return *(const uint32_t*)((const uint8_t*)td + off); }
+    static int16_t  tdI16(const Il2CppTypeDefinition* td, uint32_t off) { return *(const int16_t*)((const uint8_t*)td + off); }
+    static uint16_t tdU16(const Il2CppTypeDefinition* td, uint32_t off) { return *(const uint16_t*)((const uint8_t*)td + off); }
+    static uint8_t  tdU8 (const Il2CppTypeDefinition* td, uint32_t off) { return *(const uint8_t* )((const uint8_t*)td + off); }
+
     struct Il2CppType;
     struct Il2CppArrayType { 
         const Il2CppType* etype; 
@@ -285,8 +311,10 @@ void decryptHeader()
         int32_t typeIndex;
     };
 
-    // 本版本布局，26 字节（守卫 >= 0x1A）。nameIndex 在 +0x00（不是旧版的 +0x04）。
-    // 见 gi_fields.md §4；nameIndex 的解码见 methodNameIndex()
+    // 26 字节；**布局随版本变化，字段一律通过 version.json 的 structOffsets + md* 读取**。
+    //   7.1: name@0, parameterStart@4, returnType@8, declaringType@12, iflags@16, token@20, flags@22, count@24
+    //   7.0: name@0, returnType@4, parameterStart@8(_pad12@12), flags@18, slot@20, iflags@22, count@24
+    // 下面的成员名/偏移只用于 7.1 的旧 #if 0 代码，活动路径不要直接访问成员。
     struct Il2CppMethodDefinition {
         int32_t  nameIndex;       // 0x00  [V]
         int32_t  parameterStart;  // 0x04
@@ -299,6 +327,11 @@ void decryptHeader()
         uint8_t  parameterCount;  // 0x18  [V] (sub_140528560 在 +0x18 取参数个数)
         uint8_t  _pad19;          // 0x19
     };
+
+    // 方法字段按 version.json 的 structOffsets 读取（7.0/7.1 偏移不同）
+    static uint32_t mdU32(const Il2CppMethodDefinition* m, uint32_t off) { return *(const uint32_t*)((const uint8_t*)m + off); }
+    static uint16_t mdU16(const Il2CppMethodDefinition* m, uint32_t off) { return *(const uint16_t*)((const uint8_t*)m + off); }
+    static uint8_t  mdU8 (const Il2CppMethodDefinition* m, uint32_t off) { return *(const uint8_t* )((const uint8_t*)m + off); }
 
     struct Il2CppParameterDefinition {
         int32_t typeIndex;
@@ -316,6 +349,26 @@ void decryptHeader()
         int32_t dataIndex;
         int32_t typeIndex;
     };
+
+    // 默认值表字段偏移由 version.json -> structOffsets 决定（7.0/7.1 顺序不同）
+    static int32_t fdvFieldIndex(const Il2CppFieldDefaultValue* e) {
+        return *(const int32_t*)((const uint8_t*)e + ver::kIl2CppFieldDefaultValueFieldIndexOffset);
+    }
+    static int32_t fdvDataIndex(const Il2CppFieldDefaultValue* e) {
+        return *(const int32_t*)((const uint8_t*)e + ver::kIl2CppFieldDefaultValueDataIndexOffset);
+    }
+    static int32_t fdvTypeIndex(const Il2CppFieldDefaultValue* e) {
+        return *(const int32_t*)((const uint8_t*)e + ver::kIl2CppFieldDefaultValueTypeIndexOffset);
+    }
+    static int32_t pdvParameterIndex(const Il2CppParameterDefaultValue* e) {
+        return *(const int32_t*)((const uint8_t*)e + ver::kIl2CppParameterDefaultValueParameterIndexOffset);
+    }
+    static int32_t pdvDataIndex(const Il2CppParameterDefaultValue* e) {
+        return *(const int32_t*)((const uint8_t*)e + ver::kIl2CppParameterDefaultValueDataIndexOffset);
+    }
+    static int32_t pdvTypeIndex(const Il2CppParameterDefaultValue* e) {
+        return *(const int32_t*)((const uint8_t*)e + ver::kIl2CppParameterDefaultValueTypeIndexOffset);
+    }
 
     // ⚠️ 字段顺序按 sub_1405151D0 实测：getter 在 +6、setter 在 +8。
     //    此前 set/get 写反 -> get 读到的是 setter 字段 -> 全部越界（属性类型/访问器全空）。
@@ -346,6 +399,7 @@ void decryptHeader()
         int32_t token;
     };
 
+    // 16 字节；字段偏移走 structOffsets（7.1: argc@+8/pStart@+4；7.0: argc@+8/pStart@+12）
     struct Il2CppGenericContainer {
         int32_t ownerIndex;
         int32_t is_method;
@@ -353,10 +407,11 @@ void decryptHeader()
         int32_t genericParameterStart;
     };
 
+    // 14 字节；已确认 nameIndex@+0、flags@+6（IDA 0x1404E2B30 用 14*p+6 读方差位）
     struct Il2CppGenericParameter {
         int32_t nameIndex; // 0x00
         uint8_t _pad[4];
-        uint16_t flags;    // 0x08
+        uint16_t flags;    // 0x08（占位注释；实际 +6，活动路径只读 nameIndex）
         uint8_t _pad2[4];
     };
 
@@ -421,6 +476,8 @@ void decryptHeader()
         uint32_t fieldOffset;
 
         uint32_t fieldsOffset;
+        uint32_t fieldOffsetBaseTable;     // 7.0: 字段偏移基址表；0 = 用 7.1 简单路径
+        uint32_t fieldIndexTable;          // 7.0: typeHash -> 基址表索引
         uint32_t interfacesTable;
         uint32_t nestedTypesTable;   // 4 字节/项
 
@@ -459,6 +516,11 @@ void decryptHeader()
         uint32_t genericClassRangeOffset; // [V] MHY[0x134] ^ 0x558E11EC（startup, 8B {argStart, argc}）
         uint32_t genericTypeArgOffset;    // [V] MHY[0x180] - 898198093（= startup+0, 4B 类型索引, -1 哨兵）
         uint32_t genericClassRangeCount;  // 实测 13671（start 严格无缝累计）
+        // [V] generic class 表（startup，8 字节 {genericInstIndex@+0, typeDefinitionIndex@+4}）。
+        //   来源 GIMeta_RuntimeInit：v610 = startup + MHY[0x18] - 662445654；count = (MHY[0xE0] >> 3) ^ 0x1F5F6D1。
+        //   7.0: startup+0xC0830 / 398168；7.1: startup+0xC5520 / 406569（两版同一套读取逻辑）。
+        uint32_t genericClasses;
+        uint32_t genericClassesCount;
         uint32_t genericMethodTable;       // MHY[0xC0] - 1630172749，步长 14
         uint32_t genericMethodTableCount;  // (MHY[0x130] - 565220529)/14 = 560659
 
@@ -473,6 +535,7 @@ void decryptHeader()
 
         std::unordered_map<int32_t, std::string> stringCache;
         std::unordered_map<const Il2CppType*, std::string> typeNameCache;
+        std::unordered_set<const Il2CppType*> resolvingTypes_;   // 环检测（NameFromIl2CppType 递归）
 
         // ================= 本版本字符串解密（已实测 75/75 通过）=================
         // 见 ANALYSIS.md §4.3。本版本与旧版有两处结构差异：
@@ -483,6 +546,12 @@ void decryptHeader()
         static constexpr uint64_t kKeyMulB      = ver::kKeyMulB;
         static constexpr uint64_t kKeySeed      = ver::kKeySeed;
         static constexpr uint64_t kKeyStep      = ver::kKeyStep;   // 每 8 字节递增
+
+        // 图像名解码（7.0/7.1 形状不同，由 version.json 的 decodeExpr 决定）
+        inline uint32_t DecodeImageName(uint32_t raw, uint32_t imageIndex)
+        {
+            return ver::decImageNameIndex(raw, imageIndex);
+        }
 
         // 条目解码：entry -> (24 位偏移, 8 位长度)
         inline uint32_t DecodeStringEntry(uint32_t raw, uint32_t indexKey)
@@ -502,8 +571,7 @@ void decryptHeader()
         //    低 24 位（offset）仍对、高 8 位（length）错 → 名字正确但带垃圾尾巴。
         inline uint32_t ImageIndexKey(uint32_t index)
         {
-            return (uint32_t)(ver::kImageKeyA * ((ver::kImageKeyB * (((ver::kImageKeyInnerMul * index) ^ ver::kImageKeyInnerXor)) + ver::kImageKeyInnerAdd) >> 8)
-                   + ver::kImageKeyAdd);
+            return ver::keyImage(index);
         }
 
         // 按 (offset, length) 解密一段字符串；offset 相对 stringLiteralDataOffset
@@ -514,7 +582,8 @@ void decryptHeader()
             if ((uint64_t)header.stringLiteralDataOffset + offset + length + 8 > metadataSize)
                 return std::string();
 
-            const uint64_t keyBase = kKeyMulA * ((kKeyMulB * offset) ^ kKeySeed);
+            // 版本相关：7.1 = mulA * ((mulB*off) ^ seed)；7.0 = (mulB*off + seed) ^ mulA
+            const uint64_t keyBase = ver::decStringKey(offset);
             const uint8_t* ptr = s_GlobalMetadataHeader + header.stringLiteralDataOffset + offset;
 
             std::string value((length + 7) & ~7u, '\0');
@@ -549,63 +618,65 @@ void decryptHeader()
         // ---- 各结构 nameIndex 的解码（gi_fields.md §3/§4，均已验收）----
         // 这些是对原始字节的解码，不依赖 Il2CppTypeDefinition 的成员名，
         // 所以即使结构体成员名与本版本布局不同也能用。
-        inline int32_t typeNameIndex(uint32_t raw)      { return (int32_t)(raw - (uint32_t)ver::kTypeDefNameIndex.key); }
-        inline int32_t typeNamespaceIndex(uint32_t raw) { return (int32_t)(raw - (uint32_t)ver::kTypeDefNamespaceIndex.key); }
-        inline int32_t typeMethodStart(uint32_t raw)    { return (int32_t)(raw ^ (uint32_t)ver::kTypeDefMethodStart.key); }
-        inline int32_t typeFieldStart(uint32_t raw)     { return (int32_t)(raw ^ (uint32_t)ver::kTypeDefFieldStart.key); }
-        inline int32_t typePropertyStart(uint32_t raw)  { return (int32_t)(raw - (uint32_t)ver::kTypeDefPropertyStart.key); }
+        inline int32_t typeNameIndex(uint32_t raw)      { return ver::decTypeNameIndex(raw); }
+        inline int32_t typeNamespaceIndex(uint32_t raw) { return ver::decTypeNamespaceIndex(raw); }
+        inline int32_t typeMethodStart(uint32_t raw)    { return ver::decTypeMethodStart(raw); }
+        inline int32_t typeFieldStart(uint32_t raw)     { return ver::decTypeFieldStart(raw); }
+        inline int32_t typePropertyStart(uint32_t raw)  { return ver::decTypePropertyStart(raw); }
         // [V] parentIndex（Il2CppType 索引）：`raw - (uint32_t)ver::kTypeDefParentIndex.key`，-1 = 无父类
-        inline int32_t typeParentIndex(uint32_t raw)    { return (int32_t)(raw - (uint32_t)ver::kTypeDefParentIndex.key); }
+        inline int32_t typeParentIndex(uint32_t raw)    { return ver::decTypeParentIndex(raw); }
         // [V] 泛型容器索引：`(int16)(raw16 - (uint32_t)ver::kTypeDefGenericContainerIndex.key)`；26229 是「无泛型」哨兵（sub_140511DB0）
         inline int32_t typeGenericContainerIndex(uint16_t raw) {
-            if (raw == 26229) return -1;   // 哨兵见 ver::kTypeDefGenericContainerIndex
-            return (int16_t)(uint16_t)(raw - (uint32_t)ver::kTypeDefGenericContainerIndex.key);
+            return ver::decTypeGenericContainerIndex(raw);
         }
         // [V] 容器表每索引 key（sub_140511DB0 / sub_14050E030 两处互证）
         inline uint64_t genericContainerKey(uint32_t c) {
-            return (ver::kContainerKeyA * ((ver::kContainerKeyB * ((ver::kContainerKeyInnerMul * c + ver::kContainerKeyInnerAdd) ^ ver::kContainerKeyInnerXor)) ^ ver::kContainerKeyXor)) >> 19;
+            return ver::keyContainer(c);
         }
+        // 容器布局按 version.json 的 structOffsets 读取（7.1: argc@+8, pStart@+4；7.0: argc@+8, pStart@+12）
         inline uint32_t genericContainerArgc(uint32_t c) {
             const uint8_t* b = s_GlobalMetadataHeader + header.genericContainers + 16ull * c;
-            return *(const uint32_t*)(b + 8) - (uint32_t)genericContainerKey(c) - (uint32_t)ver::kGenericContainerArgc.key;
+            return ver::decGenericContainerArgc(*(const uint32_t*)(b + ver::kIl2CppGenericContainerArgcOffset), c);
         }
         inline uint32_t genericParameterStart(uint32_t c) {
             const uint8_t* b = s_GlobalMetadataHeader + header.genericContainers + 16ull * c;
-            return (*(const uint32_t*)(b + 4) ^ (uint32_t)ver::kGenericContainerParameterStart.key) - (uint32_t)genericContainerKey(c);
+            return ver::decGenericContainerParameterStart(*(const uint32_t*)(b + ver::kIl2CppGenericContainerParameterStartOffset), c);
         }
-        // [V] 泛型参数：nameIndex = (raw@+0 ^ (uint32_t)ver::kGenericParameterNameIndex.key) - key_p
+        // [V] 泛型参数名：7.1 = (raw ^ k) - key_p；7.0 = (raw ^ k) ^ key_p（见 version.json 的 decodeExpr）
         inline uint64_t genericParameterKey(uint32_t p) {
-            return (((ver::kGenericParamKeyB * ((ver::kGenericParamKeyInnerMul * p + ver::kGenericParamKeyInnerAdd) ^ ver::kGenericParamKeyInnerXor)) >> 10) + ver::kGenericParamKeyAdd) ^ ver::kGenericParamKeyXor;
+            return ver::keyGenericParam(p);
         }
         inline int32_t genericParameterNameIndex(uint32_t p) {
-            const uint8_t* e = s_GlobalMetadataHeader + header.genericParameters + 14ull * p;
-            return (int32_t)((*(const uint32_t*)e ^ (uint32_t)ver::kGenericParameterNameIndex.key) - (uint32_t)genericParameterKey(p));
+            // 越界保护：VAR/MVAR 的索引在异常数据里可能不是全局下标（实测见过 0x4313ac60）。
+            const uint64_t off = (uint64_t)header.genericParameters + 14ull * p;
+            if (off + 14 > metadataSize) return -1;
+            const uint8_t* e = s_GlobalMetadataHeader + off;
+            return ver::decGenericParameterNameIndex(*(const uint32_t*)e, p);
         }
-        inline uint16_t typeMethodCount(uint16_t raw)   { return (uint16_t)(raw - (uint32_t)ver::kTypeDefMethodCount.key); }
-        inline uint16_t typeFieldCount(uint16_t raw)    { return (uint16_t)(raw ^ (uint32_t)ver::kTypeDefFieldCount.key); }
-        inline uint8_t  typePropertyCount(uint8_t raw)  { return (uint8_t)(raw ^ (uint32_t)ver::kTypeDefPropertyCount.key); }
-        inline int16_t  typeEventStart(int16_t raw)     { return (int16_t)(raw + (uint32_t)ver::kTypeDefEventStart.key); }
+        inline uint16_t typeMethodCount(uint16_t raw)   { return ver::decTypeMethodCount(raw); }
+        inline uint16_t typeFieldCount(uint16_t raw)    { return ver::decTypeFieldCount(raw); }
+        inline uint8_t  typePropertyCount(uint8_t raw)  { return ver::decTypePropertyCount(raw); }
+        inline int16_t  typeEventStart(int16_t raw)     { return ver::decTypeEventStart(raw); }
         // [V] flags = +0x28 - (uint32_t)ver::kTypeDefFlags.key。验收：106 个不同值（全在 TYPE_ATTRIBUTE 掩码内）；
         //   BeforeFieldInit 87%、Public 84%、Sealed 50%、NestedPublic 29%、Abstract 8.8%、
         //   Serializable 5.7%、Interface 1.8%、**SpecialName 0%**（该标志本就罕见，用错常量时是 54%）。
-        inline uint32_t typeFlags(uint32_t raw) { return raw - (uint32_t)ver::kTypeDefFlags.key; }
+        inline uint32_t typeFlags(uint32_t raw) { return ver::decTypeFlags(raw); }
         // [V] bitfield = +0x3A。验收：valuetype 全量 88884/88884；enum 用 13 枚举 + 11 struct 锚点全对。
-        inline uint8_t typeIsValueType(uint8_t raw) { return raw & 1u; }
-        inline uint8_t typeIsEnum(uint8_t raw)      { return (uint8_t)((~raw >> 1) & 1u); }
-        inline uint16_t typeInterfacesStart(uint16_t raw){ return (uint16_t)(raw ^ (uint32_t)ver::kTypeDefInterfacesStart.key); }
+        inline uint8_t typeIsValueType(uint8_t raw) { return (uint8_t)(ver::decTypeBitfield(raw) & 1u); }
+        inline uint8_t typeIsEnum(uint8_t raw)      { uint8_t b = ver::decTypeBitfield(raw); return (uint8_t)((~b >> 1) & 1u); }
+        inline uint16_t typeInterfacesStart(uint16_t raw){ return ver::decTypeInterfacesStart(raw); }
         // ⚠️ 必须按 8 位截断：0xC8 编码 0 -> (uint8_t)(0xC8 + 56) = 0。
         //    返回 uint32 不截断会得到 256 -> 读 256 个接口 -> 越界野指针（实测崩溃）。
-        inline uint8_t  typeInterfacesCount(uint8_t raw) { return (uint8_t)(raw + (uint32_t)ver::kTypeDefInterfacesCount.key); }  // 0xC8 编码 0
-        inline int16_t  typeNestedStart(int16_t raw)     { return (int16_t)(raw + (uint32_t)ver::kTypeDefNestedTypesStart.key); }
-        inline uint32_t typeNestedCount(uint8_t raw)     { return (uint32_t)(raw ^ (uint32_t)ver::kTypeDefNestedTypesCount.key); }
+        inline uint8_t  typeInterfacesCount(uint8_t raw) { return ver::decTypeInterfacesCount(raw); }  // 0xC8 编码 0
+        inline int16_t  typeNestedStart(int16_t raw)     { return ver::decTypeNestedStart(raw); }
+        inline uint32_t typeNestedCount(uint8_t raw)     { return ver::decTypeNestedCount(raw); }
         inline uint8_t  typeEventCount(uint8_t raw)     { return (uint8_t)(raw + (uint32_t)ver::kTypeDefEventCount.key); } // 0x8F 编码 0（同样必须 8 位截断）
 
         // 方法名：逐索引 key，与 raw 异或后再减去常数
         // 见 sub_140514A70 / sub_140528080（两个独立读取点互证）
         inline int32_t methodNameIndex(uint32_t raw, uint32_t methodIndex)
         {
-            uint32_t key = (((uint32_t)ver::kMethodKeyA * methodIndex) ^ ver::kMethodKeyXor) + ver::kMethodKeyAdd;
-            return (int32_t)(key ^ (raw - (uint32_t)ver::kMethodNameIndex.key));
+            return (int32_t)(ver::keyMethod(methodIndex) ^ (raw - (uint32_t)ver::kMethodNameIndex.key));
         }
 
         // flags / iflags：与方法名同一个逐索引 key（sub_140514630 的循环体）。
@@ -614,13 +685,11 @@ void decryptHeader()
         //       iflags 只取 0 与 0x1000（IL/Managed 与 InternalCall）。
         inline uint16_t methodFlags(uint16_t raw, uint32_t methodIndex)
         {
-            uint32_t key = (((uint32_t)ver::kMethodKeyA * methodIndex) ^ ver::kMethodKeyXor) + ver::kMethodKeyAdd;
-            return (uint16_t)(key ^ raw ^ (uint32_t)ver::kMethodFlags.key);
+            return ver::decMethodFlags(raw, methodIndex);
         }
         inline uint16_t methodIFlags(uint16_t raw, uint32_t methodIndex)
         {
-            uint32_t key = (((uint32_t)ver::kMethodKeyA * methodIndex) ^ ver::kMethodKeyXor) + ver::kMethodKeyAdd;
-            return (uint16_t)(key ^ (uint32_t)(uint16_t)(raw - (uint32_t)ver::kMethodIflags.key));
+            return ver::decMethodIFlags(raw, methodIndex);
         }
 
         // [V] returnType：methodDefinition +0x08，解码 `(raw ^ key) ^ (uint32_t)ver::kMethodReturnType.key`。
@@ -632,14 +701,14 @@ void decryptHeader()
         //   来源 GIMeta_GetMethodInfoFromIndex：拿到后交给 GetTypeInfoByIndex。
         inline int32_t methodDeclaringType(uint32_t raw, uint32_t methodIndex)
         {
-            uint32_t key = (((uint32_t)ver::kMethodKeyA * methodIndex) ^ ver::kMethodKeyXor) + ver::kMethodKeyAdd;
+            uint32_t key = ver::keyMethod(methodIndex);
             return (int32_t)(key ^ raw ^ (uint32_t)ver::kMethodDeclaringType.key);
         }
         inline int32_t methodReturnTypeIndex(uint32_t methodIndex)
         {
             const uint8_t* md = s_GlobalMetadataHeader + header.methodsOffset + 26 * (size_t)methodIndex;
-            uint32_t key = (((uint32_t)ver::kMethodKeyA * methodIndex) ^ ver::kMethodKeyXor) + ver::kMethodKeyAdd;
-            return (int32_t)((*(const uint32_t*)(md + 8)) ^ key ^ kReturnTypeXor);
+            uint32_t key = ver::keyMethod(methodIndex);
+            return (int32_t)((*(const uint32_t*)(md + ver::kIl2CppMethodDefinitionReturnTypeOffset)) ^ key ^ kReturnTypeXor);
         }
 
         // [V] 方法指针索引表 = MHY[0x94] ^ 0x4A4C0A71（4 字节/方法，-1 = 无实现）。
@@ -676,7 +745,20 @@ void decryptHeader()
         inline uint64_t methodPointer(uint32_t methodIndex)
         {
             if (methodIndex >= header.methodsCount) return 0;
-            return *(const uint64_t*)(s_MethodPointerByIndex + 8 * (uint64_t)methodIndex);
+            uint64_t p = *(const uint64_t*)(s_MethodPointerByIndex + 8 * (uint64_t)methodIndex);
+            if (p <= 1) return 0;   // 0/1 = 无方法体哨兵
+            const uint64_t base = files_.pe()->optional_header().imagebase();
+            if (p < base) return 0;
+            const uint64_t rva = p - base;
+            for (const auto& sec : files_.pe()->sections())
+            {
+                if (rva >= sec.virtual_address() && rva < (uint64_t)sec.virtual_address() + sec.virtual_size())
+                {
+                    // 只有可执行段才是方法体；.data/.rdata 里的值不是函数地址
+                    return (sec.name() == ".text" || sec.name() == "il2cpp") ? p : 0;
+                }
+            }
+            return 0;
         }
 
         // returnType 不在 26 字节方法结构里，而在并行的 4 字节表（sub_140514630）。
@@ -686,38 +768,44 @@ void decryptHeader()
         //   parameterCount = ((raw@+0x18 - 31) & 0xFF) ^ (key & 0xFF)   <- 字节 XOR
         inline uint32_t methodParamStart(uint32_t raw_pstart, uint32_t methodIndex)
         {
-            uint32_t key = (((uint32_t)ver::kMethodKeyA * methodIndex) ^ ver::kMethodKeyXor) + ver::kMethodKeyAdd;
-            return key ^ (raw_pstart - (uint32_t)ver::kMethodParameterStart.key);
+            return ver::decMethodParamStart(raw_pstart, methodIndex);
         }
         inline uint8_t methodParamCount(uint8_t raw_pcount, uint32_t methodIndex)
         {
-            uint32_t key = (((uint32_t)ver::kMethodKeyA * methodIndex) ^ ver::kMethodKeyXor) + ver::kMethodKeyAdd;
-            return (uint8_t)(((uint8_t)(raw_pcount - 31u)) ^ ((uint8_t)key));
+            return ver::decMethodParamCount(raw_pcount, methodIndex);
         }
         // 参数名/类型：逐索引 key（sub_140528560）
         // ⚠️ 必须 64 位不回绕！`41617*paramIndex + 1219887025` 在 paramIndex≈73891 处首次超过 2^32，
         //    用 uint32 回绕会让「索引 ≥ 73891 的参数」名/类型全错（实测合法率 4.81% → 修后 100%）。
         inline uint32_t paramKey(uint32_t paramIndex)
         {
-            return (uint32_t)(((ver::kParamKeyA * ((ver::kParamKeyB * paramIndex + ver::kParamKeyAdd1) ^ ver::kParamKeyXor1)) >> 21) + ver::kParamKeyAdd2);
+            return ver::keyParam(paramIndex);
         }
         inline int32_t paramNameIndex(uint32_t raw, uint32_t paramIndex)
         {
-            return (int32_t)(paramKey(paramIndex) ^ (raw - (uint32_t)ver::kParameterNameIndexBase.key) ^ (uint32_t)ver::kParameterNameIndexXor.key);
+            return ver::decParamNameIndex(raw, paramIndex);
         }
         inline int32_t paramTypeIndex(uint32_t raw, uint32_t paramIndex)
         {
-            return (int32_t)(paramKey(paramIndex) ^ raw ^ (uint32_t)ver::kParameterTypeIndex.key);
+            return ver::decParamTypeIndex(raw, paramIndex);
         }
 
         // 属性名：逐索引 key（sub_1405151D0）
         inline uint32_t propertyKey(uint32_t propertyIndex)
         {
-            return (uint32_t)((((ver::kPropertyKeyA * ((ver::kPropertyKeyB * propertyIndex) >> 9)) >> 12)) ^ ver::kPropertyKeyXor);
+            return ver::keyProperty(propertyIndex);
         }
         inline int32_t propertyNameIndex(uint32_t raw, uint32_t propertyIndex)
         {
-            return (int32_t)((raw - (uint32_t)ver::kPropertyNameIndex.key) ^ propertyKey(propertyIndex));
+            return ver::decPropertyNameIndex(raw, propertyIndex);
+        }
+        inline uint16_t propertyGet(uint32_t raw, uint32_t propertyIndex)
+        {
+            return ver::decPropertyGet(raw, propertyIndex);
+        }
+        inline uint16_t propertySet(uint32_t raw, uint32_t propertyIndex)
+        {
+            return ver::decPropertySet(raw, propertyIndex);
         }
 
         // 字段名：逐索引 key（sub_14051CB80 / sub_140512870）
@@ -725,21 +813,41 @@ void decryptHeader()
         //    实测 fields[].typeIndex 合法率：32 位 123483/440172 → 64 位 440172/440172。
         inline uint32_t fieldKey(uint32_t fieldIndex)
         {
-            return (uint32_t)(((ver::kFieldKeyA * ((ver::kFieldKeyB * fieldIndex) ^ ver::kFieldKeyXor)) >> 16) + ver::kFieldKeyAdd);
+            return ver::keyField(fieldIndex);
         }
         inline int32_t fieldNameIndex(uint32_t raw, uint32_t fieldIndex)
         {
-            return (int32_t)((raw - (uint32_t)ver::kFieldNameIndexBase.key) ^ fieldKey(fieldIndex) ^ (uint32_t)ver::kFieldNameIndexXor.key);
+            return ver::decFieldNameIndex(raw, fieldIndex);
+        }
+        inline int32_t fieldTypeIndex(uint32_t raw, uint32_t fieldIndex)
+        {
+            return ver::decFieldTypeIndex(raw, fieldIndex);
         }
 
         // 事件名：逐索引 key（sub_140514CF0）
         inline uint32_t eventKey(uint32_t eventIndex)
         {
-            return (uint32_t)((((int32_t)ver::kEventKeyA * (int32_t)eventIndex + ver::kEventKeyAdd) ^ ver::kEventKeyXor));
+            return ver::keyEvent(eventIndex);
         }
         inline int32_t eventNameIndex(uint32_t raw, uint32_t eventIndex)
         {
-            return (int32_t)(eventKey(eventIndex) ^ (raw - (uint32_t)ver::kEventNameIndex.key));
+            return ver::decEventNameIndex(raw, eventIndex);
+        }
+        inline int32_t eventTypeIndex(uint32_t raw, uint32_t eventIndex)
+        {
+            return ver::decEventTypeIndex(raw, eventIndex);
+        }
+        inline uint16_t eventAdd(uint32_t raw, uint32_t eventIndex)
+        {
+            return ver::decEventAdd(raw, eventIndex);
+        }
+        inline uint16_t eventRemove(uint32_t raw, uint32_t eventIndex)
+        {
+            return ver::decEventRemove(raw, eventIndex);
+        }
+        inline uint16_t eventRaise(uint32_t raw, uint32_t eventIndex)
+        {
+            return ver::decEventRaise(raw, eventIndex);
         }
 
         const Il2CppType* GetIl2CppTypeFromIndex(int32_t index) {
@@ -786,12 +894,82 @@ void decryptHeader()
             return (const Il2CppGenericParameter*)(s_GlobalMetadataHeader + header.genericParameters) + (genericParameterStart + index);
         }
 
+        // ---- typeDef 全名（namespace + 嵌套链 + 自身名），供 generic inst 名字使用 ----
+        //   genericClasses 表给出 typeDefinitionIndex，必须能还原出 `Outer.Inner`。
+        void ensureNestingMap()
+        {
+            if (nestingMapBuilt_) return;
+            nestingMapBuilt_ = true;
+            if (!header.nestedTypesTable || !header.typeDefinitionsCount) return;
+            const uint32_t* tbl = (const uint32_t*)(s_GlobalMetadataHeader + header.nestedTypesTable);
+            const Il2CppTypeDefinition* tds = (const Il2CppTypeDefinition*)(s_GlobalMetadataHeader + header.typeDefinitionsOffset);
+            for (uint32_t t = 0; t < header.typeDefinitionsCount; ++t)
+            {
+                int32_t st = typeNestedStart(tdI16(&tds[t], ver::kIl2CppTypeDefinitionNestedTypesStartOffset));
+                uint32_t cnt = typeNestedCount(tdU8(&tds[t], ver::kIl2CppTypeDefinitionNestedTypesCountOffset));
+                for (uint32_t i = 0; i < cnt; ++i)
+                {
+                    uint32_t child = tbl[st + i];
+                    if (child < header.typeDefinitionsCount) nestingMap_[(int32_t)child] = (int32_t)t;
+                }
+            }
+        }
+
+        std::string typeDefFullName(int32_t idx)
+        {
+            if (idx < 0 || (uint32_t)idx >= header.typeDefinitionsCount) return {};
+            auto cached = typeDefNameCache_.find(idx);
+            if (cached != typeDefNameCache_.end()) return cached->second;
+
+            ensureNestingMap();
+            const Il2CppTypeDefinition* tds = (const Il2CppTypeDefinition*)(s_GlobalMetadataHeader + header.typeDefinitionsOffset);
+            auto nameOf = [&](int32_t t) {
+                std::string n{ GetStringFromIndex(typeNameIndex((uint32_t)tdI32(&tds[t], ver::kIl2CppTypeDefinitionNameIndexOffset))) };
+                if (size_t p = n.find('`'); p != std::string::npos) n.resize(p);
+                return n;
+            };
+            auto nsOf = [&](int32_t t) {
+                return std::string{ GetStringFromIndex(typeNamespaceIndex((uint32_t)tdI32(&tds[t], ver::kIl2CppTypeDefinitionNamespaceIndexOffset))) };
+            };
+
+            std::vector<std::string> chain;
+            int32_t cur = idx, outermost = -1;
+            for (int depth = 0; depth < 16; ++depth)
+            {
+                auto it = nestingMap_.find(cur);
+                if (it == nestingMap_.end()) break;
+                cur = it->second;
+                outermost = cur;
+                chain.push_back(nameOf(cur));
+            }
+            std::string ns = nsOf(idx);
+            if (ns.empty() && outermost >= 0) ns = nsOf(outermost);
+            std::string out;
+            if (!ns.empty()) out = ns + ".";
+            for (auto it = chain.rbegin(); it != chain.rend(); ++it) out += *it + ".";
+            out += nameOf(idx);
+            return typeDefNameCache_.emplace(idx, std::move(out)).first->second;
+        }
+
+        std::unordered_map<int32_t, int32_t> nestingMap_;
+        std::unordered_map<int32_t, std::string> typeDefNameCache_;
+        bool nestingMapBuilt_ = false;
+
         std::string NameFromIl2CppType(const Il2CppType* type) 
         {
             if (!type) return "";
 
             auto cached = typeNameCache.find(type);
             if (cached != typeNameCache.end()) return cached->second;
+
+            // 环检测：泛型实参可以自引用（class Node<T> : IComparable<Node<T>>）。
+            // 正在解析的 type 再次进入时返回 "?"，既避免死循环，也保留外层的真实类型名。
+            if (!resolvingTypes_.insert(type).second) return "?";
+            struct ResolveGuard {
+                std::unordered_set<const Il2CppType*>& set;
+                const Il2CppType* key;
+                ~ResolveGuard() { set.erase(key); }
+            } resolveGuard{resolvingTypes_, type};
 
             std::string result;
 
@@ -823,10 +1001,10 @@ void decryptHeader()
             {
                 if (type->data.klassIndex < 0 || type->data.klassIndex >= 88902) return "";  // 非法 klassIndex 保护
                 const Il2CppTypeDefinition* typeDefinitions = GetTypeDefinitionFromIndex(type->data.klassIndex);
-                std::string name{ GetStringFromIndex(typeNameIndex((uint32_t)typeDefinitions->nameIndex)) };
+                std::string name{ GetStringFromIndex(typeNameIndex((uint32_t)tdI32(typeDefinitions, ver::kIl2CppTypeDefinitionNameIndexOffset))) };
                 if (size_t p = name.find('`'); p != std::string::npos) name.resize(p);
 ;
-                std::string ns{ GetStringFromIndex(typeNamespaceIndex((uint32_t)typeDefinitions->namespaceIndex)) };
+                std::string ns{ GetStringFromIndex(typeNamespaceIndex((uint32_t)tdI32(typeDefinitions, ver::kIl2CppTypeDefinitionNamespaceIndexOffset))) };
                 // declaringTypeIndex 未定位 -> 不输出 declaring 前缀
                 std::string declaring;
 
@@ -836,14 +1014,44 @@ void decryptHeader()
 
             if (type->type == Il2CppTypeEnum::IL2CPP_TYPE_GENERICINST) {
                 
-                // [V] 泛型实参：metadata 侧表（init:1447-1465 那条链，已验收）
-                //   range[gi] = {argStart@+0, argc@+4}（startup，8 字节）
-                //   实参 = typeIndex[startup + 4*(argStart+k)]（4 字节，-1 哨兵）
-                //   经 GetIl2CppTypeFromIndex 取 Il2CppType。
-                //   ⚠️ 泛型**类型定义**名仍缺：type->data.generic_class 实测范围 0..406568，
-                //      大于 range 表项数(13671)，故不是它的索引；索引语义未定。
+                // [V] type->data.generic_class 是 genericClasses 表的**索引**（不是指针）：
+                //   genericClasses[g] = {genericInstIndex@+0, typeDefinitionIndex@+4}（startup，8 字节）
+                //   genericInsts[gi]  = {argc@+0, pad, argv@+8}；argv 是 Il2CppType* 的 VA 数组
+                //   来源 GIMeta_RuntimeInit / GIMeta_TypeInfoDispatcher（见 UPDATE.md §15.21）。
+                uint32_t gcIndex = (uint32_t)(uintptr_t)type->data.generic_class;
+                if (header.genericClasses && header.genericClassesCount && gcIndex < header.genericClassesCount)
+                {
+                    const uint8_t* e = s_StartupMetadataHeader + header.genericClasses + 8ull * gcIndex;
+                    uint32_t ginstIndex = *(const uint32_t*)e;
+                    uint32_t tdIndex    = *(const uint32_t*)(e + 4);
+                    if (tdIndex < header.typeDefinitionsCount && ginstIndex < header.genericInstsCount)
+                    {
+                        std::string gargs;
+                        const uint8_t* inst = s_GenericInsts + 16ull * ginstIndex;
+                        uint32_t argc = *(const uint32_t*)inst;
+                        if (argc > 64) argc = 64;
+                        // inst+8 是 **argv 数组的指针字段**；先取出指针，再逐个读 type VA。
+                        uint64_t argvVA = *(const uint64_t*)(inst + 8);
+                        const uint64_t* argv = argvVA ? (const uint64_t*)files_.at(argvVA) : nullptr;
+                        for (uint32_t k = 0; k < argc; ++k)
+                        {
+                            if (!argv || !argv[k]) continue;
+                            const Il2CppType* at = (const Il2CppType*)files_.at(argv[k]);
+                            if (!at) continue;
+                            if (!gargs.empty()) gargs += ", ";
+                            gargs += NameFromIl2CppType(at);
+                        }
+                        std::string gname = typeDefFullName((int32_t)tdIndex);
+                        if (!gname.empty())
+                        {
+                            result = gargs.empty() ? gname : gname + "<" + gargs + ">";
+                            return typeNameCache.emplace(type, std::move(result)).first->second;
+                        }
+                    }
+                }
+                // fallback：旧版 genericClassRange 路径（genericClasses 缺失时才会走到）
                 uint64_t genericIndex = (uint64_t)type->data.generic_class;
-                std::string gname;   // 类型定义名未定位
+                std::string gname;
                 std::string gargs;
                 if (genericIndex < header.genericClassRangeCount)
                 {
@@ -851,7 +1059,7 @@ void decryptHeader()
                                        + header.genericClassRangeOffset + 8 * genericIndex;
                     uint32_t argStart = *(const uint32_t*)rng;
                     uint32_t argCount = *(const uint32_t*)(rng + 4);
-                    if (argCount > 64) argCount = 64;   // 防越界
+                    if (argCount > 64) argCount = 64;
                     for (uint32_t k = 0; k < argCount; k++)
                     {
                         int32_t ti = *(const int32_t*)(s_StartupMetadataHeader
@@ -863,7 +1071,6 @@ void decryptHeader()
                         gargs += NameFromIl2CppType(at);
                     }
                 }
-                // 泛型类型定义名 gname 未定位 -> 用占位 `?` 保留参数列表（不假称类型名）
                 std::string fullName = gname.empty() ? std::string("?") : gname;
                 result = gargs.empty() ? fullName : fullName + "<" + gargs + ">";
                 return typeNameCache.emplace(type, std::move(result)).first->second;
@@ -901,7 +1108,8 @@ void decryptHeader()
                 //    `(nameIndex ^ 0x2DD1C9C6) - ((0x65DE21D74280*p) ^ 0x154AA920) + 1912316114`
                 //    在本版本会解出**乱码**（实测 2787 个方法签名被污染）。
                 uint32_t gp = (uint32_t)type->data.genericParameterIndex;
-                result = GetStringFromIndex(genericParameterNameIndex(gp));
+                int32_t gpName = genericParameterNameIndex(gp);
+                result = SanitizeGenericName(gpName >= 0 ? GetStringFromIndex(gpName) : std::string(), gp);
                 return typeNameCache.emplace(type, std::move(result)).first->second;
             }
 
@@ -916,7 +1124,7 @@ void decryptHeader()
             while (lo <= hi)
             {
                 int32_t mid = lo + ((hi - lo) >> 1);
-                int32_t v = start[mid].fieldIndex;
+                int32_t v = fdvFieldIndex(start + mid);
                 if (v == index) return start + mid;
                 if (v < index) lo = mid + 1; else hi = mid - 1;
             }
@@ -949,6 +1157,10 @@ void decryptHeader()
             case Il2CppTypeEnum::IL2CPP_TYPE_STRING:
             {
                 uint32_t len = *(uint32_t*)blob;
+                // 字符串默认值格式（两版一致）：[u32 len][bytes]。
+                // 这里只做元数据边界保护，避免损坏文件造成超大 memcpy。
+                const uint64_t off = (uint64_t)(blob - s_GlobalMetadataHeader);
+                if (off + 4ull + len > metadataSize) return "\"\"";
                 return "\"" + std::string((char*)blob + 4, len) + "\"";
             }
             case Il2CppTypeEnum::IL2CPP_TYPE_CLASS:
@@ -982,7 +1194,7 @@ void decryptHeader()
             while (lo <= hi)
             {
                 int32_t mid = lo + ((hi - lo) >> 1);
-                int32_t v = (int32_t)start[mid].parameterIndex;
+                int32_t v = pdvParameterIndex(start + mid);
                 if (v == (int32_t)parameterIndex) return start + mid;
                 if (v < (int32_t)parameterIndex) lo = mid + 1; else hi = mid - 1;
             }

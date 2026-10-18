@@ -16,6 +16,7 @@
         --version-json version.json --out /tmp/keyformulas70.json
 """
 import argparse
+import difflib
 import json
 import os
 import re
@@ -26,6 +27,23 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 
 NUM = re.compile(r'0x[0-9A-Fa-f]+|\b\d+\b')
+
+
+def _windows(lines, func=None, k=6):
+    """把同一函数的连续 1..k 行拼起来（7.0 的公式经常被反编译器拆成多行）。"""
+    by = {}
+    for f in lines:
+        if func is not None and f.get('func') != func:
+            continue
+        by.setdefault(f.get('func'), []).append(f.get('text', ''))
+    out = []
+    for fn, arr in by.items():
+        for i in range(len(arr)):
+            t = ''
+            for j in range(i, min(i + k, len(arr))):
+                t += ' ' + arr[j]
+                out.append({'func': fn, 'text': t})
+    return out
 
 
 def K(x):
@@ -71,7 +89,12 @@ def main():
 
     result = {}
     for name, ks in J.get('keyFormulas', {}).items():
-        want = {K(v) & 0xFFFFFFFFFFFFFFFF for v in ks.values()}
+        want = set()
+        for v in ks.values():
+            try:
+                want.add(K(v) & 0xFFFFFFFFFFFFFFFF)
+            except (TypeError, ValueError):
+                pass
         # ① 找"包含最多已知系数"的旧行
         best, best_hit = None, -1
         for f in old_lines:
@@ -90,8 +113,29 @@ def main():
             same = [f for f in cand if f.get('func') == best.get('func')]
             if len(same) == 1:
                 cand = same
+        if len(cand) > 1:
+            # 同模板多行：若**常数序列完全相同**（同一公式在不同调用点复用），直接采信 ✓
+            seqs = {tuple(constants(f.get('text', ''))) for f in cand}
+            if len(seqs) == 1:
+                cs = list(next(iter(seqs)))
+                print('  %-22s ✓ 同模板 %d 行但常数一致，采信: %s'
+                      % (name, len(cand), [hex(c) for c in cs]))
+                result[name] = [('0x%X' % c) for c in cs]
+                continue
         if len(cand) != 1:
-            print('  %-22s ✗ 新导出同模板行 %d 个' % (name, len(cand)))
+            # 多行拼接兜底：跨版本时反编译器常把公式拆成多行 ✗
+            bestw, bestr = None, 0.0
+            for w in _windows(new_lines, best.get('func'), k=6):
+                r = difflib.SequenceMatcher(None, tpl, template(w['text'])).ratio()
+                if r > bestr:
+                    bestr, bestw = r, w
+            if bestw is not None and bestr >= 0.95:
+                cs = constants(bestw['text'])
+                print('  %-22s ✓ 多行拼接(%.2f)，取到 %d 个常数: %s'
+                      % (name, bestr, len(cs), [hex(c) for c in cs]))
+                result[name] = [('0x%X' % c) for c in cs]
+                continue
+            print('  %-22s ✗ 新导出同模板行 %d 个（模糊最优 %.2f）' % (name, len(cand), bestr))
             continue
         cs = constants(cand[0]['text'])
         print('  %-22s ✓ 模板命中，取到 %d 个常数: %s' % (name, len(cs), [hex(c) for c in cs]))

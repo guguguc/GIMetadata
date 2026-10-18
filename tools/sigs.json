@@ -49,6 +49,162 @@
    "int3|",
    "int3|"
   ],
+  "ext_bytes": [
+   "488d0581224e02",
+   "48890562297e05",
+   "c3",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc"
+  ],
+  "ext_mask": [
+   "ffffff00000000",
+   "ffffff00000000",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
+  "bytes_disp": [
+   "488d0559bafe01",
+   "4889057a297e05",
+   "488d0563e15702",
+   "48890574297e05",
+   "488d05f5e15702",
+   "4889056e297e05",
+   "488d05d7bafe01",
+   "48890568297e05"
+  ],
+  "mask_disp": [
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000"
+  ],
+  "ext_bytes_disp": [
+   "488d0581224e02",
+   "48890562297e05",
+   "c3",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc"
+  ],
+  "ext_mask_disp": [
+   "ffffff00000000",
+   "ffffff00000000",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
+  "bytes_regs": [
+   "488d0559bafe01",
+   "4889057a297e05",
+   "488d0563e15702",
+   "48890574297e05",
+   "488d05f5e15702",
+   "4889056e297e05",
+   "488d05d7bafe01",
+   "48890568297e05"
+  ],
+  "mask_regs": [
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff"
+  ],
+  "ext_bytes_regs": [
+   "488d0581224e02",
+   "48890562297e05",
+   "c3",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
+  "bytes_rm": [
+   "488d0559bafe01",
+   "4889057a297e05",
+   "488d0563e15702",
+   "48890574297e05",
+   "488d05f5e15702",
+   "4889056e297e05",
+   "488d05d7bafe01",
+   "48890568297e05"
+  ],
+  "mask_rm": [
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff"
+  ],
+  "ext_bytes_rm": [
+   "488d0581224e02",
+   "48890562297e05",
+   "c3",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
   "bytes": [
    "488d0559bafe01",
    "4889057a297e05",
@@ -72,7 +228,10 @@
   "pat": "488d0559bafe014889057a297e05488d0563e1570248890574297e05488d05f5e157024889056e297e05488d05d7bafe0148890568297e05",
   "pmask": "ffffff00000000ffffff00000000ffffff00000000ffffff00000000ffffff00000000ffffff00000000ffffff00000000ffffff00000000",
   "distinct": 2,
-  "size": 56
+  "size": 56,
+  "callees": [
+   "GIMeta_GetDefaultValue"
+  ]
  },
  {
   "name": "GIMeta_RuntimeInit",
@@ -124,6 +283,162 @@
    "test|R,R",
    "jle|I"
   ],
+  "ext_bytes": [
+   "0f29b5e0020000",
+   "48c785d8020000feffffff",
+   "4889ce",
+   "488b0d69085a05",
+   "ff1553566103",
+   "8b0585085a05",
+   "8d4801",
+   "890d7c085a05",
+   "85c0",
+   "7e61"
+  ],
+  "ext_mask": [
+   "ffffff00000000",
+   "ffffff0000000000000000",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffff00000000",
+   "ffff00",
+   "ffff00000000",
+   "ffff",
+   "ff00"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "440f29ad50030000",
+   "440f29a540030000",
+   "440f299d30030000",
+   "440f299520030000",
+   "440f298d10030000",
+   "440f298500030000",
+   "660f7fbdf0020000"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffffff00000000",
+   "ffffffff00000000",
+   "ffffffff00000000",
+   "ffffffff00000000",
+   "ffffffff00000000",
+   "ffffffff00000000",
+   "ffffffff0000ffff"
+  ],
+  "ext_bytes_disp": [
+   "0f29b5e0020000",
+   "48c785d8020000feffffff",
+   "4889ce",
+   "488b0d69085a05",
+   "ff1553566103",
+   "8b0585085a05",
+   "8d4801",
+   "890d7c085a05",
+   "85c0",
+   "7e61"
+  ],
+  "ext_mask_disp": [
+   "ffffff00000000",
+   "ffffff00000000ffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffff00000000",
+   "ffff00",
+   "ffff00000000",
+   "ffff",
+   "ffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "440f29ad50030000",
+   "440f29a540030000",
+   "440f299d30030000",
+   "440f299520030000",
+   "440f298d10030000",
+   "440f298500030000",
+   "660f7fbdf0020000"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "f8ffffc0ffffffff",
+   "f8ffffc0ffffffff",
+   "f8ffffc0ffffffff",
+   "f8ffffc0ffffffff",
+   "f8ffffc0ffffffff",
+   "f8ffffc0ffffffff",
+   "ffffffc0ffffffff"
+  ],
+  "ext_bytes_regs": [
+   "0f29b5e0020000",
+   "48c785d8020000feffffff",
+   "4889ce",
+   "488b0d69085a05",
+   "ff1553566103",
+   "8b0585085a05",
+   "8d4801",
+   "890d7c085a05",
+   "85c0",
+   "7e61"
+  ],
+  "ext_mask_regs": [
+   "ffffc0ffffffff",
+   "f8ffc0ffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "ffc0ffffffff",
+   "ffc0ff",
+   "ffc0ffffffff",
+   "ffc0",
+   "ffff"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "440f29ad50030000",
+   "440f29a540030000",
+   "440f299d30030000",
+   "440f299520030000",
+   "440f298d10030000",
+   "440f298500030000",
+   "660f7fbdf0020000"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffffff8ffffffff",
+   "fffffff8ffffffff",
+   "fffffff8ffffffff",
+   "fffffff8ffffffff",
+   "fffffff8ffffffff",
+   "fffffff8ffffffff",
+   "fffffff8ffffffff"
+  ],
+  "ext_bytes_rm": [
+   "0f29b5e0020000",
+   "48c785d8020000feffffff",
+   "4889ce",
+   "488b0d69085a05",
+   "ff1553566103",
+   "8b0585085a05",
+   "8d4801",
+   "890d7c085a05",
+   "85c0",
+   "7e61"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffffffff",
+   "fffff8ffffffffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fff8ffffffff",
+   "fff8ff",
+   "fff8ffffffff",
+   "fff8",
+   "ffff"
+  ],
   "bytes": [
    "488dac2480000000",
    "440f29ad50030000",
@@ -147,7 +462,20 @@
   "pat": "488dac2480000000440f29ad50030000440f29a540030000440f299d30030000440f299520030000440f298d10030000440f298500030000660f7fbdf0020000",
   "pmask": "ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff0000ffff",
   "distinct": 3,
-  "size": 64
+  "size": 64,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_GetDefaultValue",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_5158B0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_LoadMetadataFile",
+   "GIMeta_SetupTypeInfoLocked"
+  ]
  },
  {
   "name": "GIMeta_DecryptString",
@@ -199,6 +527,162 @@
    "imul|R,R",
    "movabs|R,I"
   ],
+  "ext_bytes": [
+   "ff157baf6303",
+   "4489e0",
+   "48b987caeb85b179379e",
+   "480fafc1",
+   "48b9c96756162febd427",
+   "4831c8",
+   "48c1c017",
+   "48ba4febd4273daeb2c2",
+   "480fafc2",
+   "48bbf979379eb1675616"
+  ],
+  "ext_mask": [
+   "ffff00000000",
+   "ffffff",
+   "ffff0000000000000000",
+   "ffffffff",
+   "ffff0000000000000000",
+   "ffffff",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffffff",
+   "ffff0000000000000000"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "0f29bda0000000",
+   "0f29b590000000",
+   "48c78588000000feffffff",
+   "83f9ff",
+   "0f8474100000",
+   "4189cc",
+   "488b0da1665c05"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000ffffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff00000000"
+  ],
+  "ext_bytes_disp": [
+   "ff157baf6303",
+   "4489e0",
+   "48b987caeb85b179379e",
+   "480fafc1",
+   "48b9c96756162febd427",
+   "4831c8",
+   "48c1c017",
+   "48ba4febd4273daeb2c2",
+   "480fafc2",
+   "48bbf979379eb1675616"
+  ],
+  "ext_mask_disp": [
+   "ffff00000000",
+   "ffffff",
+   "ffffffffffffffffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffffffff",
+   "ffffffffffffffffffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "0f29bda0000000",
+   "0f29b590000000",
+   "48c78588000000feffffff",
+   "83f9ff",
+   "0f8474100000",
+   "4189cc",
+   "488b0da1665c05"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "ffffc0ffffffff",
+   "ffffc0ffffffff",
+   "f8ffc0ffffffffffffffff",
+   "ffc0ff",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff"
+  ],
+  "ext_bytes_regs": [
+   "ff157baf6303",
+   "4489e0",
+   "48b987caeb85b179379e",
+   "480fafc1",
+   "48b9c96756162febd427",
+   "4831c8",
+   "48c1c017",
+   "48ba4febd4273daeb2c2",
+   "480fafc2",
+   "48bbf979379eb1675616"
+  ],
+  "ext_mask_regs": [
+   "ffc0ffffffff",
+   "f8ffc0",
+   "ffffffffffffffffffff",
+   "f8ffffc0",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffffc0",
+   "ffffffffffffffffffff"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "0f29bda0000000",
+   "0f29b590000000",
+   "48c78588000000feffffff",
+   "83f9ff",
+   "0f8474100000",
+   "4189cc",
+   "488b0da1665c05"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffffffffffff",
+   "fff8ff",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8ffffffff"
+  ],
+  "ext_bytes_rm": [
+   "ff157baf6303",
+   "4489e0",
+   "48b987caeb85b179379e",
+   "480fafc1",
+   "48b9c96756162febd427",
+   "4831c8",
+   "48c1c017",
+   "48ba4febd4273daeb2c2",
+   "480fafc2",
+   "48bbf979379eb1675616"
+  ],
+  "ext_mask_rm": [
+   "fff8ffffffff",
+   "fffff8",
+   "ffffffffffffffffffff",
+   "fffffff8",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffffff8",
+   "ffffffffffffffffffff"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bda0000000",
@@ -222,7 +706,32 @@
   "pat": "488dac24800000000f29bda00000000f29b59000000048c78588000000feffffff83f9ff0f84741000004189cc488b0da1665c05",
   "pmask": "ffffffff00000000ffffff00000000ffffff00000000ffffff0000000000000000ffff00ffff00000000ffffffffffff00000000",
   "distinct": 7,
-  "size": 52
+  "size": 52,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_TypeInfoDispatcher",
@@ -274,6 +783,162 @@
    "mov|R,Md",
    "jmp|I"
   ],
+  "ext_bytes": [
+   "ffe1",
+   "8b0f",
+   "4883c448",
+   "5f",
+   "5e",
+   "e959f30000",
+   "488b05e2805c05",
+   "e945020000",
+   "488b05fe805c05",
+   "e939020000"
+  ],
+  "ext_mask": [
+   "ffff",
+   "ffff",
+   "ffffff00",
+   "ff",
+   "ff",
+   "ff00000000",
+   "ffffff00000000",
+   "ff00000000",
+   "ffffff00000000",
+   "ff00000000"
+  ],
+  "bytes_disp": [
+   "0fbe490a",
+   "31c0",
+   "ffc9",
+   "83f91d",
+   "0f876e020000",
+   "488d356f020000",
+   "48630c8e",
+   "4801f1"
+  ],
+  "mask_disp": [
+   "ffffff00",
+   "ffff",
+   "ffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffffff00000000",
+   "ffffffff",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "ffe1",
+   "8b0f",
+   "4883c448",
+   "5f",
+   "5e",
+   "e959f30000",
+   "488b05e2805c05",
+   "e945020000",
+   "488b05fe805c05",
+   "e939020000"
+  ],
+  "ext_mask_disp": [
+   "ffff",
+   "ffff",
+   "ffffffff",
+   "ff",
+   "ff",
+   "ffffffffff",
+   "ffffff00000000",
+   "ffffffffff",
+   "ffffff00000000",
+   "ffffffffff"
+  ],
+  "bytes_regs": [
+   "0fbe490a",
+   "31c0",
+   "ffc9",
+   "83f91d",
+   "0f876e020000",
+   "488d356f020000",
+   "48630c8e",
+   "4801f1"
+  ],
+  "mask_regs": [
+   "ffffc0ff",
+   "ffc0",
+   "ffc0",
+   "ffc0ff",
+   "ffffffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0c0",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "ffe1",
+   "8b0f",
+   "4883c448",
+   "5f",
+   "5e",
+   "e959f30000",
+   "488b05e2805c05",
+   "e945020000",
+   "488b05fe805c05",
+   "e939020000"
+  ],
+  "ext_mask_regs": [
+   "ffc0",
+   "ffc0",
+   "f8ffc0ff",
+   "ff",
+   "ff",
+   "ffffffffff",
+   "f8ffc0ffffffff",
+   "ffffffffff",
+   "f8ffc0ffffffff",
+   "ffffffffff"
+  ],
+  "bytes_rm": [
+   "0fbe490a",
+   "31c0",
+   "ffc9",
+   "83f91d",
+   "0f876e020000",
+   "488d356f020000",
+   "48630c8e",
+   "4801f1"
+  ],
+  "mask_rm": [
+   "fffff8ff",
+   "fff8",
+   "fff8",
+   "fff8ff",
+   "ffffffffffff",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "ffe1",
+   "8b0f",
+   "4883c448",
+   "5f",
+   "5e",
+   "e959f30000",
+   "488b05e2805c05",
+   "e945020000",
+   "488b05fe805c05",
+   "e939020000"
+  ],
+  "ext_mask_rm": [
+   "fff8",
+   "fff8",
+   "fffff8ff",
+   "ff",
+   "ff",
+   "ffffffffff",
+   "fffff8ffffffff",
+   "ffffffffff",
+   "fffff8ffffffff",
+   "ffffffffff"
+  ],
   "bytes": [
    "0fbe490a",
    "31c0",
@@ -297,7 +962,15 @@
   "pat": "0fbe490a31c0ffc983f91d0f876e020000488d356f02000048630c8e4801f1",
   "pmask": "ffffff00ffffffffffff00ffff00000000ffffff00000000ffffffffffffff",
   "distinct": 8,
-  "size": 31
+  "size": 31,
+  "callees": [
+   "GIMeta_AllocTypeInfoArray",
+   "GIMeta_CreateTypeInfo",
+   "GIMeta_GetGenericParameterInfo",
+   "GIMeta_GetMethodByIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_GetMethodByIndex",
@@ -349,6 +1022,162 @@
    "mov|R,Md0",
    "call|I"
   ],
+  "ext_bytes": [
+   "5f",
+   "5e",
+   "415e",
+   "415f",
+   "5d",
+   "c3",
+   "89d3",
+   "4889ce",
+   "8b09",
+   "e842f00000"
+  ],
+  "ext_mask": [
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ff",
+   "ffff",
+   "ffffff",
+   "ffff",
+   "ff00000000"
+  ],
+  "bytes_disp": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "488b7918",
+   "4885ff",
+   "7410",
+   "4889f8",
+   "4883c428",
+   "5b"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff00",
+   "ffffff",
+   "ffff",
+   "ffffff",
+   "ffffffff",
+   "ff"
+  ],
+  "ext_bytes_disp": [
+   "5f",
+   "5e",
+   "415e",
+   "415f",
+   "5d",
+   "c3",
+   "89d3",
+   "4889ce",
+   "8b09",
+   "e842f00000"
+  ],
+  "ext_mask_disp": [
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ff",
+   "ffff",
+   "ffffff",
+   "ffff",
+   "ffffffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "488b7918",
+   "4885ff",
+   "7410",
+   "4889f8",
+   "4883c428",
+   "5b"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "ff"
+  ],
+  "ext_bytes_regs": [
+   "5f",
+   "5e",
+   "415e",
+   "415f",
+   "5d",
+   "c3",
+   "89d3",
+   "4889ce",
+   "8b09",
+   "e842f00000"
+  ],
+  "ext_mask_regs": [
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ff",
+   "ffc0",
+   "f8ffc0",
+   "ffc0",
+   "ffffffffff"
+  ],
+  "bytes_rm": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "488b7918",
+   "4885ff",
+   "7410",
+   "4889f8",
+   "4883c428",
+   "5b"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8ff",
+   "fffff8",
+   "ffff",
+   "fffff8",
+   "fffff8ff",
+   "ff"
+  ],
+  "ext_bytes_rm": [
+   "5f",
+   "5e",
+   "415e",
+   "415f",
+   "5d",
+   "c3",
+   "89d3",
+   "4889ce",
+   "8b09",
+   "e842f00000"
+  ],
+  "ext_mask_rm": [
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ff",
+   "fff8",
+   "fffff8",
+   "fff8",
+   "ffffffffff"
+  ],
   "bytes": [
    "488d6c2420",
    "48c74500feffffff",
@@ -372,7 +1201,32 @@
   "pat": "488d6c242048c74500feffffff488b79184885ff74104889f84883c4285b",
   "pmask": "ffffffff00ffffff0000000000ffffff00ffffffff00ffffffffffff00ff",
   "distinct": 8,
-  "size": 30
+  "size": 30,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_GetGenericParameterInfo",
@@ -424,6 +1278,162 @@
    "rol|R,i1b",
    "imul|R,R"
   ],
+  "ext_bytes": [
+   "48ba4febd4273daeb2c2",
+   "4c89c8",
+   "480fafc2",
+   "48c1c01f",
+   "48b987caeb85b179379e",
+   "480fafc1",
+   "48bbcd6756162febd427",
+   "4831d8",
+   "48c1c01b",
+   "480fafc1"
+  ],
+  "ext_mask": [
+   "ffff0000000000000000",
+   "ffffff",
+   "ffffffff",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffffff",
+   "ffff0000000000000000",
+   "ffffff",
+   "ffffff00",
+   "ffffffff"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "0f29bd90000000",
+   "0f29b580000000",
+   "48c74578feffffff",
+   "4989ce",
+   "488b0dfd785c05",
+   "ff15d7c16303",
+   "4d8b4e08"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00"
+  ],
+  "ext_bytes_disp": [
+   "48ba4febd4273daeb2c2",
+   "4c89c8",
+   "480fafc2",
+   "48c1c01f",
+   "48b987caeb85b179379e",
+   "480fafc1",
+   "48bbcd6756162febd427",
+   "4831d8",
+   "48c1c01b",
+   "480fafc1"
+  ],
+  "ext_mask_disp": [
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffffff",
+   "ffffffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "0f29bd90000000",
+   "0f29b580000000",
+   "48c74578feffffff",
+   "4989ce",
+   "488b0dfd785c05",
+   "ff15d7c16303",
+   "4d8b4e08"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "ffffc0ffffffff",
+   "ffffc0ffffffff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "48ba4febd4273daeb2c2",
+   "4c89c8",
+   "480fafc2",
+   "48c1c01f",
+   "48b987caeb85b179379e",
+   "480fafc1",
+   "48bbcd6756162febd427",
+   "4831d8",
+   "48c1c01b",
+   "480fafc1"
+  ],
+  "ext_mask_regs": [
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "f8ffffc0",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffffc0",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffffc0"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "0f29bd90000000",
+   "0f29b580000000",
+   "48c74578feffffff",
+   "4989ce",
+   "488b0dfd785c05",
+   "ff15d7c16303",
+   "4d8b4e08"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "48ba4febd4273daeb2c2",
+   "4c89c8",
+   "480fafc2",
+   "48c1c01f",
+   "48b987caeb85b179379e",
+   "480fafc1",
+   "48bbcd6756162febd427",
+   "4831d8",
+   "48c1c01b",
+   "480fafc1"
+  ],
+  "ext_mask_rm": [
+   "ffffffffffffffffffff",
+   "fffff8",
+   "fffffff8",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffffff8",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "fffff8ff",
+   "fffffff8"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bd90000000",
@@ -447,7 +1457,32 @@
   "pat": "488dac24800000000f29bd900000000f29b58000000048c74578feffffff4989ce488b0dfd785c05ff15d7c163034d8b4e08",
   "pmask": "ffffffff00000000ffffff00000000ffffff00000000ffffff0000000000ffffffffffff00000000ffff00000000ffffff00",
   "distinct": 6,
-  "size": 50
+  "size": 50,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_SetupNestedLocked",
@@ -499,6 +1534,162 @@
    "mov|R,Md0",
    "call|Md"
   ],
+  "ext_bytes": [
+   "488d056c3e5c05",
+   "488945d0",
+   "488b0d613e5c05",
+   "ff153b876303",
+   "488d55d0",
+   "4889f9",
+   "e897120000",
+   "488b45d0",
+   "488b08",
+   "ff152a8b6303"
+  ],
+  "ext_mask": [
+   "ffffff00000000",
+   "ffffff00",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffff",
+   "ff00000000",
+   "ffffff00",
+   "ffffff",
+   "ffff00000000"
+  ],
+  "bytes_disp": [
+   "488d6c2470",
+   "48c74500feffffff",
+   "4839d1",
+   "0f84ba060000",
+   "4989d7",
+   "4889cf",
+   "f681c900000010",
+   "7531"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffff00000000ff",
+   "ffff"
+  ],
+  "ext_bytes_disp": [
+   "488d056c3e5c05",
+   "488945d0",
+   "488b0d613e5c05",
+   "ff153b876303",
+   "488d55d0",
+   "4889f9",
+   "e897120000",
+   "488b45d0",
+   "488b08",
+   "ff152a8b6303"
+  ],
+  "ext_mask_disp": [
+   "ffffff00000000",
+   "ffffff00",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffff",
+   "ffffffffff",
+   "ffffff00",
+   "ffffff",
+   "ffff00000000"
+  ],
+  "bytes_regs": [
+   "488d6c2470",
+   "48c74500feffffff",
+   "4839d1",
+   "0f84ba060000",
+   "4989d7",
+   "4889cf",
+   "f681c900000010",
+   "7531"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffc0ffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_regs": [
+   "488d056c3e5c05",
+   "488945d0",
+   "488b0d613e5c05",
+   "ff153b876303",
+   "488d55d0",
+   "4889f9",
+   "e897120000",
+   "488b45d0",
+   "488b08",
+   "ff152a8b6303"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ffffffff",
+   "f8ffc0ff",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffc0ffffffff"
+  ],
+  "bytes_rm": [
+   "488d6c2470",
+   "48c74500feffffff",
+   "4839d1",
+   "0f84ba060000",
+   "4989d7",
+   "4889cf",
+   "f681c900000010",
+   "7531"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fff8ffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_rm": [
+   "488d056c3e5c05",
+   "488945d0",
+   "488b0d613e5c05",
+   "ff153b876303",
+   "488d55d0",
+   "4889f9",
+   "e897120000",
+   "488b45d0",
+   "488b08",
+   "ff152a8b6303"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffffffff",
+   "fffff8ff",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff",
+   "fffff8",
+   "ffffffffff",
+   "fffff8ff",
+   "fffff8",
+   "fff8ffffffff"
+  ],
   "bytes": [
    "488d6c2470",
    "48c74500feffffff",
@@ -522,7 +1713,30 @@
   "pat": "488d6c247048c74500feffffff4839d10f84ba0600004989d74889cff681c9000000107531",
   "pmask": "ffffffff00ffffff0000000000ffffffffff00000000ffffffffffffffff0000000000ff00",
   "distinct": 7,
-  "size": 37
+  "size": 37,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA"
+  ]
  },
  {
   "name": "GIMeta_IsAssignableFrom",
@@ -574,6 +1788,162 @@
    "call|Md",
    "mov|R,R"
   ],
+  "ext_bytes": [
+   "ff15047d6303",
+   "4889f9",
+   "e874300000",
+   "488b0d15345c05",
+   "ff15f7806303",
+   "48837e3000",
+   "7522",
+   "488b0d01345c05",
+   "ff15db7c6303",
+   "4889f1"
+  ],
+  "ext_mask": [
+   "ffff00000000",
+   "ffffff",
+   "ff00000000",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff0000",
+   "ff00",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "4489c3",
+   "4889d6",
+   "4889cf",
+   "4883793000",
+   "7522",
+   "488b0d2a345c05"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00ff",
+   "ffff",
+   "ffffff00000000"
+  ],
+  "ext_bytes_disp": [
+   "ff15047d6303",
+   "4889f9",
+   "e874300000",
+   "488b0d15345c05",
+   "ff15f7806303",
+   "48837e3000",
+   "7522",
+   "488b0d01345c05",
+   "ff15db7c6303",
+   "4889f1"
+  ],
+  "ext_mask_disp": [
+   "ffff00000000",
+   "ffffff",
+   "ffffffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00ff",
+   "ffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "4489c3",
+   "4889d6",
+   "4889cf",
+   "4883793000",
+   "7522",
+   "488b0d2a345c05"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ffff",
+   "ffff",
+   "f8ffc0ffffffff"
+  ],
+  "ext_bytes_regs": [
+   "ff15047d6303",
+   "4889f9",
+   "e874300000",
+   "488b0d15345c05",
+   "ff15f7806303",
+   "48837e3000",
+   "7522",
+   "488b0d01345c05",
+   "ff15db7c6303",
+   "4889f1"
+  ],
+  "ext_mask_regs": [
+   "ffc0ffffffff",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ffff",
+   "ffff",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "4489c3",
+   "4889d6",
+   "4889cf",
+   "4883793000",
+   "7522",
+   "488b0d2a345c05"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "fffff8ffff",
+   "ffff",
+   "fffff8ffffffff"
+  ],
+  "ext_bytes_rm": [
+   "ff15047d6303",
+   "4889f9",
+   "e874300000",
+   "488b0d15345c05",
+   "ff15f7806303",
+   "48837e3000",
+   "7522",
+   "488b0d01345c05",
+   "ff15db7c6303",
+   "4889f1"
+  ],
+  "ext_mask_rm": [
+   "fff8ffffffff",
+   "fffff8",
+   "ffffffffff",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ffff",
+   "ffff",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8"
+  ],
   "bytes": [
    "488d6c2430",
    "48c745f8feffffff",
@@ -597,7 +1967,29 @@
   "pat": "488d6c243048c745f8feffffff4489c34889d64889cf48837930007522488b0d2a345c05",
   "pmask": "ffffffff00ffffff0000000000ffffffffffffffffffffffff0000ff00ffffff00000000",
   "distinct": 6,
-  "size": 36
+  "size": 36,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA"
+  ]
  },
  {
   "name": "GIMeta_SetupFieldsLocked",
@@ -649,6 +2041,162 @@
    "je|I",
    "mov|R,Md0"
   ],
+  "ext_bytes": [
+   "488b09",
+   "f68401c900000008",
+   "750b",
+   "4801c1",
+   "4889f2",
+   "e8b3ffffff",
+   "498b4738",
+   "4885c0",
+   "0f84c4010000",
+   "8b08"
+  ],
+  "ext_mask": [
+   "ffffff",
+   "ffffff0000000000",
+   "ff00",
+   "ffffff",
+   "ffffff",
+   "ff00000000",
+   "ffffff00",
+   "ffffff",
+   "ffff00000000",
+   "ffff"
+  ],
+  "bytes_disp": [
+   "f681c900000008",
+   "0f8509050000",
+   "4889d6",
+   "4989cf",
+   "8b81ac000000",
+   "4885c0",
+   "741f",
+   "488b0deb255c05"
+  ],
+  "mask_disp": [
+   "ffff00000000ff",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffff00000000",
+   "ffffff",
+   "ffff",
+   "ffffff00000000"
+  ],
+  "ext_bytes_disp": [
+   "488b09",
+   "f68401c900000008",
+   "750b",
+   "4801c1",
+   "4889f2",
+   "e8b3ffffff",
+   "498b4738",
+   "4885c0",
+   "0f84c4010000",
+   "8b08"
+  ],
+  "ext_mask_disp": [
+   "ffffff",
+   "ffffff00000000ff",
+   "ffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffffffff",
+   "ffff"
+  ],
+  "bytes_regs": [
+   "f681c900000008",
+   "0f8509050000",
+   "4889d6",
+   "4989cf",
+   "8b81ac000000",
+   "4885c0",
+   "741f",
+   "488b0deb255c05"
+  ],
+  "mask_regs": [
+   "ffc0ffffffffff",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffc0ffffffff",
+   "f8ffc0",
+   "ffff",
+   "f8ffc0ffffffff"
+  ],
+  "ext_bytes_regs": [
+   "488b09",
+   "f68401c900000008",
+   "750b",
+   "4801c1",
+   "4889f2",
+   "e8b3ffffff",
+   "498b4738",
+   "4885c0",
+   "0f84c4010000",
+   "8b08"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0",
+   "ffc0c0ffffffffff",
+   "ffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffffffffffff",
+   "ffc0"
+  ],
+  "bytes_rm": [
+   "f681c900000008",
+   "0f8509050000",
+   "4889d6",
+   "4989cf",
+   "8b81ac000000",
+   "4885c0",
+   "741f",
+   "488b0deb255c05"
+  ],
+  "mask_rm": [
+   "fff8ffffffffff",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fff8ffffffff",
+   "fffff8",
+   "ffff",
+   "fffff8ffffffff"
+  ],
+  "ext_bytes_rm": [
+   "488b09",
+   "f68401c900000008",
+   "750b",
+   "4801c1",
+   "4889f2",
+   "e8b3ffffff",
+   "498b4738",
+   "4885c0",
+   "0f84c4010000",
+   "8b08"
+  ],
+  "ext_mask_rm": [
+   "fffff8",
+   "fff8ffffffffffff",
+   "ffff",
+   "fffff8",
+   "fffff8",
+   "ffffffffff",
+   "fffff8ff",
+   "fffff8",
+   "ffffffffffff",
+   "fff8"
+  ],
   "bytes": [
    "f681c900000008",
    "0f8509050000",
@@ -672,7 +2220,29 @@
   "pat": "f681c9000000080f85090500004889d64989cf8b81ac0000004885c0741f488b0deb255c05",
   "pmask": "ffff0000000000ffff00000000ffffffffffffffff00000000ffffffff00ffffff00000000",
   "distinct": 6,
-  "size": 37
+  "size": 37,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA"
+  ]
  },
  {
   "name": "GIMeta_SetupTypeInfoLocked",
@@ -724,6 +2294,162 @@
    "mov|R,R",
    "mov|R,R"
   ],
+  "ext_bytes": [
+   "4885c9",
+   "7438",
+   "41f685a000000010",
+   "0f8550150000",
+   "0c20",
+   "418885c9000000",
+   "8b09",
+   "e8419f0000",
+   "4889c1",
+   "4c89fa"
+  ],
+  "ext_mask": [
+   "ffffff",
+   "ff00",
+   "ffffff0000000000",
+   "ffff00000000",
+   "ff00",
+   "ffffff00000000",
+   "ffff",
+   "ff00000000",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "48c74520feffffff",
+   "0fb681c9000000",
+   "a810",
+   "0f85eb0f0000",
+   "4989d7",
+   "4989cd",
+   "488b4938"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00ffffffff",
+   "ffffff00000000",
+   "ffff",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00"
+  ],
+  "ext_bytes_disp": [
+   "4885c9",
+   "7438",
+   "41f685a000000010",
+   "0f8550150000",
+   "0c20",
+   "418885c9000000",
+   "8b09",
+   "e8419f0000",
+   "4889c1",
+   "4c89fa"
+  ],
+  "ext_mask_disp": [
+   "ffffff",
+   "ffff",
+   "ffffff00000000ff",
+   "ffffffffffff",
+   "ffff",
+   "ffffff00000000",
+   "ffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "48c74520feffffff",
+   "0fb681c9000000",
+   "a810",
+   "0f85eb0f0000",
+   "4989d7",
+   "4989cd",
+   "488b4938"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "f8ffc0ffffffffff",
+   "ffffc0ffffffff",
+   "ffff",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "4885c9",
+   "7438",
+   "41f685a000000010",
+   "0f8550150000",
+   "0c20",
+   "418885c9000000",
+   "8b09",
+   "e8419f0000",
+   "4889c1",
+   "4c89fa"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0",
+   "ffff",
+   "f8ffc0ffffffffff",
+   "ffffffffffff",
+   "ffff",
+   "f8ffc0ffffffff",
+   "ffc0",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "48c74520feffffff",
+   "0fb681c9000000",
+   "a810",
+   "0f85eb0f0000",
+   "4989d7",
+   "4989cd",
+   "488b4938"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffffff",
+   "fffff8ffffffff",
+   "ffff",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "4885c9",
+   "7438",
+   "41f685a000000010",
+   "0f8550150000",
+   "0c20",
+   "418885c9000000",
+   "8b09",
+   "e8419f0000",
+   "4889c1",
+   "4c89fa"
+  ],
+  "ext_mask_rm": [
+   "fffff8",
+   "ffff",
+   "fffff8ffffffffff",
+   "ffffffffffff",
+   "ffff",
+   "fffff8ffffffff",
+   "fff8",
+   "ffffffffff",
+   "fffff8",
+   "fffff8"
+  ],
   "bytes": [
    "488dac2480000000",
    "48c74520feffffff",
@@ -747,7 +2473,29 @@
   "pat": "488dac248000000048c74520feffffff0fb681c9000000a8100f85eb0f00004989d74989cd488b4938",
   "pmask": "ffffffff00000000ffffff0000000000ffffff00000000ff00ffff00000000ffffffffffffffffff00",
   "distinct": 7,
-  "size": 41
+  "size": 41,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA"
+  ]
  },
  {
   "name": "GIMeta_SetupMethodsLocked",
@@ -799,6 +2547,162 @@
    "ret|",
    "mov|R,Md38"
   ],
+  "ext_bytes": [
+   "5b",
+   "5d",
+   "5f",
+   "5e",
+   "415c",
+   "415d",
+   "415e",
+   "415f",
+   "c3",
+   "498b4638"
+  ],
+  "ext_mask": [
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "0fb799c2000000",
+   "4885db",
+   "750a",
+   "41f686c80000000e",
+   "7407",
+   "49837e2000",
+   "7411",
+   "4883c458"
+  ],
+  "mask_disp": [
+   "ffffff00000000",
+   "ffffff",
+   "ffff",
+   "ffffff00000000ff",
+   "ffff",
+   "ffffff00ff",
+   "ffff",
+   "ffffffff"
+  ],
+  "ext_bytes_disp": [
+   "5b",
+   "5d",
+   "5f",
+   "5e",
+   "415c",
+   "415d",
+   "415e",
+   "415f",
+   "c3",
+   "498b4638"
+  ],
+  "ext_mask_disp": [
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ffffff00"
+  ],
+  "bytes_regs": [
+   "0fb799c2000000",
+   "4885db",
+   "750a",
+   "41f686c80000000e",
+   "7407",
+   "49837e2000",
+   "7411",
+   "4883c458"
+  ],
+  "mask_regs": [
+   "ffffc0ffffffff",
+   "f8ffc0",
+   "ffff",
+   "f8ffc0ffffffffff",
+   "ffff",
+   "f8ffc0ffff",
+   "ffff",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "5b",
+   "5d",
+   "5f",
+   "5e",
+   "415c",
+   "415d",
+   "415e",
+   "415f",
+   "c3",
+   "498b4638"
+  ],
+  "ext_mask_regs": [
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ff",
+   "f8ffc0ff"
+  ],
+  "bytes_rm": [
+   "0fb799c2000000",
+   "4885db",
+   "750a",
+   "41f686c80000000e",
+   "7407",
+   "49837e2000",
+   "7411",
+   "4883c458"
+  ],
+  "mask_rm": [
+   "fffff8ffffffff",
+   "fffff8",
+   "ffff",
+   "fffff8ffffffffff",
+   "ffff",
+   "fffff8ffff",
+   "ffff",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "5b",
+   "5d",
+   "5f",
+   "5e",
+   "415c",
+   "415d",
+   "415e",
+   "415f",
+   "c3",
+   "498b4638"
+  ],
+  "ext_mask_rm": [
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ff",
+   "fffff8ff"
+  ],
   "bytes": [
    "0fb799c2000000",
    "4885db",
@@ -822,7 +2726,22 @@
   "pat": "0fb799c20000004885db750a41f686c80000000e740749837e200074114883c458",
   "pmask": "ffffff00000000ffffffff00ffffff0000000000ff00ffffff0000ff00ffffff00",
   "distinct": 7,
-  "size": 33
+  "size": 33,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_GetMethodNameFromIndex",
@@ -874,6 +2793,162 @@
    "cmp|Md0*,i0",
    "jne|I"
   ],
+  "ext_bytes": [
+   "0f8e1d020000",
+   "89eb",
+   "31ed",
+   "eb0e",
+   "6690",
+   "48ffc5",
+   "4839eb",
+   "0f8409020000",
+   "48833cef00",
+   "75ed"
+  ],
+  "ext_mask": [
+   "ffff00000000",
+   "ffff",
+   "ffff",
+   "ff00",
+   "ffff",
+   "ffffff",
+   "ffffff",
+   "ffff00000000",
+   "ffffffff00",
+   "ff00"
+  ],
+  "bytes_disp": [
+   "e84fc2ffff",
+   "49837c242000",
+   "0f8438020000",
+   "49837c243800",
+   "750b",
+   "41f68424c80000000e",
+   "7446",
+   "85ed"
+  ],
+  "mask_disp": [
+   "ffffffffff",
+   "ffffffff00ff",
+   "ffffffffffff",
+   "ffffffff00ff",
+   "ffff",
+   "ffffffff00000000ff",
+   "ffff",
+   "ffff"
+  ],
+  "ext_bytes_disp": [
+   "0f8e1d020000",
+   "89eb",
+   "31ed",
+   "eb0e",
+   "6690",
+   "48ffc5",
+   "4839eb",
+   "0f8409020000",
+   "48833cef00",
+   "75ed"
+  ],
+  "ext_mask_disp": [
+   "ffffffffffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffffffffff",
+   "ffff"
+  ],
+  "bytes_regs": [
+   "e84fc2ffff",
+   "49837c242000",
+   "0f8438020000",
+   "49837c243800",
+   "750b",
+   "41f68424c80000000e",
+   "7446",
+   "85ed"
+  ],
+  "mask_regs": [
+   "ffffffffff",
+   "f8ffc0c0ffff",
+   "ffffffffffff",
+   "f8ffc0c0ffff",
+   "ffff",
+   "f8ffc0c0ffffffffff",
+   "ffff",
+   "ffc0"
+  ],
+  "ext_bytes_regs": [
+   "0f8e1d020000",
+   "89eb",
+   "31ed",
+   "eb0e",
+   "6690",
+   "48ffc5",
+   "4839eb",
+   "0f8409020000",
+   "48833cef00",
+   "75ed"
+  ],
+  "ext_mask_regs": [
+   "ffffffffffff",
+   "ffc0",
+   "ffc0",
+   "ffff",
+   "ffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffffff",
+   "f8ffc0c0ff",
+   "ffff"
+  ],
+  "bytes_rm": [
+   "e84fc2ffff",
+   "49837c242000",
+   "0f8438020000",
+   "49837c243800",
+   "750b",
+   "41f68424c80000000e",
+   "7446",
+   "85ed"
+  ],
+  "mask_rm": [
+   "ffffffffff",
+   "fffff8ffffff",
+   "ffffffffffff",
+   "fffff8ffffff",
+   "ffff",
+   "fffff8ffffffffffff",
+   "ffff",
+   "fff8"
+  ],
+  "ext_bytes_rm": [
+   "0f8e1d020000",
+   "89eb",
+   "31ed",
+   "eb0e",
+   "6690",
+   "48ffc5",
+   "4839eb",
+   "0f8409020000",
+   "48833cef00",
+   "75ed"
+  ],
+  "ext_mask_rm": [
+   "ffffffffffff",
+   "fff8",
+   "fff8",
+   "ffff",
+   "ffff",
+   "fffff8",
+   "fffff8",
+   "ffffffffffff",
+   "fffff8ffff",
+   "ffff"
+  ],
   "bytes": [
    "e84fc2ffff",
    "49837c242000",
@@ -897,7 +2972,22 @@
   "pat": "e84fc2ffff49837c2420000f843802000049837c243800750b41f68424c80000000e744685ed",
   "pmask": "ff00000000ffffffff0000ffff00000000ffffffff0000ff00ffffffff0000000000ff00ffff",
   "distinct": 6,
-  "size": 38
+  "size": 38,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_SetupEventsLocked",
@@ -949,6 +3039,162 @@
    "call|I",
    "mov|Md28,R"
   ],
+  "ext_bytes": [
+   "8b08",
+   "4889d7",
+   "e820800000",
+   "4889c1",
+   "4889f2",
+   "e8b5ffffff",
+   "488b4738",
+   "8b08",
+   "e80a800000",
+   "4889442428"
+  ],
+  "ext_mask": [
+   "ffff",
+   "ffffff",
+   "ff00000000",
+   "ffffff",
+   "ffffff",
+   "ff00000000",
+   "ffffff00",
+   "ffff",
+   "ff00000000",
+   "ffffffff00"
+  ],
+  "bytes_disp": [
+   "4883b98800000000",
+   "0f85b1040000",
+   "4889d6",
+   "4889ca",
+   "488b4138",
+   "4885c0",
+   "48894c2430",
+   "0f8427020000"
+  ],
+  "mask_disp": [
+   "ffffff00000000ff",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffff00",
+   "ffffffffffff"
+  ],
+  "ext_bytes_disp": [
+   "8b08",
+   "4889d7",
+   "e820800000",
+   "4889c1",
+   "4889f2",
+   "e8b5ffffff",
+   "488b4738",
+   "8b08",
+   "e80a800000",
+   "4889442428"
+  ],
+  "ext_mask_disp": [
+   "ffff",
+   "ffffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffff",
+   "ffffff00",
+   "ffff",
+   "ffffffffff",
+   "ffffffff00"
+  ],
+  "bytes_regs": [
+   "4883b98800000000",
+   "0f85b1040000",
+   "4889d6",
+   "4889ca",
+   "488b4138",
+   "4885c0",
+   "48894c2430",
+   "0f8427020000"
+  ],
+  "mask_regs": [
+   "f8ffc0ffffffffff",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0",
+   "f8ffc0c0ff",
+   "ffffffffffff"
+  ],
+  "ext_bytes_regs": [
+   "8b08",
+   "4889d7",
+   "e820800000",
+   "4889c1",
+   "4889f2",
+   "e8b5ffffff",
+   "488b4738",
+   "8b08",
+   "e80a800000",
+   "4889442428"
+  ],
+  "ext_mask_regs": [
+   "ffc0",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0ff",
+   "ffc0",
+   "ffffffffff",
+   "f8ffc0c0ff"
+  ],
+  "bytes_rm": [
+   "4883b98800000000",
+   "0f85b1040000",
+   "4889d6",
+   "4889ca",
+   "488b4138",
+   "4885c0",
+   "48894c2430",
+   "0f8427020000"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "fffff8ffff",
+   "ffffffffffff"
+  ],
+  "ext_bytes_rm": [
+   "8b08",
+   "4889d7",
+   "e820800000",
+   "4889c1",
+   "4889f2",
+   "e8b5ffffff",
+   "488b4738",
+   "8b08",
+   "e80a800000",
+   "4889442428"
+  ],
+  "ext_mask_rm": [
+   "fff8",
+   "fffff8",
+   "ffffffffff",
+   "fffff8",
+   "fffff8",
+   "ffffffffff",
+   "fffff8ff",
+   "fff8",
+   "ffffffffff",
+   "fffff8ffff"
+  ],
   "bytes": [
    "4883b98800000000",
    "0f85b1040000",
@@ -972,7 +3218,20 @@
   "pat": "4883b988000000000f85b10400004889d64889ca488b41384885c048894c24300f8427020000",
   "pmask": "ffffff0000000000ffff00000000ffffffffffffffffff00ffffffffffffff00ffff00000000",
   "distinct": 7,
-  "size": 38
+  "size": 38,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_SetupPropertiesLocked",
@@ -1024,6 +3283,162 @@
    "mov|R,Md98",
    "movzx|R,Md43"
   ],
+  "ext_bytes": [
+   "e84b7b0000",
+   "4889c1",
+   "4889f2",
+   "e8c0ffffff",
+   "498b442438",
+   "8b08",
+   "e8347b0000",
+   "4989c5",
+   "488b8098000000",
+   "0fb64043"
+  ],
+  "ext_mask": [
+   "ff00000000",
+   "ffffff",
+   "ffffff",
+   "ff00000000",
+   "ffffffff00",
+   "ffff",
+   "ff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "4883796000",
+   "0f85c0030000",
+   "4889d6",
+   "4989cc",
+   "488b4138",
+   "4885c0",
+   "0f84aa010000",
+   "8b08"
+  ],
+  "mask_disp": [
+   "ffffff00ff",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_disp": [
+   "e84b7b0000",
+   "4889c1",
+   "4889f2",
+   "e8c0ffffff",
+   "498b442438",
+   "8b08",
+   "e8347b0000",
+   "4989c5",
+   "488b8098000000",
+   "0fb64043"
+  ],
+  "ext_mask_disp": [
+   "ffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffff",
+   "ffffffff00",
+   "ffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffffff00"
+  ],
+  "bytes_regs": [
+   "4883796000",
+   "0f85c0030000",
+   "4889d6",
+   "4989cc",
+   "488b4138",
+   "4885c0",
+   "0f84aa010000",
+   "8b08"
+  ],
+  "mask_regs": [
+   "f8ffc0ffff",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffffffffffff",
+   "ffc0"
+  ],
+  "ext_bytes_regs": [
+   "e84b7b0000",
+   "4889c1",
+   "4889f2",
+   "e8c0ffffff",
+   "498b442438",
+   "8b08",
+   "e8347b0000",
+   "4989c5",
+   "488b8098000000",
+   "0fb64043"
+  ],
+  "ext_mask_regs": [
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0c0ff",
+   "ffc0",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffffc0ff"
+  ],
+  "bytes_rm": [
+   "4883796000",
+   "0f85c0030000",
+   "4889d6",
+   "4989cc",
+   "488b4138",
+   "4885c0",
+   "0f84aa010000",
+   "8b08"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "ffffffffffff",
+   "fff8"
+  ],
+  "ext_bytes_rm": [
+   "e84b7b0000",
+   "4889c1",
+   "4889f2",
+   "e8c0ffffff",
+   "498b442438",
+   "8b08",
+   "e8347b0000",
+   "4989c5",
+   "488b8098000000",
+   "0fb64043"
+  ],
+  "ext_mask_rm": [
+   "ffffffffff",
+   "fffff8",
+   "fffff8",
+   "ffffffffff",
+   "fffff8ffff",
+   "fff8",
+   "ffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fffff8ff"
+  ],
   "bytes": [
    "4883796000",
    "0f85c0030000",
@@ -1047,7 +3462,19 @@
   "pat": "48837960000f85c00300004889d64989cc488b41384885c00f84aa0100008b08",
   "pmask": "ffffff0000ffff00000000ffffffffffffffffff00ffffffffff00000000ffff",
   "distinct": 6,
-  "size": 32
+  "size": 32,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_SetupTypeLocked2",
@@ -1099,6 +3526,162 @@
    "mov|R,R",
    "mov|R,Md"
   ],
+  "ext_bytes": [
+   "488b09",
+   "48837c013000",
+   "7512",
+   "4801c1",
+   "e8c2ffffff",
+   "8b86ac000000",
+   "85c0",
+   "7416",
+   "89c0",
+   "488b0d7ff85b05"
+  ],
+  "ext_mask": [
+   "ffffff",
+   "ffffffff0000",
+   "ff00",
+   "ffffff",
+   "ff00000000",
+   "ffff00000000",
+   "ffff",
+   "ff00",
+   "ffff",
+   "ffffff00000000"
+  ],
+  "bytes_disp": [
+   "4883793000",
+   "0f85d1000000",
+   "4889ce",
+   "8b81ac000000",
+   "b301",
+   "4885c0",
+   "743a",
+   "488b0da5f85b05"
+  ],
+  "mask_disp": [
+   "ffffff00ff",
+   "ffffffffffff",
+   "ffffff",
+   "ffff00000000",
+   "ffff",
+   "ffffff",
+   "ffff",
+   "ffffff00000000"
+  ],
+  "ext_bytes_disp": [
+   "488b09",
+   "48837c013000",
+   "7512",
+   "4801c1",
+   "e8c2ffffff",
+   "8b86ac000000",
+   "85c0",
+   "7416",
+   "89c0",
+   "488b0d7ff85b05"
+  ],
+  "ext_mask_disp": [
+   "ffffff",
+   "ffffffff00ff",
+   "ffff",
+   "ffffff",
+   "ffffffffff",
+   "ffff00000000",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffffff00000000"
+  ],
+  "bytes_regs": [
+   "4883793000",
+   "0f85d1000000",
+   "4889ce",
+   "8b81ac000000",
+   "b301",
+   "4885c0",
+   "743a",
+   "488b0da5f85b05"
+  ],
+  "mask_regs": [
+   "f8ffc0ffff",
+   "ffffffffffff",
+   "f8ffc0",
+   "ffc0ffffffff",
+   "ffff",
+   "f8ffc0",
+   "ffff",
+   "f8ffc0ffffffff"
+  ],
+  "ext_bytes_regs": [
+   "488b09",
+   "48837c013000",
+   "7512",
+   "4801c1",
+   "e8c2ffffff",
+   "8b86ac000000",
+   "85c0",
+   "7416",
+   "89c0",
+   "488b0d7ff85b05"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0",
+   "f8ffc0c0ffff",
+   "ffff",
+   "f8ffc0",
+   "ffffffffff",
+   "ffc0ffffffff",
+   "ffc0",
+   "ffff",
+   "ffc0",
+   "f8ffc0ffffffff"
+  ],
+  "bytes_rm": [
+   "4883793000",
+   "0f85d1000000",
+   "4889ce",
+   "8b81ac000000",
+   "b301",
+   "4885c0",
+   "743a",
+   "488b0da5f85b05"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "ffffffffffff",
+   "fffff8",
+   "fff8ffffffff",
+   "ffff",
+   "fffff8",
+   "ffff",
+   "fffff8ffffffff"
+  ],
+  "ext_bytes_rm": [
+   "488b09",
+   "48837c013000",
+   "7512",
+   "4801c1",
+   "e8c2ffffff",
+   "8b86ac000000",
+   "85c0",
+   "7416",
+   "89c0",
+   "488b0d7ff85b05"
+  ],
+  "ext_mask_rm": [
+   "fffff8",
+   "fffff8ffffff",
+   "ffff",
+   "fffff8",
+   "ffffffffff",
+   "fff8ffffffff",
+   "fff8",
+   "ffff",
+   "fff8",
+   "fffff8ffffffff"
+  ],
   "bytes": [
    "4883793000",
    "0f85d1000000",
@@ -1122,7 +3705,17 @@
   "pat": "48837930000f85d10000004889ce8b81ac000000b3014885c0743a488b0da5f85b05",
   "pmask": "ffffff0000ffff00000000ffffffffff00000000ff00ffffffff00ffffff00000000",
   "distinct": 7,
-  "size": 34
+  "size": 34,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_CreateTypeInfo",
@@ -1174,6 +3767,162 @@
    "mov|R,R",
    "jmp|I"
   ],
+  "ext_bytes": [
+   "488b0dc0dc5b05",
+   "ffd6",
+   "4c8b0dc7dc5b05",
+   "4c8b15e0dc5b05",
+   "4c8b05e1dc5b05",
+   "4531ff",
+   "49bb0101010101010101",
+   "31f6",
+   "4c89f2",
+   "e980000000"
+  ],
+  "ext_mask": [
+   "ffffff00000000",
+   "ffff",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff",
+   "ffff0000000000000000",
+   "ffff",
+   "ffffff",
+   "ff00000000"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "0f29bd80000000",
+   "0f297570",
+   "48c74568feffffff",
+   "4989ce",
+   "488b0dd0e65b05",
+   "488b35a92f6303",
+   "ffd6"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00000000",
+   "ffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffff"
+  ],
+  "ext_bytes_disp": [
+   "488b0dc0dc5b05",
+   "ffd6",
+   "4c8b0dc7dc5b05",
+   "4c8b15e0dc5b05",
+   "4c8b05e1dc5b05",
+   "4531ff",
+   "49bb0101010101010101",
+   "31f6",
+   "4c89f2",
+   "e980000000"
+  ],
+  "ext_mask_disp": [
+   "ffffff00000000",
+   "ffff",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "ffffff",
+   "ffffffffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "0f29bd80000000",
+   "0f297570",
+   "48c74568feffffff",
+   "4989ce",
+   "488b0dd0e65b05",
+   "488b35a92f6303",
+   "ffd6"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "ffffc0ffffffff",
+   "ffffc0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "ffc0"
+  ],
+  "ext_bytes_regs": [
+   "488b0dc0dc5b05",
+   "ffd6",
+   "4c8b0dc7dc5b05",
+   "4c8b15e0dc5b05",
+   "4c8b05e1dc5b05",
+   "4531ff",
+   "49bb0101010101010101",
+   "31f6",
+   "4c89f2",
+   "e980000000"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ffffffff",
+   "ffc0",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0",
+   "ffffffffffffffffffff",
+   "ffc0",
+   "f8ffc0",
+   "ffffffffff"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "0f29bd80000000",
+   "0f297570",
+   "48c74568feffffff",
+   "4989ce",
+   "488b0dd0e65b05",
+   "488b35a92f6303",
+   "ffd6"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fff8"
+  ],
+  "ext_bytes_rm": [
+   "488b0dc0dc5b05",
+   "ffd6",
+   "4c8b0dc7dc5b05",
+   "4c8b15e0dc5b05",
+   "4c8b05e1dc5b05",
+   "4531ff",
+   "49bb0101010101010101",
+   "31f6",
+   "4c89f2",
+   "e980000000"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffffffff",
+   "fff8",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8",
+   "ffffffffffffffffffff",
+   "fff8",
+   "fffff8",
+   "ffffffffff"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bd80000000",
@@ -1197,7 +3946,20 @@
   "pat": "488dac24800000000f29bd800000000f29757048c74568feffffff4989ce488b0dd0e65b05488b35a92f6303ffd6",
   "pmask": "ffffffff00000000ffffff00000000ffffff00ffffff0000000000ffffffffffff00000000ffffff00000000ffff",
   "distinct": 6,
-  "size": 46
+  "size": 46,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_GetMethodInfo2",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendChar",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_GetFieldName",
@@ -1249,6 +4011,162 @@
    "pop|R",
    "ret|"
   ],
+  "ext_bytes": [
+   "7419",
+   "488b0daa8d5b05",
+   "ff158cda6203",
+   "4889f8",
+   "4883c428",
+   "5b",
+   "5f",
+   "5e",
+   "5d",
+   "c3"
+  ],
+  "ext_mask": [
+   "ff00",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff",
+   "ffffff00",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
+  "bytes_disp": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4889ce",
+   "488b0dc98d5b05",
+   "ff15a3d66203",
+   "48bb19fdccf03736e5e2",
+   "488b3e",
+   "4801df"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "7419",
+   "488b0daa8d5b05",
+   "ff158cda6203",
+   "4889f8",
+   "4883c428",
+   "5b",
+   "5f",
+   "5e",
+   "5d",
+   "c3"
+  ],
+  "ext_mask_disp": [
+   "ffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff",
+   "ffffffff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
+  "bytes_regs": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4889ce",
+   "488b0dc98d5b05",
+   "ff15a3d66203",
+   "48bb19fdccf03736e5e2",
+   "488b3e",
+   "4801df"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "7419",
+   "488b0daa8d5b05",
+   "ff158cda6203",
+   "4889f8",
+   "4883c428",
+   "5b",
+   "5f",
+   "5e",
+   "5d",
+   "c3"
+  ],
+  "ext_mask_regs": [
+   "ffff",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
+  "bytes_rm": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4889ce",
+   "488b0dc98d5b05",
+   "ff15a3d66203",
+   "48bb19fdccf03736e5e2",
+   "488b3e",
+   "4801df"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "7419",
+   "488b0daa8d5b05",
+   "ff158cda6203",
+   "4889f8",
+   "4883c428",
+   "5b",
+   "5f",
+   "5e",
+   "5d",
+   "c3"
+  ],
+  "ext_mask_rm": [
+   "ffff",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8",
+   "fffff8ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
   "bytes": [
    "488d6c2420",
    "48c74500feffffff",
@@ -1272,7 +4190,19 @@
   "pat": "488d6c242048c74500feffffff4889ce488b0dc98d5b05ff15a3d6620348bb19fdccf03736e5e2488b3e4801df",
   "pmask": "ffffffff00ffffff0000000000ffffffffffff00000000ffff00000000ffff0000000000000000ffffffffffff",
   "distinct": 7,
-  "size": 45
+  "size": 45,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetFieldName",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_GetTypeInfoFromIndex",
+   "GIMeta_RegisterTypeRecursive",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupTypeLocked2"
+  ]
  },
  {
   "name": "GIMeta_GetMethodInfoFromIndex",
@@ -1324,6 +4254,162 @@
    "add|R,I",
    "lea|R,Md0*"
   ],
+  "ext_bytes": [
+   "488b05537f5b05",
+   "b9ac8935e3",
+   "03886c010000",
+   "4863c1",
+   "480305467f5b05",
+   "89f2",
+   "69ce73bf4833",
+   "81f147897573",
+   "81c15b9e435c",
+   "488d3c92"
+  ],
+  "ext_mask": [
+   "ffffff00000000",
+   "ff00000000",
+   "ffff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ffff",
+   "ffff00000000",
+   "ffff00000000",
+   "ffff00000000",
+   "ffffffff"
+  ],
+  "bytes_disp": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "488b05947f5b05",
+   "4863d9",
+   "488b04d8",
+   "4885c0",
+   "0f85b9000000",
+   "89ce"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff00000000",
+   "ffffff",
+   "ffffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_disp": [
+   "488b05537f5b05",
+   "b9ac8935e3",
+   "03886c010000",
+   "4863c1",
+   "480305467f5b05",
+   "89f2",
+   "69ce73bf4833",
+   "81f147897573",
+   "81c15b9e435c",
+   "488d3c92"
+  ],
+  "ext_mask_disp": [
+   "ffffff00000000",
+   "ffffffffff",
+   "ffff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ffff",
+   "ffffffffffff",
+   "ffffffffffff",
+   "ffffffffffff",
+   "ffffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "488b05947f5b05",
+   "4863d9",
+   "488b04d8",
+   "4885c0",
+   "0f85b9000000",
+   "89ce"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0",
+   "f8ffc0c0",
+   "f8ffc0",
+   "ffffffffffff",
+   "ffc0"
+  ],
+  "ext_bytes_regs": [
+   "488b05537f5b05",
+   "b9ac8935e3",
+   "03886c010000",
+   "4863c1",
+   "480305467f5b05",
+   "89f2",
+   "69ce73bf4833",
+   "81f147897573",
+   "81c15b9e435c",
+   "488d3c92"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ffffffff",
+   "ffffffffff",
+   "ffc0ffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffc0",
+   "ffc0ffffffff",
+   "ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0c0"
+  ],
+  "bytes_rm": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "488b05947f5b05",
+   "4863d9",
+   "488b04d8",
+   "4885c0",
+   "0f85b9000000",
+   "89ce"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8ffffffff",
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "ffffffffffff",
+   "fff8"
+  ],
+  "ext_bytes_rm": [
+   "488b05537f5b05",
+   "b9ac8935e3",
+   "03886c010000",
+   "4863c1",
+   "480305467f5b05",
+   "89f2",
+   "69ce73bf4833",
+   "81f147897573",
+   "81c15b9e435c",
+   "488d3c92"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffffffff",
+   "ffffffffff",
+   "fff8ffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fff8",
+   "fff8ffffffff",
+   "fff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff"
+  ],
   "bytes": [
    "488d6c2430",
    "48c74500feffffff",
@@ -1347,7 +4433,19 @@
   "pat": "488d6c243048c74500feffffff488b05947f5b054863d9488b04d84885c00f85b900000089ce",
   "pmask": "ffffffff00ffffff0000000000ffffff00000000ffffffffffffffffffffffff00000000ffff",
   "distinct": 8,
-  "size": 38
+  "size": 38,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetFieldName",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_GetTypeInfoFromIndex",
+   "GIMeta_RegisterTypeRecursive",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupTypeLocked2"
+  ]
  },
  {
   "name": "GIMeta_IterNestedTypes",
@@ -1399,6 +4497,162 @@
    "mov|R,R",
    "mov|R,R"
   ],
+  "ext_bytes": [
+   "5f",
+   "5e",
+   "415c",
+   "415d",
+   "415e",
+   "415f",
+   "5d",
+   "c3",
+   "4989d6",
+   "4989cc"
+  ],
+  "ext_mask": [
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ff",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488d6c2470",
+   "0f2975f0",
+   "48c745e8feffffff",
+   "807a45ba",
+   "7515",
+   "0f2875f0",
+   "4883c478",
+   "5b"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00",
+   "ffffff00ffffffff",
+   "ffff00ff",
+   "ffff",
+   "ffffff00",
+   "ffffffff",
+   "ff"
+  ],
+  "ext_bytes_disp": [
+   "5f",
+   "5e",
+   "415c",
+   "415d",
+   "415e",
+   "415f",
+   "5d",
+   "c3",
+   "4989d6",
+   "4989cc"
+  ],
+  "ext_mask_disp": [
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ff",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2470",
+   "0f2975f0",
+   "48c745e8feffffff",
+   "807a45ba",
+   "7515",
+   "0f2875f0",
+   "4883c478",
+   "5b"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "ffffc0ff",
+   "f8ffc0ffffffffff",
+   "ffc0ffff",
+   "ffff",
+   "ffffc0ff",
+   "f8ffc0ff",
+   "ff"
+  ],
+  "ext_bytes_regs": [
+   "5f",
+   "5e",
+   "415c",
+   "415d",
+   "415e",
+   "415f",
+   "5d",
+   "c3",
+   "4989d6",
+   "4989cc"
+  ],
+  "ext_mask_regs": [
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ff",
+   "f8ffc0",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "488d6c2470",
+   "0f2975f0",
+   "48c745e8feffffff",
+   "807a45ba",
+   "7515",
+   "0f2875f0",
+   "4883c478",
+   "5b"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ff",
+   "fffff8ffffffffff",
+   "fff8ffff",
+   "ffff",
+   "fffff8ff",
+   "fffff8ff",
+   "ff"
+  ],
+  "ext_bytes_rm": [
+   "5f",
+   "5e",
+   "415c",
+   "415d",
+   "415e",
+   "415f",
+   "5d",
+   "c3",
+   "4989d6",
+   "4989cc"
+  ],
+  "ext_mask_rm": [
+   "ff",
+   "ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ff",
+   "ff",
+   "fffff8",
+   "fffff8"
+  ],
   "bytes": [
    "488d6c2470",
    "0f2975f0",
@@ -1422,7 +4676,18 @@
   "pat": "488d6c24700f2975f048c745e8feffffff807a45ba75150f2875f04883c4785b",
   "pmask": "ffffffff00ffffff00ffffff0000000000ffff0000ff00ffffff00ffffff00ff",
   "distinct": 8,
-  "size": 32
+  "size": 32,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetFieldName",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_GetTypeInfoFromIndex",
+   "GIMeta_RegisterTypeRecursive",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupTypeLocked2"
+  ]
  },
  {
   "name": "GIMeta_GetMethodInfo2",
@@ -1474,6 +4739,162 @@
    "mov|Md48,R",
    "cmp|Md24,I"
   ],
+  "ext_bytes": [
+   "4889542450",
+   "7214",
+   "488b4220",
+   "4889442448",
+   "817f24ea223e6a",
+   "7414",
+   "eb35",
+   "488d4220",
+   "4889442448",
+   "817f24ea223e6a"
+  ],
+  "ext_mask": [
+   "ffffffff00",
+   "ff00",
+   "ffffff00",
+   "ffffffff00",
+   "ffff0000000000",
+   "ff00",
+   "ff00",
+   "ffffff00",
+   "ffffffff00",
+   "ffff0000000000"
+  ],
+  "bytes_disp": [
+   "4488442427",
+   "4889cf",
+   "488b4238",
+   "48837a1810",
+   "4889d6",
+   "7203",
+   "488b32",
+   "4883f810"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff",
+   "ffffff00",
+   "ffffff00ff",
+   "ffffff",
+   "ffff",
+   "ffffff",
+   "ffffffff"
+  ],
+  "ext_bytes_disp": [
+   "4889542450",
+   "7214",
+   "488b4220",
+   "4889442448",
+   "817f24ea223e6a",
+   "7414",
+   "eb35",
+   "488d4220",
+   "4889442448",
+   "817f24ea223e6a"
+  ],
+  "ext_mask_disp": [
+   "ffffffff00",
+   "ffff",
+   "ffffff00",
+   "ffffffff00",
+   "ffff00ffffffff",
+   "ffff",
+   "ffff",
+   "ffffff00",
+   "ffffffff00",
+   "ffff00ffffffff"
+  ],
+  "bytes_regs": [
+   "4488442427",
+   "4889cf",
+   "488b4238",
+   "48837a1810",
+   "4889d6",
+   "7203",
+   "488b32",
+   "4883f810"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0ffff",
+   "f8ffc0",
+   "ffff",
+   "f8ffc0",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "4889542450",
+   "7214",
+   "488b4220",
+   "4889442448",
+   "817f24ea223e6a",
+   "7414",
+   "eb35",
+   "488d4220",
+   "4889442448",
+   "817f24ea223e6a"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0c0ff",
+   "ffff",
+   "f8ffc0ff",
+   "f8ffc0c0ff",
+   "ffc0ffffffffff",
+   "ffff",
+   "ffff",
+   "f8ffc0ff",
+   "f8ffc0c0ff",
+   "ffc0ffffffffff"
+  ],
+  "bytes_rm": [
+   "4488442427",
+   "4889cf",
+   "488b4238",
+   "48837a1810",
+   "4889d6",
+   "7203",
+   "488b32",
+   "4883f810"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8",
+   "fffff8ff",
+   "fffff8ffff",
+   "fffff8",
+   "ffff",
+   "fffff8",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "4889542450",
+   "7214",
+   "488b4220",
+   "4889442448",
+   "817f24ea223e6a",
+   "7414",
+   "eb35",
+   "488d4220",
+   "4889442448",
+   "817f24ea223e6a"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffff",
+   "ffff",
+   "fffff8ff",
+   "fffff8ffff",
+   "fff8ffffffffff",
+   "ffff",
+   "ffff",
+   "fffff8ff",
+   "fffff8ffff",
+   "fff8ffffffffff"
+  ],
   "bytes": [
    "4488442427",
    "4889cf",
@@ -1497,7 +4918,17 @@
   "pat": "44884424274889cf488b423848837a18104889d67203488b324883f810",
   "pmask": "ffffffff00ffffffffffff00ffffff0000ffffffff00ffffffffffff00",
   "distinct": 6,
-  "size": 29
+  "size": 29,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetFieldName",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_GetTypeInfoFromIndex",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupTypeLocked2"
+  ]
  },
  {
   "name": "GIMeta_LoadMetadataFile",
@@ -1549,6 +4980,162 @@
    "lea|R,Md8",
    "lea|R,Md-28"
   ],
+  "ext_bytes": [
+   "e864edfdff",
+   "488b45f8",
+   "48837d0010",
+   "7204",
+   "488b7de8",
+   "48897d08",
+   "48894510",
+   "488d7db8",
+   "488d5508",
+   "4c8d45d8"
+  ],
+  "ext_mask": [
+   "ff00000000",
+   "ffffff00",
+   "ffffff0000",
+   "ff00",
+   "ffffff00",
+   "ffffff00",
+   "ffffff00",
+   "ffffff00",
+   "ffffff00",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "48c74518feffffff",
+   "4889ce",
+   "488d0502b55303",
+   "488945d8",
+   "48c745e008000000",
+   "488d7de8",
+   "4889f9"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffffff00",
+   "ffffff00ffffffff",
+   "ffffff00",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "e864edfdff",
+   "488b45f8",
+   "48837d0010",
+   "7204",
+   "488b7de8",
+   "48897d08",
+   "48894510",
+   "488d7db8",
+   "488d5508",
+   "4c8d45d8"
+  ],
+  "ext_mask_disp": [
+   "ffffffffff",
+   "ffffff00",
+   "ffffff00ff",
+   "ffff",
+   "ffffff00",
+   "ffffff00",
+   "ffffff00",
+   "ffffff00",
+   "ffffff00",
+   "ffffff00"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "48c74518feffffff",
+   "4889ce",
+   "488d0502b55303",
+   "488945d8",
+   "48c745e008000000",
+   "488d7de8",
+   "4889f9"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "f8ffc0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ff",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "e864edfdff",
+   "488b45f8",
+   "48837d0010",
+   "7204",
+   "488b7de8",
+   "48897d08",
+   "48894510",
+   "488d7db8",
+   "488d5508",
+   "4c8d45d8"
+  ],
+  "ext_mask_regs": [
+   "ffffffffff",
+   "f8ffc0ff",
+   "f8ffc0ffff",
+   "ffff",
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "f8ffc0ff"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "48c74518feffffff",
+   "4889ce",
+   "488d0502b55303",
+   "488945d8",
+   "48c745e008000000",
+   "488d7de8",
+   "4889f9"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "fffff8ffffffffff",
+   "fffff8ff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "e864edfdff",
+   "488b45f8",
+   "48837d0010",
+   "7204",
+   "488b7de8",
+   "48897d08",
+   "48894510",
+   "488d7db8",
+   "488d5508",
+   "4c8d45d8"
+  ],
+  "ext_mask_rm": [
+   "ffffffffff",
+   "fffff8ff",
+   "fffff8ffff",
+   "ffff",
+   "fffff8ff",
+   "fffff8ff",
+   "fffff8ff",
+   "fffff8ff",
+   "fffff8ff",
+   "fffff8ff"
+  ],
   "bytes": [
    "488dac2480000000",
    "48c74518feffffff",
@@ -1572,7 +5159,13 @@
   "pat": "488dac248000000048c74518feffffff4889ce488d0502b55303488945d848c745e008000000488d7de84889f9",
   "pmask": "ffffffff00000000ffffff0000000000ffffffffffff00000000ffffff00ffffff0000000000ffffff00ffffff",
   "distinct": 4,
-  "size": 45
+  "size": 45,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoFromIndex"
+  ]
  },
  {
   "name": "GIMeta_GetDefaultValue",
@@ -1624,6 +5217,162 @@
    "imul|R,R,I",
    "xor|R,Md0*"
   ],
+  "ext_bytes": [
+   "69f963df87d9",
+   "8db7b50d2b99",
+   "81f6d6db056b",
+   "4469e63d46927b",
+   "ffc1",
+   "81c718edb272",
+   "81f7d6db056b",
+   "44332498",
+   "69df3d46927b",
+   "331c88"
+  ],
+  "ext_mask": [
+   "ffff00000000",
+   "ffff00000000",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffff",
+   "ffff00000000",
+   "ffff00000000",
+   "ffffffff",
+   "ffff00000000",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "488b15941e5b05",
+   "4863825c010000",
+   "48351dccfb7a",
+   "89cb",
+   "4c8b3d861e5b05",
+   "4c01f8"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffffffffff",
+   "ffff",
+   "ffffff00000000",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "69f963df87d9",
+   "8db7b50d2b99",
+   "81f6d6db056b",
+   "4469e63d46927b",
+   "ffc1",
+   "81c718edb272",
+   "81f7d6db056b",
+   "44332498",
+   "69df3d46927b",
+   "331c88"
+  ],
+  "ext_mask_disp": [
+   "ffffffffffff",
+   "ffff00000000",
+   "ffffffffffff",
+   "ffffffffffffff",
+   "ffff",
+   "ffffffffffff",
+   "ffffffffffff",
+   "ffffffff",
+   "ffffffffffff",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "488b15941e5b05",
+   "4863825c010000",
+   "48351dccfb7a",
+   "89cb",
+   "4c8b3d861e5b05",
+   "4c01f8"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "ffffffffffff",
+   "ffc0",
+   "f8ffc0ffffffff",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "69f963df87d9",
+   "8db7b50d2b99",
+   "81f6d6db056b",
+   "4469e63d46927b",
+   "ffc1",
+   "81c718edb272",
+   "81f7d6db056b",
+   "44332498",
+   "69df3d46927b",
+   "331c88"
+  ],
+  "ext_mask_regs": [
+   "ffc0ffffffff",
+   "ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "ffc0",
+   "ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0c0",
+   "ffc0ffffffff",
+   "ffc0c0"
+  ],
+  "bytes_rm": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "488b15941e5b05",
+   "4863825c010000",
+   "48351dccfb7a",
+   "89cb",
+   "4c8b3d861e5b05",
+   "4c01f8"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "ffffffffffff",
+   "fff8",
+   "fffff8ffffffff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "69f963df87d9",
+   "8db7b50d2b99",
+   "81f6d6db056b",
+   "4469e63d46927b",
+   "ffc1",
+   "81c718edb272",
+   "81f7d6db056b",
+   "44332498",
+   "69df3d46927b",
+   "331c88"
+  ],
+  "ext_mask_rm": [
+   "fff8ffffffff",
+   "fff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ffffffff",
+   "fff8",
+   "fff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff",
+   "fff8ffffffff",
+   "fff8ff"
+  ],
   "bytes": [
    "488d6c2430",
    "48c74500feffffff",
@@ -1647,7 +5396,13 @@
   "pat": "488d6c243048c74500feffffff488b15941e5b054863825c01000048351dccfb7a89cb4c8b3d861e5b054c01f8",
   "pmask": "ffffffff00ffffff0000000000ffffff00000000ffffff00000000ffff00000000ffffffffff00000000ffffff",
   "distinct": 7,
-  "size": 45
+  "size": 45,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoFromIndex"
+  ]
  },
  {
   "name": "GIMeta_DecodeDefaultValue",
@@ -1699,6 +5454,162 @@
    "mov|Md8,R",
    "mov|R,R"
   ],
+  "ext_bytes": [
+   "4c8945d8",
+   "488d054a155b05",
+   "488945b0",
+   "c645b800",
+   "488b0d3b155b05",
+   "ff1505686203",
+   "4963c6",
+   "48bb4febd4273daeb2c2",
+   "48897d08",
+   "4889f9"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffffff00000000",
+   "ffffff00",
+   "ffff0000",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff",
+   "ffff0000000000000000",
+   "ffffff00",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "48c74510feffffff",
+   "4c89c6",
+   "4889d7",
+   "4189ce",
+   "48c745c800000000",
+   "894dc8",
+   "488955d0"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00ffffffff",
+   "ffff00",
+   "ffffff00"
+  ],
+  "ext_bytes_disp": [
+   "4c8945d8",
+   "488d054a155b05",
+   "488945b0",
+   "c645b800",
+   "488b0d3b155b05",
+   "ff1505686203",
+   "4963c6",
+   "48bb4febd4273daeb2c2",
+   "48897d08",
+   "4889f9"
+  ],
+  "ext_mask_disp": [
+   "ffffff00",
+   "ffffff00000000",
+   "ffffff00",
+   "ffff00ff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff",
+   "ffffffffffffffffffff",
+   "ffffff00",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "48c74510feffffff",
+   "4c89c6",
+   "4889d7",
+   "4189ce",
+   "48c745c800000000",
+   "894dc8",
+   "488955d0"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ffffffffff",
+   "ffc0ff",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "4c8945d8",
+   "488d054a155b05",
+   "488945b0",
+   "c645b800",
+   "488b0d3b155b05",
+   "ff1505686203",
+   "4963c6",
+   "48bb4febd4273daeb2c2",
+   "48897d08",
+   "4889f9"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ff",
+   "f8ffc0ffffffff",
+   "f8ffc0ff",
+   "ffc0ffff",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0",
+   "ffffffffffffffffffff",
+   "f8ffc0ff",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "48c74510feffffff",
+   "4c89c6",
+   "4889d7",
+   "4189ce",
+   "48c745c800000000",
+   "894dc8",
+   "488955d0"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "fffff8ffffffffff",
+   "fff8ff",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "4c8945d8",
+   "488d054a155b05",
+   "488945b0",
+   "c645b800",
+   "488b0d3b155b05",
+   "ff1505686203",
+   "4963c6",
+   "48bb4febd4273daeb2c2",
+   "48897d08",
+   "4889f9"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "fff8ffff",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8",
+   "ffffffffffffffffffff",
+   "fffff8ff",
+   "fffff8"
+  ],
   "bytes": [
    "488dac2480000000",
    "48c74510feffffff",
@@ -1722,7 +5633,11 @@
   "pat": "488dac248000000048c74510feffffff4c89c64889d74189ce48c745c800000000894dc8488955d0",
   "pmask": "ffffffff00000000ffffff0000000000ffffffffffffffffffffffff0000000000ffff00ffffff00",
   "distinct": 4,
-  "size": 40
+  "size": 40,
+  "callees": [
+   "GIMeta_GetMethodByIndex",
+   "GIMeta_GetTypeInfoByIndex"
+  ]
  },
  {
   "name": "GIMeta_GetTypeHandle",
@@ -1774,6 +5689,162 @@
    "xor|R,R",
    "rol|R,i1b"
   ],
+  "ext_bytes": [
+   "48894c2428",
+   "4889542438",
+   "488b4208",
+   "4889442430",
+   "4963fd",
+   "480fafcb",
+   "48c1c11f",
+   "480fafcd",
+   "4831f1",
+   "48c1c11b"
+  ],
+  "ext_mask": [
+   "ffffffff00",
+   "ffffffff00",
+   "ffffff00",
+   "ffffffff00",
+   "ffffff",
+   "ffffffff",
+   "ffffff00",
+   "ffffffff",
+   "ffffff",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "48bb4febd4273daeb2c2",
+   "48bd87caeb85b179379e",
+   "49b963aeb2c277caeb85",
+   "48becd6756162febd427",
+   "49b8f979379eb1675616",
+   "48c744242000000000",
+   "894c2420",
+   "488b0a"
+  ],
+  "mask_disp": [
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffff00ffffffff",
+   "ffffff00",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "48894c2428",
+   "4889542438",
+   "488b4208",
+   "4889442430",
+   "4963fd",
+   "480fafcb",
+   "48c1c11f",
+   "480fafcd",
+   "4831f1",
+   "48c1c11b"
+  ],
+  "ext_mask_disp": [
+   "ffffffff00",
+   "ffffffff00",
+   "ffffff00",
+   "ffffffff00",
+   "ffffff",
+   "ffffffff",
+   "ffffffff",
+   "ffffffff",
+   "ffffff",
+   "ffffffff"
+  ],
+  "bytes_regs": [
+   "48bb4febd4273daeb2c2",
+   "48bd87caeb85b179379e",
+   "49b963aeb2c277caeb85",
+   "48becd6756162febd427",
+   "49b8f979379eb1675616",
+   "48c744242000000000",
+   "894c2420",
+   "488b0a"
+  ],
+  "mask_regs": [
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "f8ffc0c0ffffffffff",
+   "ffc0c0ff",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "48894c2428",
+   "4889542438",
+   "488b4208",
+   "4889442430",
+   "4963fd",
+   "480fafcb",
+   "48c1c11f",
+   "480fafcd",
+   "4831f1",
+   "48c1c11b"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0c0ff",
+   "f8ffc0ff",
+   "f8ffc0c0ff",
+   "f8ffc0",
+   "f8ffffc0",
+   "f8ffc0ff",
+   "f8ffffc0",
+   "f8ffc0",
+   "f8ffc0ff"
+  ],
+  "bytes_rm": [
+   "48bb4febd4273daeb2c2",
+   "48bd87caeb85b179379e",
+   "49b963aeb2c277caeb85",
+   "48becd6756162febd427",
+   "49b8f979379eb1675616",
+   "48c744242000000000",
+   "894c2420",
+   "488b0a"
+  ],
+  "mask_rm": [
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "fffff8ffffffffffff",
+   "fff8ffff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "48894c2428",
+   "4889542438",
+   "488b4208",
+   "4889442430",
+   "4963fd",
+   "480fafcb",
+   "48c1c11f",
+   "480fafcd",
+   "4831f1",
+   "48c1c11b"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffff",
+   "fffff8ffff",
+   "fffff8ff",
+   "fffff8ffff",
+   "fffff8",
+   "fffffff8",
+   "fffff8ff",
+   "fffffff8",
+   "fffff8",
+   "fffff8ff"
+  ],
   "bytes": [
    "48bb4febd4273daeb2c2",
    "48bd87caeb85b179379e",
@@ -1797,7 +5868,14 @@
   "pat": "48bb4febd4273daeb2c248bd87caeb85b179379e49b963aeb2c277caeb8548becd6756162febd42749b8f979379eb167561648c744242000000000894c2420488b0a",
   "pmask": "ffff0000000000000000ffff0000000000000000ffff0000000000000000ffff0000000000000000ffff0000000000000000ffffffff0000000000ffffff00ffffff",
   "distinct": 4,
-  "size": 66
+  "size": 66,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_GetTypeInfoFromIndex2",
@@ -1849,6 +5927,162 @@
    "xor|R,R",
    "rol|R,i1b"
   ],
+  "ext_bytes": [
+   "48894c2428",
+   "4889542438",
+   "488b4208",
+   "4889442430",
+   "4963fd",
+   "480fafcb",
+   "48c1c11f",
+   "480fafcd",
+   "4831f1",
+   "48c1c11b"
+  ],
+  "ext_mask": [
+   "ffffffff00",
+   "ffffffff00",
+   "ffffff00",
+   "ffffffff00",
+   "ffffff",
+   "ffffffff",
+   "ffffff00",
+   "ffffffff",
+   "ffffff",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "48bb4febd4273daeb2c2",
+   "48bd87caeb85b179379e",
+   "49b963aeb2c277caeb85",
+   "48becd6756162febd427",
+   "49b8f979379eb1675616",
+   "48c744242000000000",
+   "894c2420",
+   "488b0a"
+  ],
+  "mask_disp": [
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffff00ffffffff",
+   "ffffff00",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "48894c2428",
+   "4889542438",
+   "488b4208",
+   "4889442430",
+   "4963fd",
+   "480fafcb",
+   "48c1c11f",
+   "480fafcd",
+   "4831f1",
+   "48c1c11b"
+  ],
+  "ext_mask_disp": [
+   "ffffffff00",
+   "ffffffff00",
+   "ffffff00",
+   "ffffffff00",
+   "ffffff",
+   "ffffffff",
+   "ffffffff",
+   "ffffffff",
+   "ffffff",
+   "ffffffff"
+  ],
+  "bytes_regs": [
+   "48bb4febd4273daeb2c2",
+   "48bd87caeb85b179379e",
+   "49b963aeb2c277caeb85",
+   "48becd6756162febd427",
+   "49b8f979379eb1675616",
+   "48c744242000000000",
+   "894c2420",
+   "488b0a"
+  ],
+  "mask_regs": [
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "f8ffc0c0ffffffffff",
+   "ffc0c0ff",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "48894c2428",
+   "4889542438",
+   "488b4208",
+   "4889442430",
+   "4963fd",
+   "480fafcb",
+   "48c1c11f",
+   "480fafcd",
+   "4831f1",
+   "48c1c11b"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0c0ff",
+   "f8ffc0ff",
+   "f8ffc0c0ff",
+   "f8ffc0",
+   "f8ffffc0",
+   "f8ffc0ff",
+   "f8ffffc0",
+   "f8ffc0",
+   "f8ffc0ff"
+  ],
+  "bytes_rm": [
+   "48bb4febd4273daeb2c2",
+   "48bd87caeb85b179379e",
+   "49b963aeb2c277caeb85",
+   "48becd6756162febd427",
+   "49b8f979379eb1675616",
+   "48c744242000000000",
+   "894c2420",
+   "488b0a"
+  ],
+  "mask_rm": [
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "fffff8ffffffffffff",
+   "fff8ffff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "48894c2428",
+   "4889542438",
+   "488b4208",
+   "4889442430",
+   "4963fd",
+   "480fafcb",
+   "48c1c11f",
+   "480fafcd",
+   "4831f1",
+   "48c1c11b"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffff",
+   "fffff8ffff",
+   "fffff8ff",
+   "fffff8ffff",
+   "fffff8",
+   "fffffff8",
+   "fffff8ff",
+   "fffffff8",
+   "fffff8",
+   "fffff8ff"
+  ],
   "bytes": [
    "48bb4febd4273daeb2c2",
    "48bd87caeb85b179379e",
@@ -1872,7 +6106,14 @@
   "pat": "48bb4febd4273daeb2c248bd87caeb85b179379e49b963aeb2c277caeb8548becd6756162febd42749b8f979379eb167561648c744242000000000894c2420488b0a",
   "pmask": "ffff0000000000000000ffff0000000000000000ffff0000000000000000ffff0000000000000000ffff0000000000000000ffffffff0000000000ffffff00ffffff",
   "distinct": 4,
-  "size": 66
+  "size": 66,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_GetTypeInfoFromIndex",
@@ -1924,6 +6165,162 @@
    "mov|R,R",
    "test|Mdc9,i10"
   ],
+  "ext_bytes": [
+   "7568",
+   "488b05ed035b05",
+   "4889f9",
+   "48c1e104",
+   "48034848",
+   "e8fd8afeff",
+   "4885c0",
+   "7457",
+   "4889c6",
+   "f680c900000010"
+  ],
+  "ext_mask": [
+   "ff00",
+   "ffffff00000000",
+   "ffffff",
+   "ffffff00",
+   "ffffff00",
+   "ff00000000",
+   "ffffff",
+   "ff00",
+   "ffffff",
+   "ffff0000000000"
+  ],
+  "bytes_disp": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "83f9ff",
+   "7479",
+   "488b0530045b05",
+   "4863f9",
+   "488b34f8",
+   "4885f6"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffff",
+   "ffffff00000000",
+   "ffffff",
+   "ffffffff",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "7568",
+   "488b05ed035b05",
+   "4889f9",
+   "48c1e104",
+   "48034848",
+   "e8fd8afeff",
+   "4885c0",
+   "7457",
+   "4889c6",
+   "f680c900000010"
+  ],
+  "ext_mask_disp": [
+   "ffff",
+   "ffffff00000000",
+   "ffffff",
+   "ffffffff",
+   "ffffff00",
+   "ffffffffff",
+   "ffffff",
+   "ffff",
+   "ffffff",
+   "ffff00000000ff"
+  ],
+  "bytes_regs": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "83f9ff",
+   "7479",
+   "488b0530045b05",
+   "4863f9",
+   "488b34f8",
+   "4885f6"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "ffc0ff",
+   "ffff",
+   "f8ffc0ffffffff",
+   "f8ffc0",
+   "f8ffc0c0",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "7568",
+   "488b05ed035b05",
+   "4889f9",
+   "48c1e104",
+   "48034848",
+   "e8fd8afeff",
+   "4885c0",
+   "7457",
+   "4889c6",
+   "f680c900000010"
+  ],
+  "ext_mask_regs": [
+   "ffff",
+   "f8ffc0ffffffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "ffffffffff",
+   "f8ffc0",
+   "ffff",
+   "f8ffc0",
+   "ffc0ffffffffff"
+  ],
+  "bytes_rm": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "83f9ff",
+   "7479",
+   "488b0530045b05",
+   "4863f9",
+   "488b34f8",
+   "4885f6"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fff8ff",
+   "ffff",
+   "fffff8ffffffff",
+   "fffff8",
+   "fffff8ff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "7568",
+   "488b05ed035b05",
+   "4889f9",
+   "48c1e104",
+   "48034848",
+   "e8fd8afeff",
+   "4885c0",
+   "7457",
+   "4889c6",
+   "f680c900000010"
+  ],
+  "ext_mask_rm": [
+   "ffff",
+   "fffff8ffffffff",
+   "fffff8",
+   "fffff8ff",
+   "fffff8ff",
+   "ffffffffff",
+   "fffff8",
+   "ffff",
+   "fffff8",
+   "fff8ffffffffff"
+  ],
   "bytes": [
    "488d6c2430",
    "48c745f8feffffff",
@@ -1947,7 +6344,14 @@
   "pat": "488d6c243048c745f8feffffff83f9ff7479488b0530045b054863f9488b34f84885f6",
   "pmask": "ffffffff00ffffff0000000000ffff00ff00ffffff00000000ffffffffffffffffffff",
   "distinct": 8,
-  "size": 35
+  "size": 35,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_CmpToken",
@@ -1999,6 +6403,162 @@
    "sar|R,i3",
    "xor|R,I"
   ],
+  "ext_bytes": [
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "488b1541015b05",
+   "448b4a40",
+   "41c1f903",
+   "4181f10e801a00"
+  ],
+  "ext_mask": [
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ffffff00000000",
+   "ffffff00",
+   "ffffff00",
+   "ffffff00000000"
+  ],
+  "bytes_disp": [
+   "8b01",
+   "2b02",
+   "c3",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc"
+  ],
+  "mask_disp": [
+   "ffff",
+   "ffff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
+  "ext_bytes_disp": [
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "488b1541015b05",
+   "448b4a40",
+   "41c1f903",
+   "4181f10e801a00"
+  ],
+  "ext_mask_disp": [
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ffffff00000000",
+   "ffffff00",
+   "ffffffff",
+   "ffffffffffffff"
+  ],
+  "bytes_regs": [
+   "8b01",
+   "2b02",
+   "c3",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc"
+  ],
+  "mask_regs": [
+   "ffc0",
+   "ffc0",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
+  "ext_bytes_regs": [
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "488b1541015b05",
+   "448b4a40",
+   "41c1f903",
+   "4181f10e801a00"
+  ],
+  "ext_mask_regs": [
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "f8ffc0ffffffff",
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "f8ffc0ffffffff"
+  ],
+  "bytes_rm": [
+   "8b01",
+   "2b02",
+   "c3",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc"
+  ],
+  "mask_rm": [
+   "fff8",
+   "fff8",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff"
+  ],
+  "ext_bytes_rm": [
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "cc",
+   "488b1541015b05",
+   "448b4a40",
+   "41c1f903",
+   "4181f10e801a00"
+  ],
+  "ext_mask_rm": [
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "ff",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "fffff8ff",
+   "fffff8ffffffff"
+  ],
   "bytes": [
    "8b01",
    "2b02",
@@ -2022,7 +6582,23 @@
   "pat": "8b012b02c3cccccccccc",
   "pmask": "ffffffffffffffffffff",
   "distinct": 4,
-  "size": 10
+  "size": 10,
+  "callees": [
+   "GIMeta_DecryptString",
+   "GIMeta_GetDefaultValue",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodName2",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_GetTypeInfoFromIndex",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendChar"
+  ]
  },
  {
   "name": "GIMeta_GetClassInfo",
@@ -2074,6 +6650,162 @@
    "xor|R,R",
    "imul|R,R"
   ],
+  "ext_bytes": [
+   "48c1c21f",
+   "480fafd6",
+   "4831ea",
+   "48c1c21b",
+   "480fafd6",
+   "4c01ca",
+   "4889d7",
+   "48c1ef21",
+   "4831d7",
+   "480faffb"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffff"
+  ],
+  "bytes_disp": [
+   "48bb4febd4273daeb2c2",
+   "48be87caeb85b179379e",
+   "49b963aeb2c277caeb85",
+   "48bdcd6756162febd427",
+   "49b8f979379eb1675616",
+   "486301",
+   "488b5108",
+   "480fafd3"
+  ],
+  "mask_disp": [
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffffff"
+  ],
+  "ext_bytes_disp": [
+   "48c1c21f",
+   "480fafd6",
+   "4831ea",
+   "48c1c21b",
+   "480fafd6",
+   "4c01ca",
+   "4889d7",
+   "48c1ef21",
+   "4831d7",
+   "480faffb"
+  ],
+  "ext_mask_disp": [
+   "ffffffff",
+   "ffffffff",
+   "ffffff",
+   "ffffffff",
+   "ffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffff",
+   "ffffff",
+   "ffffffff"
+  ],
+  "bytes_regs": [
+   "48bb4febd4273daeb2c2",
+   "48be87caeb85b179379e",
+   "49b963aeb2c277caeb85",
+   "48bdcd6756162febd427",
+   "49b8f979379eb1675616",
+   "486301",
+   "488b5108",
+   "480fafd3"
+  ],
+  "mask_regs": [
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffffc0"
+  ],
+  "ext_bytes_regs": [
+   "48c1c21f",
+   "480fafd6",
+   "4831ea",
+   "48c1c21b",
+   "480fafd6",
+   "4c01ca",
+   "4889d7",
+   "48c1ef21",
+   "4831d7",
+   "480faffb"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ff",
+   "f8ffffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0",
+   "f8ffffc0"
+  ],
+  "bytes_rm": [
+   "48bb4febd4273daeb2c2",
+   "48be87caeb85b179379e",
+   "49b963aeb2c277caeb85",
+   "48bdcd6756162febd427",
+   "49b8f979379eb1675616",
+   "486301",
+   "488b5108",
+   "480fafd3"
+  ],
+  "mask_rm": [
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "fffff8ff",
+   "fffffff8"
+  ],
+  "ext_bytes_rm": [
+   "48c1c21f",
+   "480fafd6",
+   "4831ea",
+   "48c1c21b",
+   "480fafd6",
+   "4c01ca",
+   "4889d7",
+   "48c1ef21",
+   "4831d7",
+   "480faffb"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "fffffff8",
+   "fffff8",
+   "fffff8ff",
+   "fffffff8",
+   "fffff8",
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "fffffff8"
+  ],
   "bytes": [
    "48bb4febd4273daeb2c2",
    "48be87caeb85b179379e",
@@ -2097,7 +6829,23 @@
   "pat": "48bb4febd4273daeb2c248be87caeb85b179379e49b963aeb2c277caeb8548bdcd6756162febd42749b8f979379eb1675616486301488b5108480fafd3",
   "pmask": "ffff0000000000000000ffff0000000000000000ffff0000000000000000ffff0000000000000000ffff0000000000000000ffffffffffff00ffffffff",
   "distinct": 4,
-  "size": 61
+  "size": 61,
+  "callees": [
+   "GIMeta_DecryptString",
+   "GIMeta_GetDefaultValue",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodName2",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_GetTypeInfoFromIndex",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendChar"
+  ]
  },
  {
   "name": "GIMeta_GetMethodName2",
@@ -2149,6 +6897,162 @@
    "mov|R,Md0",
    "xor|R,R"
   ],
+  "ext_bytes": [
+   "488d0592f35403",
+   "4c39ca",
+   "7445",
+   "0f1f8000000000",
+   "488b4a20",
+   "f6412f20",
+   "7516",
+   "4883c110",
+   "8b09",
+   "4431c1"
+  ],
+  "ext_mask": [
+   "ffffff00000000",
+   "ffffff",
+   "ff00",
+   "ffffff00000000",
+   "ffffff00",
+   "ffff0000",
+   "ff00",
+   "ffffff00",
+   "ffff",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "f6412f20",
+   "7579",
+   "488b4108",
+   "f680c80000000e",
+   "448b4110",
+   "0f8493000000",
+   "488b151ab45a05",
+   "4c8b0d1bb45a05"
+  ],
+  "mask_disp": [
+   "ffff00ff",
+   "ffff",
+   "ffffff00",
+   "ffff00000000ff",
+   "ffffff00",
+   "ffffffffffff",
+   "ffffff00000000",
+   "ffffff00000000"
+  ],
+  "ext_bytes_disp": [
+   "488d0592f35403",
+   "4c39ca",
+   "7445",
+   "0f1f8000000000",
+   "488b4a20",
+   "f6412f20",
+   "7516",
+   "4883c110",
+   "8b09",
+   "4431c1"
+  ],
+  "ext_mask_disp": [
+   "ffffff00000000",
+   "ffffff",
+   "ffff",
+   "ffffff00000000",
+   "ffffff00",
+   "ffff00ff",
+   "ffff",
+   "ffffffff",
+   "ffff",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "f6412f20",
+   "7579",
+   "488b4108",
+   "f680c80000000e",
+   "448b4110",
+   "0f8493000000",
+   "488b151ab45a05",
+   "4c8b0d1bb45a05"
+  ],
+  "mask_regs": [
+   "ffc0ffff",
+   "ffff",
+   "f8ffc0ff",
+   "ffc0ffffffffff",
+   "f8ffc0ff",
+   "ffffffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff"
+  ],
+  "ext_bytes_regs": [
+   "488d0592f35403",
+   "4c39ca",
+   "7445",
+   "0f1f8000000000",
+   "488b4a20",
+   "f6412f20",
+   "7516",
+   "4883c110",
+   "8b09",
+   "4431c1"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ffffffff",
+   "f8ffc0",
+   "ffff",
+   "ffffc0ffffffff",
+   "f8ffc0ff",
+   "ffc0ffff",
+   "ffff",
+   "f8ffc0ff",
+   "ffc0",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "f6412f20",
+   "7579",
+   "488b4108",
+   "f680c80000000e",
+   "448b4110",
+   "0f8493000000",
+   "488b151ab45a05",
+   "4c8b0d1bb45a05"
+  ],
+  "mask_rm": [
+   "fff8ffff",
+   "ffff",
+   "fffff8ff",
+   "fff8ffffffffff",
+   "fffff8ff",
+   "ffffffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff"
+  ],
+  "ext_bytes_rm": [
+   "488d0592f35403",
+   "4c39ca",
+   "7445",
+   "0f1f8000000000",
+   "488b4a20",
+   "f6412f20",
+   "7516",
+   "4883c110",
+   "8b09",
+   "4431c1"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffffffff",
+   "fffff8",
+   "ffff",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "fff8ffff",
+   "ffff",
+   "fffff8ff",
+   "fff8",
+   "fffff8"
+  ],
   "bytes": [
    "f6412f20",
    "7579",
@@ -2172,7 +7076,19 @@
   "pat": "f6412f207579488b4108f680c80000000e448b41100f8493000000488b151ab45a054c8b0d1bb45a05",
   "pmask": "ffff0000ff00ffffff00ffff0000000000ffffff00ffff00000000ffffff00000000ffffff00000000",
   "distinct": 4,
-  "size": 41
+  "size": 41,
+  "callees": [
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodName2",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_GetMethodNameCached",
@@ -2224,6 +7140,162 @@
    "mov|Md0,R",
    "movabs|R,I"
   ],
+  "ext_bytes": [
+   "740a",
+   "488b38",
+   "4839df",
+   "754b",
+   "eb34",
+   "488b0da7cc5a05",
+   "ba18000000",
+   "e81d73fdff",
+   "488918",
+   "48b981ba9f1292aa0212"
+  ],
+  "ext_mask": [
+   "ff00",
+   "ffffff",
+   "ffffff",
+   "ff00",
+   "ff00",
+   "ffffff00000000",
+   "ff00000000",
+   "ff00000000",
+   "ffffff",
+   "ffff0000000000000000"
+  ],
+  "bytes_disp": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4889ce",
+   "488b0da9d75a05",
+   "ff1583206203",
+   "488b4630",
+   "48bb282ac373e1500345",
+   "4885c0"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "740a",
+   "488b38",
+   "4839df",
+   "754b",
+   "eb34",
+   "488b0da7cc5a05",
+   "ba18000000",
+   "e81d73fdff",
+   "488918",
+   "48b981ba9f1292aa0212"
+  ],
+  "ext_mask_disp": [
+   "ffff",
+   "ffffff",
+   "ffffff",
+   "ffff",
+   "ffff",
+   "ffffff00000000",
+   "ffffffffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffffffffffffffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4889ce",
+   "488b0da9d75a05",
+   "ff1583206203",
+   "488b4630",
+   "48bb282ac373e1500345",
+   "4885c0"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "740a",
+   "488b38",
+   "4839df",
+   "754b",
+   "eb34",
+   "488b0da7cc5a05",
+   "ba18000000",
+   "e81d73fdff",
+   "488918",
+   "48b981ba9f1292aa0212"
+  ],
+  "ext_mask_regs": [
+   "ffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffff",
+   "ffff",
+   "f8ffc0ffffffff",
+   "ffffffffff",
+   "ffffffffff",
+   "f8ffc0",
+   "ffffffffffffffffffff"
+  ],
+  "bytes_rm": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4889ce",
+   "488b0da9d75a05",
+   "ff1583206203",
+   "488b4630",
+   "48bb282ac373e1500345",
+   "4885c0"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "740a",
+   "488b38",
+   "4839df",
+   "754b",
+   "eb34",
+   "488b0da7cc5a05",
+   "ba18000000",
+   "e81d73fdff",
+   "488918",
+   "48b981ba9f1292aa0212"
+  ],
+  "ext_mask_rm": [
+   "ffff",
+   "fffff8",
+   "fffff8",
+   "ffff",
+   "ffff",
+   "fffff8ffffffff",
+   "ffffffffff",
+   "ffffffffff",
+   "fffff8",
+   "ffffffffffffffffffff"
+  ],
   "bytes": [
    "488d6c2420",
    "48c74500feffffff",
@@ -2247,7 +7319,18 @@
   "pat": "488d6c242048c74500feffffff4889ce488b0da9d75a05ff1583206203488b463048bb282ac373e15003454885c0",
   "pmask": "ffffffff00ffffff0000000000ffffffffffff00000000ffff00000000ffffff00ffff0000000000000000ffffff",
   "distinct": 7,
-  "size": 46
+  "size": 46,
+  "callees": [
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodName2",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_SetupParameters",
@@ -2299,6 +7382,162 @@
    "mov|R,Md10",
    "je|I"
   ],
+  "ext_bytes": [
+   "0f848e000000",
+   "48b981ba9f1292aa0212",
+   "48394808",
+   "0f85a9010000",
+   "41f6462f20",
+   "0f85b8000000",
+   "498b4e08",
+   "f681c80000000e",
+   "418b5610",
+   "0f84bb000000"
+  ],
+  "ext_mask": [
+   "ffff00000000",
+   "ffff0000000000000000",
+   "ffffff00",
+   "ffff00000000",
+   "ffffff0000",
+   "ffff00000000",
+   "ffffff00",
+   "ffff0000000000",
+   "ffffff00",
+   "ffff00000000"
+  ],
+  "bytes_disp": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4989ce",
+   "488b0de1d35a05",
+   "ff15bb1c6203",
+   "498b4630",
+   "48bf7f4560ed6d55fded",
+   "4885c0"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "0f848e000000",
+   "48b981ba9f1292aa0212",
+   "48394808",
+   "0f85a9010000",
+   "41f6462f20",
+   "0f85b8000000",
+   "498b4e08",
+   "f681c80000000e",
+   "418b5610",
+   "0f84bb000000"
+  ],
+  "ext_mask_disp": [
+   "ffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffff00",
+   "ffffffffffff",
+   "ffffff00ff",
+   "ffffffffffff",
+   "ffffff00",
+   "ffff00000000ff",
+   "ffffff00",
+   "ffffffffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4989ce",
+   "488b0de1d35a05",
+   "ff15bb1c6203",
+   "498b4630",
+   "48bf7f4560ed6d55fded",
+   "4885c0"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "0f848e000000",
+   "48b981ba9f1292aa0212",
+   "48394808",
+   "0f85a9010000",
+   "41f6462f20",
+   "0f85b8000000",
+   "498b4e08",
+   "f681c80000000e",
+   "418b5610",
+   "0f84bb000000"
+  ],
+  "ext_mask_regs": [
+   "ffffffffffff",
+   "ffffffffffffffffffff",
+   "f8ffc0ff",
+   "ffffffffffff",
+   "f8ffc0ffff",
+   "ffffffffffff",
+   "f8ffc0ff",
+   "ffc0ffffffffff",
+   "f8ffc0ff",
+   "ffffffffffff"
+  ],
+  "bytes_rm": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4989ce",
+   "488b0de1d35a05",
+   "ff15bb1c6203",
+   "498b4630",
+   "48bf7f4560ed6d55fded",
+   "4885c0"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "0f848e000000",
+   "48b981ba9f1292aa0212",
+   "48394808",
+   "0f85a9010000",
+   "41f6462f20",
+   "0f85b8000000",
+   "498b4e08",
+   "f681c80000000e",
+   "418b5610",
+   "0f84bb000000"
+  ],
+  "ext_mask_rm": [
+   "ffffffffffff",
+   "ffffffffffffffffffff",
+   "fffff8ff",
+   "ffffffffffff",
+   "fffff8ffff",
+   "ffffffffffff",
+   "fffff8ff",
+   "fff8ffffffffff",
+   "fffff8ff",
+   "ffffffffffff"
+  ],
   "bytes": [
    "488d6c2430",
    "48c74500feffffff",
@@ -2322,7 +7561,16 @@
   "pat": "488d6c243048c74500feffffff4989ce488b0de1d35a05ff15bb1c6203498b463048bf7f4560ed6d55fded4885c0",
   "pmask": "ffffffff00ffffff0000000000ffffffffffff00000000ffff00000000ffffff00ffff0000000000000000ffffff",
   "distinct": 7,
-  "size": 46
+  "size": 46,
+  "callees": [
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_RegisterTypeRecursive",
@@ -2374,6 +7622,162 @@
    "xorps|R,R",
    "movaps|Md10,R"
   ],
+  "ext_bytes": [
+   "4d8b6810",
+   "49beffffffffffffff7f",
+   "4d39f5",
+   "0f84a7020000",
+   "4c89ce",
+   "4989cc",
+   "488b07",
+   "488b4f18",
+   "0f57c0",
+   "0f294510"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffff",
+   "ffff00000000",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "48c74530feffffff",
+   "498b4118",
+   "803800",
+   "0f84b4020000",
+   "4c89c7",
+   "488945c8",
+   "48895508"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00ffffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff00"
+  ],
+  "ext_bytes_disp": [
+   "4d8b6810",
+   "49beffffffffffffff7f",
+   "4d39f5",
+   "0f84a7020000",
+   "4c89ce",
+   "4989cc",
+   "488b07",
+   "488b4f18",
+   "0f57c0",
+   "0f294510"
+  ],
+  "ext_mask_disp": [
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffff00"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "48c74530feffffff",
+   "498b4118",
+   "803800",
+   "0f84b4020000",
+   "4c89c7",
+   "488945c8",
+   "48895508"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ff",
+   "ffc0ff",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "4d8b6810",
+   "49beffffffffffffff7f",
+   "4d39f5",
+   "0f84a7020000",
+   "4c89ce",
+   "4989cc",
+   "488b07",
+   "488b4f18",
+   "0f57c0",
+   "0f294510"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "ffffc0",
+   "ffffc0ff"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "48c74530feffffff",
+   "498b4118",
+   "803800",
+   "0f84b4020000",
+   "4c89c7",
+   "488945c8",
+   "48895508"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffffff",
+   "fffff8ff",
+   "fff8ff",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8ff",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "4d8b6810",
+   "49beffffffffffffff7f",
+   "4d39f5",
+   "0f84a7020000",
+   "4c89ce",
+   "4989cc",
+   "488b07",
+   "488b4f18",
+   "0f57c0",
+   "0f294510"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "fffff8ff"
+  ],
   "bytes": [
    "488dac2480000000",
    "48c74530feffffff",
@@ -2397,7 +7801,12 @@
   "pat": "488dac248000000048c74530feffffff498b41188038000f84b40200004c89c7488945c848895508",
   "pmask": "ffffffff00000000ffffff0000000000ffffff00ffff00ffff00000000ffffffffffff00ffffff00",
   "distinct": 7,
-  "size": 40
+  "size": 40,
+  "callees": [
+   "GIMeta_RegisterType",
+   "GIMeta_RegisterTypeRecursive",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_RegisterType",
@@ -2449,6 +7858,162 @@
    "mov|R,Md30",
    "jmp|I"
   ],
+  "ext_bytes": [
+   "488b4138",
+   "483b4148",
+   "48898dd0000000",
+   "731b",
+   "48034740",
+   "483b4750",
+   "0f82ff090000",
+   "488bbdd0000000",
+   "488b7730",
+   "eb2c"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffffff00",
+   "ffffff00000000",
+   "ff00",
+   "ffffff00",
+   "ffffff00",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffffff00",
+   "ff00"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "0f29bdf0000000",
+   "0f29b5e0000000",
+   "48c785d8000000feffffff",
+   "4c894d68",
+   "4d89c7",
+   "48899590000000",
+   "4889cf"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000ffffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffff00000000",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "488b4138",
+   "483b4148",
+   "48898dd0000000",
+   "731b",
+   "48034740",
+   "483b4750",
+   "0f82ff090000",
+   "488bbdd0000000",
+   "488b7730",
+   "eb2c"
+  ],
+  "ext_mask_disp": [
+   "ffffff00",
+   "ffffff00",
+   "ffffff00000000",
+   "ffff",
+   "ffffff00",
+   "ffffff00",
+   "ffffffffffff",
+   "ffffff00000000",
+   "ffffff00",
+   "ffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "0f29bdf0000000",
+   "0f29b5e0000000",
+   "48c785d8000000feffffff",
+   "4c894d68",
+   "4d89c7",
+   "48899590000000",
+   "4889cf"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "ffffc0ffffffff",
+   "ffffc0ffffffff",
+   "f8ffc0ffffffffffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "488b4138",
+   "483b4148",
+   "48898dd0000000",
+   "731b",
+   "48034740",
+   "483b4750",
+   "0f82ff090000",
+   "488bbdd0000000",
+   "488b7730",
+   "eb2c"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "f8ffc0ffffffff",
+   "ffff",
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "ffffffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ff",
+   "ffff"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "0f29bdf0000000",
+   "0f29b5e0000000",
+   "48c785d8000000feffffff",
+   "4c894d68",
+   "4d89c7",
+   "48899590000000",
+   "4889cf"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffffffffffff",
+   "fffff8ff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "488b4138",
+   "483b4148",
+   "48898dd0000000",
+   "731b",
+   "48034740",
+   "483b4750",
+   "0f82ff090000",
+   "488bbdd0000000",
+   "488b7730",
+   "eb2c"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "fffff8ff",
+   "fffff8ffffffff",
+   "ffff",
+   "fffff8ff",
+   "fffff8ff",
+   "ffffffffffff",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "ffff"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bdf0000000",
@@ -2472,7 +8037,8 @@
   "pat": "488dac24800000000f29bdf00000000f29b5e000000048c785d8000000feffffff4c894d684d89c7488995900000004889cf",
   "pmask": "ffffffff00000000ffffff00000000ffffff00000000ffffff0000000000000000ffffff00ffffffffffff00000000ffffff",
   "distinct": 5,
-  "size": 50
+  "size": 50,
+  "callees": []
  },
  {
   "name": "GIMeta_GetFieldDefaultValue",
@@ -2524,6 +8090,162 @@
    "call|I",
    "mov|R,R"
   ],
+  "ext_bytes": [
+   "48334f08",
+   "482b7928",
+   "0fb68182000000",
+   "c1e010",
+   "3d00001500",
+   "750e",
+   "488b4138",
+   "8b08",
+   "e82f5f0500",
+   "4889c1"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffffff00",
+   "ffffff00000000",
+   "ffff00",
+   "ff00000000",
+   "ff00",
+   "ffffff00",
+   "ffff",
+   "ff00000000",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488d6c2450",
+   "48c745f8feffffff",
+   "488b7918",
+   "48b82f8043104a670953",
+   "48334710",
+   "f6400980",
+   "0f8488010000",
+   "48b917f17e3b4efce066"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff00",
+   "ffff00ff",
+   "ffffffffffff",
+   "ffffffffffffffffffff"
+  ],
+  "ext_bytes_disp": [
+   "48334f08",
+   "482b7928",
+   "0fb68182000000",
+   "c1e010",
+   "3d00001500",
+   "750e",
+   "488b4138",
+   "8b08",
+   "e82f5f0500",
+   "4889c1"
+  ],
+  "ext_mask_disp": [
+   "ffffff00",
+   "ffffff00",
+   "ffffff00000000",
+   "ffffff",
+   "ffffffffff",
+   "ffff",
+   "ffffff00",
+   "ffff",
+   "ffffffffff",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2450",
+   "48c745f8feffffff",
+   "488b7918",
+   "48b82f8043104a670953",
+   "48334710",
+   "f6400980",
+   "0f8488010000",
+   "48b917f17e3b4efce066"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0ff",
+   "ffc0ffff",
+   "ffffffffffff",
+   "ffffffffffffffffffff"
+  ],
+  "ext_bytes_regs": [
+   "48334f08",
+   "482b7928",
+   "0fb68182000000",
+   "c1e010",
+   "3d00001500",
+   "750e",
+   "488b4138",
+   "8b08",
+   "e82f5f0500",
+   "4889c1"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "ffffc0ffffffff",
+   "ffc0ff",
+   "ffffffffff",
+   "ffff",
+   "f8ffc0ff",
+   "ffc0",
+   "ffffffffff",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "488d6c2450",
+   "48c745f8feffffff",
+   "488b7918",
+   "48b82f8043104a670953",
+   "48334710",
+   "f6400980",
+   "0f8488010000",
+   "48b917f17e3b4efce066"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8ff",
+   "fff8ffff",
+   "ffffffffffff",
+   "ffffffffffffffffffff"
+  ],
+  "ext_bytes_rm": [
+   "48334f08",
+   "482b7928",
+   "0fb68182000000",
+   "c1e010",
+   "3d00001500",
+   "750e",
+   "488b4138",
+   "8b08",
+   "e82f5f0500",
+   "4889c1"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "fffff8ff",
+   "fffff8ffffffff",
+   "fff8ff",
+   "ffffffffff",
+   "ffff",
+   "fffff8ff",
+   "fff8",
+   "ffffffffff",
+   "fffff8"
+  ],
   "bytes": [
    "488d6c2450",
    "48c745f8feffffff",
@@ -2547,7 +8269,11 @@
   "pat": "488d6c245048c745f8feffffff488b791848b82f8043104a67095348334710f64009800f848801000048b917f17e3b4efce066",
   "pmask": "ffffffff00ffffff0000000000ffffff00ffff0000000000000000ffffff00ffff0000ffff00000000ffff0000000000000000",
   "distinct": 7,
-  "size": 51
+  "size": 51,
+  "callees": [
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_GetDefaultParameterValueObject",
@@ -2599,6 +8325,162 @@
    "mov|R,I",
    "add|R,Md9c"
   ],
+  "ext_bytes": [
+   "e83d35ffff",
+   "4883c420",
+   "4889c1",
+   "8b7910",
+   "b8ffffffff",
+   "4839c7",
+   "742a",
+   "488b35aab45a05",
+   "b8d41781f0",
+   "03869c000000"
+  ],
+  "ext_mask": [
+   "ff00000000",
+   "ffffff00",
+   "ffffff",
+   "ffff00",
+   "ff00000000",
+   "ffffff",
+   "ff00",
+   "ffffff00000000",
+   "ff00000000",
+   "ffff00000000"
+  ],
+  "bytes_disp": [
+   "41c60000",
+   "0fb6412f",
+   "2424",
+   "3c20",
+   "7516",
+   "488b4118",
+   "8b08",
+   "4883ec20"
+  ],
+  "mask_disp": [
+   "ffffffff",
+   "ffffff00",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffffff00",
+   "ffff",
+   "ffffffff"
+  ],
+  "ext_bytes_disp": [
+   "e83d35ffff",
+   "4883c420",
+   "4889c1",
+   "8b7910",
+   "b8ffffffff",
+   "4839c7",
+   "742a",
+   "488b35aab45a05",
+   "b8d41781f0",
+   "03869c000000"
+  ],
+  "ext_mask_disp": [
+   "ffffffffff",
+   "ffffffff",
+   "ffffff",
+   "ffff00",
+   "ffffffffff",
+   "ffffff",
+   "ffff",
+   "ffffff00000000",
+   "ffffffffff",
+   "ffff00000000"
+  ],
+  "bytes_regs": [
+   "41c60000",
+   "0fb6412f",
+   "2424",
+   "3c20",
+   "7516",
+   "488b4118",
+   "8b08",
+   "4883ec20"
+  ],
+  "mask_regs": [
+   "f8ffc0ff",
+   "ffffc0ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "f8ffc0ff",
+   "ffc0",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "e83d35ffff",
+   "4883c420",
+   "4889c1",
+   "8b7910",
+   "b8ffffffff",
+   "4839c7",
+   "742a",
+   "488b35aab45a05",
+   "b8d41781f0",
+   "03869c000000"
+  ],
+  "ext_mask_regs": [
+   "ffffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffc0ff",
+   "ffffffffff",
+   "f8ffc0",
+   "ffff",
+   "f8ffc0ffffffff",
+   "ffffffffff",
+   "ffc0ffffffff"
+  ],
+  "bytes_rm": [
+   "41c60000",
+   "0fb6412f",
+   "2424",
+   "3c20",
+   "7516",
+   "488b4118",
+   "8b08",
+   "4883ec20"
+  ],
+  "mask_rm": [
+   "fffff8ff",
+   "fffff8ff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "fffff8ff",
+   "fff8",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "e83d35ffff",
+   "4883c420",
+   "4889c1",
+   "8b7910",
+   "b8ffffffff",
+   "4839c7",
+   "742a",
+   "488b35aab45a05",
+   "b8d41781f0",
+   "03869c000000"
+  ],
+  "ext_mask_rm": [
+   "ffffffffff",
+   "fffff8ff",
+   "fffff8",
+   "fff8ff",
+   "ffffffffff",
+   "fffff8",
+   "ffff",
+   "fffff8ffffffff",
+   "ffffffffff",
+   "fff8ffffffff"
+  ],
   "bytes": [
    "41c60000",
    "0fb6412f",
@@ -2622,7 +8504,12 @@
   "pat": "41c600000fb6412f24243c207516488b41188b084883ec20",
   "pmask": "ffffff00ffffff00ff00ff00ff00ffffff00ffffffffff00",
   "distinct": 7,
-  "size": 24
+  "size": 24,
+  "callees": [
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_GetGenericMethodParamInfo",
@@ -2674,6 +8561,162 @@
    "test|R,R",
    "je|I"
   ],
+  "ext_bytes": [
+   "488b0d80e96005",
+   "ba01000000",
+   "4531c0",
+   "e8b3900100",
+   "4889c1",
+   "4889fa",
+   "e898410400",
+   "4889c6",
+   "4885ff",
+   "0f84e6000000"
+  ],
+  "ext_mask": [
+   "ffffff00000000",
+   "ff00000000",
+   "ffffff",
+   "ff00000000",
+   "ffffff",
+   "ffffff",
+   "ff00000000",
+   "ffffff",
+   "ffffff",
+   "ffff00000000"
+  ],
+  "bytes_disp": [
+   "488b4110",
+   "f6402f20",
+   "747f",
+   "488b4818",
+   "488b5910",
+   "4885db",
+   "746a",
+   "8b3b"
+  ],
+  "mask_disp": [
+   "ffffff00",
+   "ffff00ff",
+   "ffff",
+   "ffffff00",
+   "ffffff00",
+   "ffffff",
+   "ffff",
+   "ffff"
+  ],
+  "ext_bytes_disp": [
+   "488b0d80e96005",
+   "ba01000000",
+   "4531c0",
+   "e8b3900100",
+   "4889c1",
+   "4889fa",
+   "e898410400",
+   "4889c6",
+   "4885ff",
+   "0f84e6000000"
+  ],
+  "ext_mask_disp": [
+   "ffffff00000000",
+   "ffffffffff",
+   "ffffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffffff"
+  ],
+  "bytes_regs": [
+   "488b4110",
+   "f6402f20",
+   "747f",
+   "488b4818",
+   "488b5910",
+   "4885db",
+   "746a",
+   "8b3b"
+  ],
+  "mask_regs": [
+   "f8ffc0ff",
+   "ffc0ffff",
+   "ffff",
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffff",
+   "ffc0"
+  ],
+  "ext_bytes_regs": [
+   "488b0d80e96005",
+   "ba01000000",
+   "4531c0",
+   "e8b3900100",
+   "4889c1",
+   "4889fa",
+   "e898410400",
+   "4889c6",
+   "4885ff",
+   "0f84e6000000"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ffffffff",
+   "ffffffffff",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffffff"
+  ],
+  "bytes_rm": [
+   "488b4110",
+   "f6402f20",
+   "747f",
+   "488b4818",
+   "488b5910",
+   "4885db",
+   "746a",
+   "8b3b"
+  ],
+  "mask_rm": [
+   "fffff8ff",
+   "fff8ffff",
+   "ffff",
+   "fffff8ff",
+   "fffff8ff",
+   "fffff8",
+   "ffff",
+   "fff8"
+  ],
+  "ext_bytes_rm": [
+   "488b0d80e96005",
+   "ba01000000",
+   "4531c0",
+   "e8b3900100",
+   "4889c1",
+   "4889fa",
+   "e898410400",
+   "4889c6",
+   "4885ff",
+   "0f84e6000000"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffffffff",
+   "ffffffffff",
+   "fffff8",
+   "ffffffffff",
+   "fffff8",
+   "fffff8",
+   "ffffffffff",
+   "fffff8",
+   "fffff8",
+   "ffffffffffff"
+  ],
   "bytes": [
    "488b4110",
    "f6402f20",
@@ -2697,7 +8740,23 @@
   "pat": "488b4110f6402f20747f488b4818488b59104885db746a8b3b",
   "pmask": "ffffff00ffff0000ff00ffffff00ffffff00ffffffff00ffff",
   "distinct": 4,
-  "size": 25
+  "size": 25,
+  "callees": [
+   "GIMeta_AllocTypeInfoArray",
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_GetGenericParameterInfo",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_IsAssignableFrom",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_BuildMethodName",
@@ -2749,6 +8808,162 @@
    "call|I",
    "mov|Md-10,i0"
   ],
+  "ext_bytes": [
+   "0f840b0b0000",
+   "0f57c0",
+   "0f2945e0",
+   "48c745f000000000",
+   "48c745f80f000000",
+   "4c8d75e0",
+   "ba00010000",
+   "4c89f1",
+   "e8371d0000",
+   "48c745f000000000"
+  ],
+  "ext_mask": [
+   "ffff00000000",
+   "ffffff",
+   "ffffff00",
+   "ffffff0000000000",
+   "ffffff0000000000",
+   "ffffff00",
+   "ff00000000",
+   "ffffff",
+   "ff00000000",
+   "ffffff0000000000"
+  ],
+  "bytes_disp": [
+   "488d6c2470",
+   "48c74500feffffff",
+   "4989cf",
+   "488b4130",
+   "4885c0",
+   "0f841f0b0000",
+   "48bb0a963bccd0038385",
+   "48035810"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffffffff",
+   "ffffffffffffffffffff",
+   "ffffff00"
+  ],
+  "ext_bytes_disp": [
+   "0f840b0b0000",
+   "0f57c0",
+   "0f2945e0",
+   "48c745f000000000",
+   "48c745f80f000000",
+   "4c8d75e0",
+   "ba00010000",
+   "4c89f1",
+   "e8371d0000",
+   "48c745f000000000"
+  ],
+  "ext_mask_disp": [
+   "ffffffffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff00ffffffff",
+   "ffffff00ffffffff",
+   "ffffff00",
+   "ffffffffff",
+   "ffffff",
+   "ffffffffff",
+   "ffffff00ffffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2470",
+   "48c74500feffffff",
+   "4989cf",
+   "488b4130",
+   "4885c0",
+   "0f841f0b0000",
+   "48bb0a963bccd0038385",
+   "48035810"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffffffffffff",
+   "ffffffffffffffffffff",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "0f840b0b0000",
+   "0f57c0",
+   "0f2945e0",
+   "48c745f000000000",
+   "48c745f80f000000",
+   "4c8d75e0",
+   "ba00010000",
+   "4c89f1",
+   "e8371d0000",
+   "48c745f000000000"
+  ],
+  "ext_mask_regs": [
+   "ffffffffffff",
+   "ffffc0",
+   "ffffc0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ff",
+   "ffffffffff",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0ffffffffff"
+  ],
+  "bytes_rm": [
+   "488d6c2470",
+   "48c74500feffffff",
+   "4989cf",
+   "488b4130",
+   "4885c0",
+   "0f841f0b0000",
+   "48bb0a963bccd0038385",
+   "48035810"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "ffffffffffff",
+   "ffffffffffffffffffff",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "0f840b0b0000",
+   "0f57c0",
+   "0f2945e0",
+   "48c745f000000000",
+   "48c745f80f000000",
+   "4c8d75e0",
+   "ba00010000",
+   "4c89f1",
+   "e8371d0000",
+   "48c745f000000000"
+  ],
+  "ext_mask_rm": [
+   "ffffffffffff",
+   "fffff8",
+   "fffff8ff",
+   "fffff8ffffffffff",
+   "fffff8ffffffffff",
+   "fffff8ff",
+   "ffffffffff",
+   "fffff8",
+   "ffffffffff",
+   "fffff8ffffffffff"
+  ],
   "bytes": [
    "488d6c2470",
    "48c74500feffffff",
@@ -2772,7 +8987,22 @@
   "pat": "488d6c247048c74500feffffff4989cf488b41304885c00f841f0b000048bb0a963bccd003838548035810",
   "pmask": "ffffffff00ffffff0000000000ffffffffffff00ffffffffff00000000ffff0000000000000000ffffff00",
   "distinct": 8,
-  "size": 43
+  "size": 43,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_GetGenericParameterInfo",
+   "GIMeta_GetMethodByIndex",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendChar",
+   "MetaStr_AppendN",
+   "MetaStr_AppendObject",
+   "MetaStr_Reserve"
+  ]
  },
  {
   "name": "GIMeta_FindTypeByName",
@@ -2824,6 +9054,162 @@
    "mov|R,i1",
    "jmp|I"
   ],
+  "ext_bytes": [
+   "48c1ee03",
+   "4c8b0d65c76105",
+   "4c8b157ec76105",
+   "41bb01000000",
+   "4c8b0579c76105",
+   "49bc0101010101010101",
+   "48897538",
+   "4889f2",
+   "41b701",
+   "eb7a"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffff0000000000000000",
+   "ffffff00",
+   "ffffff",
+   "ffff00",
+   "ff00"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "0f29bda0000000",
+   "0f29b590000000",
+   "48c78588000000feffffff",
+   "4889ce",
+   "488b0d52c86105",
+   "ff15bc366903",
+   "48897568"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000ffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00"
+  ],
+  "ext_bytes_disp": [
+   "48c1ee03",
+   "4c8b0d65c76105",
+   "4c8b157ec76105",
+   "41bb01000000",
+   "4c8b0579c76105",
+   "49bc0101010101010101",
+   "48897538",
+   "4889f2",
+   "41b701",
+   "eb7a"
+  ],
+  "ext_mask_disp": [
+   "ffffffff",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffffffffff",
+   "ffffff00000000",
+   "ffffffffffffffffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffff",
+   "ffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "0f29bda0000000",
+   "0f29b590000000",
+   "48c78588000000feffffff",
+   "4889ce",
+   "488b0d52c86105",
+   "ff15bc366903",
+   "48897568"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "ffffc0ffffffff",
+   "ffffc0ffffffff",
+   "f8ffc0ffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "48c1ee03",
+   "4c8b0d65c76105",
+   "4c8b157ec76105",
+   "41bb01000000",
+   "4c8b0579c76105",
+   "49bc0101010101010101",
+   "48897538",
+   "4889f2",
+   "41b701",
+   "eb7a"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ff",
+   "f8ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "ffffffffffff",
+   "f8ffc0ffffffff",
+   "ffffffffffffffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffffff",
+   "ffff"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "0f29bda0000000",
+   "0f29b590000000",
+   "48c78588000000feffffff",
+   "4889ce",
+   "488b0d52c86105",
+   "ff15bc366903",
+   "48897568"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "48c1ee03",
+   "4c8b0d65c76105",
+   "4c8b157ec76105",
+   "41bb01000000",
+   "4c8b0579c76105",
+   "49bc0101010101010101",
+   "48897538",
+   "4889f2",
+   "41b701",
+   "eb7a"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "ffffffffffff",
+   "fffff8ffffffff",
+   "ffffffffffffffffffff",
+   "fffff8ff",
+   "fffff8",
+   "ffffff",
+   "ffff"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bda0000000",
@@ -2847,7 +9233,22 @@
   "pat": "488dac24800000000f29bda00000000f29b59000000048c78588000000feffffff4889ce488b0d52c86105ff15bc36690348897568",
   "pmask": "ffffffff00000000ffffff00000000ffffff00000000ffffff0000000000000000ffffffffffff00000000ffff00000000ffffff00",
   "distinct": 7,
-  "size": 53
+  "size": 53,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_GetGenericParameterInfo",
+   "GIMeta_GetMethodByIndex",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendChar",
+   "MetaStr_AppendN",
+   "MetaStr_AppendObject",
+   "MetaStr_Reserve"
+  ]
  },
  {
   "name": "GIMeta_AllocTypeInfoArray",
@@ -2899,6 +9300,162 @@
    "mov|Mdf8,R",
    "call|I"
   ],
+  "ext_bytes": [
+   "0f93c3",
+   "0f9285c8000000",
+   "488b0d58345f05",
+   "ff15ba9f6603",
+   "44887548",
+   "4408f3",
+   "4889b5e8000000",
+   "488d4e78",
+   "48898df8000000",
+   "e8dc680000"
+  ],
+  "ext_mask": [
+   "ffffff",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffff",
+   "ffffff00000000",
+   "ffffff00",
+   "ffffff00000000",
+   "ff00000000"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "0f29bd20010000",
+   "0f29b510010000",
+   "48c78508010000feffffff",
+   "4589c6",
+   "89d7",
+   "4889ce",
+   "83fa02"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffffff00000000ffffffff",
+   "ffffff",
+   "ffff",
+   "ffffff",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "0f93c3",
+   "0f9285c8000000",
+   "488b0d58345f05",
+   "ff15ba9f6603",
+   "44887548",
+   "4408f3",
+   "4889b5e8000000",
+   "488d4e78",
+   "48898df8000000",
+   "e8dc680000"
+  ],
+  "ext_mask_disp": [
+   "ffffff",
+   "ffffff00000000",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffff",
+   "ffffff00000000",
+   "ffffff00",
+   "ffffff00000000",
+   "ffffffffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "0f29bd20010000",
+   "0f29b510010000",
+   "48c78508010000feffffff",
+   "4589c6",
+   "89d7",
+   "4889ce",
+   "83fa02"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "ffffc0ffffffff",
+   "ffffc0ffffffff",
+   "f8ffc0ffffffffffffffff",
+   "f8ffc0",
+   "ffc0",
+   "f8ffc0",
+   "ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "0f93c3",
+   "0f9285c8000000",
+   "488b0d58345f05",
+   "ff15ba9f6603",
+   "44887548",
+   "4408f3",
+   "4889b5e8000000",
+   "488d4e78",
+   "48898df8000000",
+   "e8dc680000"
+  ],
+  "ext_mask_regs": [
+   "ffffc0",
+   "ffffc0ffffffff",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "f8ffc0ff",
+   "f8ffc0ffffffff",
+   "ffffffffff"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "0f29bd20010000",
+   "0f29b510010000",
+   "48c78508010000feffffff",
+   "4589c6",
+   "89d7",
+   "4889ce",
+   "83fa02"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8ffffffffffffffff",
+   "fffff8",
+   "fff8",
+   "fffff8",
+   "fff8ff"
+  ],
+  "ext_bytes_rm": [
+   "0f93c3",
+   "0f9285c8000000",
+   "488b0d58345f05",
+   "ff15ba9f6603",
+   "44887548",
+   "4408f3",
+   "4889b5e8000000",
+   "488d4e78",
+   "48898df8000000",
+   "e8dc680000"
+  ],
+  "ext_mask_rm": [
+   "fffff8",
+   "fffff8ffffffff",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "fffff8ffffffff",
+   "ffffffffff"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f29bd20010000",
@@ -2922,7 +9479,15 @@
   "pat": "488dac24800000000f29bd200100000f29b51001000048c78508010000feffffff4589c689d74889ce83fa02",
   "pmask": "ffffffff00000000ffffff00000000ffffff00000000ffffff0000000000000000ffffffffffffffffffff00",
   "distinct": 5,
-  "size": 44
+  "size": 44,
+  "callees": [
+   "GIMeta_GetMethodByIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_DecodeAttributeArg",
@@ -2974,6 +9539,162 @@
    "cmp|R,R",
    "mov|Md-18,R"
   ],
+  "ext_bytes": [
+   "488d0de9020000",
+   "48630481",
+   "4801c8",
+   "ffe0",
+   "4989df",
+   "49c1ef10",
+   "450fb7f7",
+   "48b8fffffffffeffffff",
+   "4839c3",
+   "488975e8"
+  ],
+  "ext_mask": [
+   "ffffff00000000",
+   "ffffffff",
+   "ffffff",
+   "ffff",
+   "ffffff",
+   "ffffff00",
+   "ffffffff",
+   "ffff0000000000000000",
+   "ffffff",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "488d6c2440",
+   "48c74500feffffff",
+   "4489cf",
+   "4889ce",
+   "4180f803",
+   "7759",
+   "4889d3",
+   "410fb6c0"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffff",
+   "ffff",
+   "ffffff",
+   "ffffffff"
+  ],
+  "ext_bytes_disp": [
+   "488d0de9020000",
+   "48630481",
+   "4801c8",
+   "ffe0",
+   "4989df",
+   "49c1ef10",
+   "450fb7f7",
+   "48b8fffffffffeffffff",
+   "4839c3",
+   "488975e8"
+  ],
+  "ext_mask_disp": [
+   "ffffff00000000",
+   "ffffffff",
+   "ffffff",
+   "ffff",
+   "ffffff",
+   "ffffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffff00"
+  ],
+  "bytes_regs": [
+   "488d6c2440",
+   "48c74500feffffff",
+   "4489cf",
+   "4889ce",
+   "4180f803",
+   "7759",
+   "4889d3",
+   "410fb6c0"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "ffff",
+   "f8ffc0",
+   "f8ffffc0"
+  ],
+  "ext_bytes_regs": [
+   "488d0de9020000",
+   "48630481",
+   "4801c8",
+   "ffe0",
+   "4989df",
+   "49c1ef10",
+   "450fb7f7",
+   "48b8fffffffffeffffff",
+   "4839c3",
+   "488975e8"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ffffffff",
+   "f8ffc0c0",
+   "f8ffc0",
+   "ffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffffc0",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0ff"
+  ],
+  "bytes_rm": [
+   "488d6c2440",
+   "48c74500feffffff",
+   "4489cf",
+   "4889ce",
+   "4180f803",
+   "7759",
+   "4889d3",
+   "410fb6c0"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8ff",
+   "ffff",
+   "fffff8",
+   "fffffff8"
+  ],
+  "ext_bytes_rm": [
+   "488d0de9020000",
+   "48630481",
+   "4801c8",
+   "ffe0",
+   "4989df",
+   "49c1ef10",
+   "450fb7f7",
+   "48b8fffffffffeffffff",
+   "4839c3",
+   "488975e8"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffffffff",
+   "fffff8ff",
+   "fffff8",
+   "fff8",
+   "fffff8",
+   "fffff8ff",
+   "fffffff8",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "fffff8ff"
+  ],
   "bytes": [
    "488d6c2440",
    "48c74500feffffff",
@@ -2997,7 +9718,13 @@
   "pat": "488d6c244048c74500feffffff4489cf4889ce4180f80377594889d3410fb6c0",
   "pmask": "ffffffff00ffffff0000000000ffffffffffffffffff00ff00ffffffffffffff",
   "distinct": 6,
-  "size": 32
+  "size": 32,
+  "callees": [
+   "GIMeta_AllocTypeInfoArray",
+   "GIMeta_DecryptString",
+   "GIMeta_FindTypeByName",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "GIMeta_TypePredicateA",
@@ -3049,6 +9776,162 @@
    "movabs|R,I",
    "xor|R,R"
   ],
+  "ext_bytes": [
+   "4989c1",
+   "488b4008",
+   "496329",
+   "48b94febd4273daeb2c2",
+   "480fafc1",
+   "48c1c01f",
+   "48ba87caeb85b179379e",
+   "480fafc2",
+   "49b8cd6756162febd427",
+   "4c31c0"
+  ],
+  "ext_mask": [
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffff0000000000000000",
+   "ffffffff",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffffff",
+   "ffff0000000000000000",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488b4908",
+   "e844ecffff",
+   "4989f1",
+   "483b4608",
+   "7412",
+   "418b09",
+   "4889c2",
+   "e850ebfbff"
+  ],
+  "mask_disp": [
+   "ffffff00",
+   "ffffffffff",
+   "ffffff",
+   "ffffff00",
+   "ffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffff"
+  ],
+  "ext_bytes_disp": [
+   "4989c1",
+   "488b4008",
+   "496329",
+   "48b94febd4273daeb2c2",
+   "480fafc1",
+   "48c1c01f",
+   "48ba87caeb85b179379e",
+   "480fafc2",
+   "49b8cd6756162febd427",
+   "4c31c0"
+  ],
+  "ext_mask_disp": [
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffffffffffffffff",
+   "ffffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488b4908",
+   "e844ecffff",
+   "4989f1",
+   "483b4608",
+   "7412",
+   "418b09",
+   "4889c2",
+   "e850ebfbff"
+  ],
+  "mask_regs": [
+   "f8ffc0ff",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "ffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffff"
+  ],
+  "ext_bytes_regs": [
+   "4989c1",
+   "488b4008",
+   "496329",
+   "48b94febd4273daeb2c2",
+   "480fafc1",
+   "48c1c01f",
+   "48ba87caeb85b179379e",
+   "480fafc2",
+   "49b8cd6756162febd427",
+   "4c31c0"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffffffffffffffffffff",
+   "f8ffffc0",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffffc0",
+   "ffffffffffffffffffff",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "488b4908",
+   "e844ecffff",
+   "4989f1",
+   "483b4608",
+   "7412",
+   "418b09",
+   "4889c2",
+   "e850ebfbff"
+  ],
+  "mask_rm": [
+   "fffff8ff",
+   "ffffffffff",
+   "fffff8",
+   "fffff8ff",
+   "ffff",
+   "fffff8",
+   "fffff8",
+   "ffffffffff"
+  ],
+  "ext_bytes_rm": [
+   "4989c1",
+   "488b4008",
+   "496329",
+   "48b94febd4273daeb2c2",
+   "480fafc1",
+   "48c1c01f",
+   "48ba87caeb85b179379e",
+   "480fafc2",
+   "49b8cd6756162febd427",
+   "4c31c0"
+  ],
+  "ext_mask_rm": [
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "ffffffffffffffffffff",
+   "fffffff8",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffffff8",
+   "ffffffffffffffffffff",
+   "fffff8"
+  ],
   "bytes": [
    "488b4908",
    "e844ecffff",
@@ -3072,7 +9955,23 @@
   "pat": "488b4908e844ecffff4989f1483b46087412418b094889c2e850ebfbff",
   "pmask": "ffffff00ff00000000ffffffffffff00ff00ffffffffffffff00000000",
   "distinct": 5,
-  "size": 29
+  "size": 29,
+  "callees": [
+   "GIMeta_DecryptString",
+   "GIMeta_GetDefaultValue",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodName2",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_GetTypeInfoFromIndex",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendChar"
+  ]
  },
  {
   "name": "GIMeta_TypeAttrGetter",
@@ -3124,6 +10023,162 @@
    "mov|R,I",
    "add|R,Md18"
   ],
+  "ext_bytes": [
+   "7559",
+   "488b0d2cf95a05",
+   "ff1546486203",
+   "31c9",
+   "31c0",
+   "f0480fb10d11f95a05",
+   "7530",
+   "488b0580f85a05",
+   "b961a4acdd",
+   "034818"
+  ],
+  "ext_mask": [
+   "ff00",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffff",
+   "ffff",
+   "ffffffffff00000000",
+   "ff00",
+   "ffffff00000000",
+   "ff00000000",
+   "ffff00"
+  ],
+  "bytes_disp": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "83f9ff",
+   "0f84a3010000",
+   "89ce",
+   "31c9",
+   "31c0",
+   "f0480fb10d2df95a05"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffff",
+   "ffff",
+   "ffff",
+   "ffffffffff00000000"
+  ],
+  "ext_bytes_disp": [
+   "7559",
+   "488b0d2cf95a05",
+   "ff1546486203",
+   "31c9",
+   "31c0",
+   "f0480fb10d11f95a05",
+   "7530",
+   "488b0580f85a05",
+   "b961a4acdd",
+   "034818"
+  ],
+  "ext_mask_disp": [
+   "ffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffff",
+   "ffff",
+   "ffffffffff00000000",
+   "ffff",
+   "ffffff00000000",
+   "ffffffffff",
+   "ffff00"
+  ],
+  "bytes_regs": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "83f9ff",
+   "0f84a3010000",
+   "89ce",
+   "31c9",
+   "31c0",
+   "f0480fb10d2df95a05"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "ffc0ff",
+   "ffffffffffff",
+   "ffc0",
+   "ffc0",
+   "ffc0",
+   "fff8ffffc0ffffffff"
+  ],
+  "ext_bytes_regs": [
+   "7559",
+   "488b0d2cf95a05",
+   "ff1546486203",
+   "31c9",
+   "31c0",
+   "f0480fb10d11f95a05",
+   "7530",
+   "488b0580f85a05",
+   "b961a4acdd",
+   "034818"
+  ],
+  "ext_mask_regs": [
+   "ffff",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "ffc0",
+   "ffc0",
+   "fff8ffffc0ffffffff",
+   "ffff",
+   "f8ffc0ffffffff",
+   "ffffffffff",
+   "ffc0ff"
+  ],
+  "bytes_rm": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "83f9ff",
+   "0f84a3010000",
+   "89ce",
+   "31c9",
+   "31c0",
+   "f0480fb10d2df95a05"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fff8ff",
+   "ffffffffffff",
+   "fff8",
+   "fff8",
+   "fff8",
+   "fffffffff8ffffffff"
+  ],
+  "ext_bytes_rm": [
+   "7559",
+   "488b0d2cf95a05",
+   "ff1546486203",
+   "31c9",
+   "31c0",
+   "f0480fb10d11f95a05",
+   "7530",
+   "488b0580f85a05",
+   "b961a4acdd",
+   "034818"
+  ],
+  "ext_mask_rm": [
+   "ffff",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fff8",
+   "fff8",
+   "fffffffff8ffffffff",
+   "ffff",
+   "fffff8ffffffff",
+   "ffffffffff",
+   "fff8ff"
+  ],
   "bytes": [
    "488d6c2430",
    "48c745f8feffffff",
@@ -3147,7 +10202,23 @@
   "pat": "488d6c243048c745f8feffffff83f9ff0f84a301000089ce31c931c0f0480fb10d2df95a05",
   "pmask": "ffffffff00ffffff0000000000ffff00ffff00000000ffffffffffffffffffffff00000000",
   "distinct": 7,
-  "size": 37
+  "size": 37,
+  "callees": [
+   "GIMeta_DecryptString",
+   "GIMeta_GetDefaultValue",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodName2",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_GetTypeInfoFromIndex",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendChar"
+  ]
  },
  {
   "name": "GIMeta_TypePredicateB",
@@ -3199,6 +10270,162 @@
    "mov|R,Md98",
    "mov|R,I"
   ],
+  "ext_bytes": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0d8de55805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffff00",
+   "ffffff",
+   "ffff00000000",
+   "ff00",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ff00000000"
+  ],
+  "bytes_disp": [
+   "8b09",
+   "e88464fdff",
+   "4889c6",
+   "488b00",
+   "483b050ff15805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask_disp": [
+   "ffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff",
+   "ffff00000000ff",
+   "ffff"
+  ],
+  "ext_bytes_disp": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0d8de55805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask_disp": [
+   "ffffff00",
+   "ffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffff",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ffffffffff"
+  ],
+  "bytes_regs": [
+   "8b09",
+   "e88464fdff",
+   "4889c6",
+   "488b00",
+   "483b050ff15805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask_regs": [
+   "ffc0",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffff",
+   "ffc0ffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_regs": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0d8de55805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask_regs": [
+   "ffffc0ff",
+   "ffc0ff",
+   "f8ffc0",
+   "ffc0ffffffff",
+   "ffff",
+   "ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffffffffff"
+  ],
+  "bytes_rm": [
+   "8b09",
+   "e88464fdff",
+   "4889c6",
+   "488b00",
+   "483b050ff15805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask_rm": [
+   "fff8",
+   "ffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8ffffffff",
+   "ffff",
+   "fff8ffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_rm": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0d8de55805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "fff8ff",
+   "fffff8",
+   "fff8ffffffff",
+   "ffff",
+   "fff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "ffffffffff"
+  ],
   "bytes": [
    "8b09",
    "e88464fdff",
@@ -3222,7 +10449,16 @@
   "pat": "8b09e88464fdff4889c6488b00483b050ff158057551f686c80000000e7512",
   "pmask": "ffffff00000000ffffffffffffffffff00000000ff00ffff0000000000ff00",
   "distinct": 6,
-  "size": 31
+  "size": 31,
+  "callees": [
+   "GIMeta_AllocTypeInfoArray",
+   "GIMeta_DecodeAttributeArg",
+   "GIMeta_DecryptString",
+   "GIMeta_FindTypeByName",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_TypePredicateC",
@@ -3274,6 +10510,162 @@
    "mov|R,Md98",
    "mov|R,I"
   ],
+  "ext_bytes": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0dfde45805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffff00",
+   "ffffff",
+   "ffff00000000",
+   "ff00",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ff00000000"
+  ],
+  "bytes_disp": [
+   "8b09",
+   "e8f463fdff",
+   "4889c6",
+   "488b00",
+   "483b057ff05805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask_disp": [
+   "ffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff",
+   "ffff00000000ff",
+   "ffff"
+  ],
+  "ext_bytes_disp": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0dfde45805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask_disp": [
+   "ffffff00",
+   "ffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffff",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ffffffffff"
+  ],
+  "bytes_regs": [
+   "8b09",
+   "e8f463fdff",
+   "4889c6",
+   "488b00",
+   "483b057ff05805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask_regs": [
+   "ffc0",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffff",
+   "ffc0ffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_regs": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0dfde45805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask_regs": [
+   "ffffc0ff",
+   "ffc0ff",
+   "f8ffc0",
+   "ffc0ffffffff",
+   "ffff",
+   "ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffffffffff"
+  ],
+  "bytes_rm": [
+   "8b09",
+   "e8f463fdff",
+   "4889c6",
+   "488b00",
+   "483b057ff05805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask_rm": [
+   "fff8",
+   "ffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8ffffffff",
+   "ffff",
+   "fff8ffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_rm": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0dfde45805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "fff8ff",
+   "fffff8",
+   "fff8ffffffff",
+   "ffff",
+   "fff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "ffffffffff"
+  ],
   "bytes": [
    "8b09",
    "e8f463fdff",
@@ -3297,7 +10689,16 @@
   "pat": "8b09e8f463fdff4889c6488b00483b057ff058057551f686c80000000e7512",
   "pmask": "ffffff00000000ffffffffffffffffff00000000ff00ffff0000000000ff00",
   "distinct": 6,
-  "size": 31
+  "size": 31,
+  "callees": [
+   "GIMeta_AllocTypeInfoArray",
+   "GIMeta_DecodeAttributeArg",
+   "GIMeta_DecryptString",
+   "GIMeta_FindTypeByName",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_TypePredicateD",
@@ -3349,6 +10750,162 @@
    "mov|R,Md98",
    "mov|R,I"
   ],
+  "ext_bytes": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0d6de45805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffff00",
+   "ffffff",
+   "ffff00000000",
+   "ff00",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ff00000000"
+  ],
+  "bytes_disp": [
+   "8b09",
+   "e86463fdff",
+   "4889c6",
+   "488b00",
+   "483b05efef5805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask_disp": [
+   "ffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff",
+   "ffff00000000ff",
+   "ffff"
+  ],
+  "ext_bytes_disp": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0d6de45805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask_disp": [
+   "ffffff00",
+   "ffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffff",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ffffffffff"
+  ],
+  "bytes_regs": [
+   "8b09",
+   "e86463fdff",
+   "4889c6",
+   "488b00",
+   "483b05efef5805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask_regs": [
+   "ffc0",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffff",
+   "ffc0ffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_regs": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0d6de45805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask_regs": [
+   "ffffc0ff",
+   "ffc0ff",
+   "f8ffc0",
+   "ffc0ffffffff",
+   "ffff",
+   "ffc0ffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffffffffff"
+  ],
+  "bytes_rm": [
+   "8b09",
+   "e86463fdff",
+   "4889c6",
+   "488b00",
+   "483b05efef5805",
+   "7551",
+   "f686c80000000e",
+   "7512"
+  ],
+  "mask_rm": [
+   "fff8",
+   "ffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8ffffffff",
+   "ffff",
+   "fff8ffffffffff",
+   "ffff"
+  ],
+  "ext_bytes_rm": [
+   "0fb64e72",
+   "c1e110",
+   "4889f0",
+   "81f900000f00",
+   "7510",
+   "8b86b0000000",
+   "488b0d6de45805",
+   "480301",
+   "488b8098000000",
+   "b940cfb4bb"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "fff8ff",
+   "fffff8",
+   "fff8ffffffff",
+   "ffff",
+   "fff8ffffffff",
+   "fffff8ffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "ffffffffff"
+  ],
   "bytes": [
    "8b09",
    "e86463fdff",
@@ -3372,7 +10929,16 @@
   "pat": "8b09e86463fdff4889c6488b00483b05efef58057551f686c80000000e7512",
   "pmask": "ffffff00000000ffffffffffffffffff00000000ff00ffff0000000000ff00",
   "distinct": 6,
-  "size": 31
+  "size": 31,
+  "callees": [
+   "GIMeta_AllocTypeInfoArray",
+   "GIMeta_DecodeAttributeArg",
+   "GIMeta_DecryptString",
+   "GIMeta_FindTypeByName",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_Helper_510CE0",
@@ -3424,6 +10990,162 @@
    "nop|",
    "add|R,i38"
   ],
+  "ext_bytes": [
+   "7526",
+   "488b0d514c5c05",
+   "ff152b956303",
+   "488d55f8",
+   "4889f1",
+   "e807390000",
+   "488b0d384c5c05",
+   "ff151a996303",
+   "90",
+   "4883c438"
+  ],
+  "ext_mask": [
+   "ff00",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffff",
+   "ff00000000",
+   "ffffff00000000",
+   "ffff00000000",
+   "ff",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4889ce",
+   "6683b9c200000000",
+   "7509",
+   "f686c80000000e",
+   "742d",
+   "48837e2000"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff0000ffffff",
+   "ffff",
+   "ffff00000000ff",
+   "ffff",
+   "ffffff00ff"
+  ],
+  "ext_bytes_disp": [
+   "7526",
+   "488b0d514c5c05",
+   "ff152b956303",
+   "488d55f8",
+   "4889f1",
+   "e807390000",
+   "488b0d384c5c05",
+   "ff151a996303",
+   "90",
+   "4883c438"
+  ],
+  "ext_mask_disp": [
+   "ffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffff",
+   "ffffffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ff",
+   "ffffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4889ce",
+   "6683b9c200000000",
+   "7509",
+   "f686c80000000e",
+   "742d",
+   "48837e2000"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "ffffc0ffffffffff",
+   "ffff",
+   "ffc0ffffffffff",
+   "ffff",
+   "f8ffc0ffff"
+  ],
+  "ext_bytes_regs": [
+   "7526",
+   "488b0d514c5c05",
+   "ff152b956303",
+   "488d55f8",
+   "4889f1",
+   "e807390000",
+   "488b0d384c5c05",
+   "ff151a996303",
+   "90",
+   "4883c438"
+  ],
+  "ext_mask_regs": [
+   "ffff",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "ff",
+   "f8ffc0ff"
+  ],
+  "bytes_rm": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4889ce",
+   "6683b9c200000000",
+   "7509",
+   "f686c80000000e",
+   "742d",
+   "48837e2000"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ffffffffff",
+   "ffff",
+   "fff8ffffffffff",
+   "ffff",
+   "fffff8ffff"
+  ],
+  "ext_bytes_rm": [
+   "7526",
+   "488b0d514c5c05",
+   "ff152b956303",
+   "488d55f8",
+   "4889f1",
+   "e807390000",
+   "488b0d384c5c05",
+   "ff151a996303",
+   "90",
+   "4883c438"
+  ],
+  "ext_mask_rm": [
+   "ffff",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff",
+   "fffff8",
+   "ffffffffff",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "ff",
+   "fffff8ff"
+  ],
   "bytes": [
    "488d6c2430",
    "48c74500feffffff",
@@ -3447,7 +11169,32 @@
   "pat": "488d6c243048c74500feffffff4889ce6683b9c2000000007509f686c80000000e742d48837e2000",
   "pmask": "ffffffff00ffffff0000000000ffffffffffff0000ffff00ff00ffff0000000000ff00ffffff0000",
   "distinct": 7,
-  "size": 40
+  "size": 40,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_FindMethodByNameA",
@@ -3499,6 +11246,162 @@
    "movzx|R,Mdc2",
    "shl|R,i3"
   ],
+  "ext_bytes": [
+   "8b4d70",
+   "49bfd8d53c8c1eaffcba",
+   "90",
+   "4531ed",
+   "666666662e0f1f840000000000",
+   "4d85ed",
+   "742b",
+   "4983c508",
+   "0fb783c2000000",
+   "48c1e003"
+  ],
+  "ext_mask": [
+   "ffff00",
+   "ffff0000000000000000",
+   "ff",
+   "ffffff",
+   "ffffffffffffffffff0000ffff",
+   "ffffff",
+   "ff00",
+   "ffffff00",
+   "ffffff00000000",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4885c9",
+   "0f8445010000",
+   "4589cc",
+   "4489c7",
+   "4989d6",
+   "4889cb"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "8b4d70",
+   "49bfd8d53c8c1eaffcba",
+   "90",
+   "4531ed",
+   "666666662e0f1f840000000000",
+   "4d85ed",
+   "742b",
+   "4983c508",
+   "0fb783c2000000",
+   "48c1e003"
+  ],
+  "ext_mask_disp": [
+   "ffff00",
+   "ffffffffffffffffffff",
+   "ff",
+   "ffffff",
+   "ffffffffffffffffff0000ffff",
+   "ffffff",
+   "ffff",
+   "ffffffff",
+   "ffffff00000000",
+   "ffffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4885c9",
+   "0f8445010000",
+   "4589cc",
+   "4489c7",
+   "4989d6",
+   "4889cb"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "8b4d70",
+   "49bfd8d53c8c1eaffcba",
+   "90",
+   "4531ed",
+   "666666662e0f1f840000000000",
+   "4d85ed",
+   "742b",
+   "4983c508",
+   "0fb783c2000000",
+   "48c1e003"
+  ],
+  "ext_mask_regs": [
+   "ffc0ff",
+   "ffffffffffffffffffff",
+   "ff",
+   "f8ffc0",
+   "ffffffffffffffc0c0ffffffff",
+   "f8ffc0",
+   "ffff",
+   "f8ffc0ff",
+   "ffffc0ffffffff",
+   "f8ffc0ff"
+  ],
+  "bytes_rm": [
+   "488d6c2430",
+   "48c74500feffffff",
+   "4885c9",
+   "0f8445010000",
+   "4589cc",
+   "4489c7",
+   "4989d6",
+   "4889cb"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "8b4d70",
+   "49bfd8d53c8c1eaffcba",
+   "90",
+   "4531ed",
+   "666666662e0f1f840000000000",
+   "4d85ed",
+   "742b",
+   "4983c508",
+   "0fb783c2000000",
+   "48c1e003"
+  ],
+  "ext_mask_rm": [
+   "fff8ff",
+   "ffffffffffffffffffff",
+   "ff",
+   "fffff8",
+   "fffffffffffffff8ffffffffff",
+   "fffff8",
+   "ffff",
+   "fffff8ff",
+   "fffff8ffffffff",
+   "fffff8ff"
+  ],
   "bytes": [
    "488d6c2430",
    "48c74500feffffff",
@@ -3522,7 +11425,32 @@
   "pat": "488d6c243048c74500feffffff4885c90f84450100004589cc4489c74989d64889cb",
   "pmask": "ffffffff00ffffff0000000000ffffffffff00000000ffffffffffffffffffffffff",
   "distinct": 5,
-  "size": 34
+  "size": 34,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetMethodNameCached",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_FindTypeByName2",
@@ -3574,6 +11502,162 @@
    "movzx|R,Md72",
    "shl|R,i10"
   ],
+  "ext_bytes": [
+   "48c744242015000000",
+   "4c8d0de6155603",
+   "4c8d7dd0",
+   "ba15000000",
+   "4c89f9",
+   "e8a710faff",
+   "41f68424c80000000e",
+   "7514",
+   "410fb64c2472",
+   "c1e110"
+  ],
+  "ext_mask": [
+   "ffffffff0000000000",
+   "ffffff00000000",
+   "ffffff00",
+   "ff00000000",
+   "ffffff",
+   "ff00000000",
+   "ffffffff0000000000",
+   "ff00",
+   "ffffffffff00",
+   "ffff00"
+  ],
+  "bytes_disp": [
+   "488d6c2460",
+   "48c745f8feffffff",
+   "4989d6",
+   "4989cc",
+   "0f57c0",
+   "0f2945d0",
+   "48c745e000000000",
+   "48c745e80f000000"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff00ffffffff",
+   "ffffff00ffffffff"
+  ],
+  "ext_bytes_disp": [
+   "48c744242015000000",
+   "4c8d0de6155603",
+   "4c8d7dd0",
+   "ba15000000",
+   "4c89f9",
+   "e8a710faff",
+   "41f68424c80000000e",
+   "7514",
+   "410fb64c2472",
+   "c1e110"
+  ],
+  "ext_mask_disp": [
+   "ffffffff00ffffffff",
+   "ffffff00000000",
+   "ffffff00",
+   "ffffffffff",
+   "ffffff",
+   "ffffffffff",
+   "ffffffff00000000ff",
+   "ffff",
+   "ffffffffff00",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2460",
+   "48c745f8feffffff",
+   "4989d6",
+   "4989cc",
+   "0f57c0",
+   "0f2945d0",
+   "48c745e000000000",
+   "48c745e80f000000"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffc0",
+   "ffffc0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ffffffffff"
+  ],
+  "ext_bytes_regs": [
+   "48c744242015000000",
+   "4c8d0de6155603",
+   "4c8d7dd0",
+   "ba15000000",
+   "4c89f9",
+   "e8a710faff",
+   "41f68424c80000000e",
+   "7514",
+   "410fb64c2472",
+   "c1e110"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0c0ffffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ff",
+   "ffffffffff",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0c0ffffffffff",
+   "ffff",
+   "f8ffffc0c0ff",
+   "ffc0ff"
+  ],
+  "bytes_rm": [
+   "488d6c2460",
+   "48c745f8feffffff",
+   "4989d6",
+   "4989cc",
+   "0f57c0",
+   "0f2945d0",
+   "48c745e000000000",
+   "48c745e80f000000"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "fffff8ff",
+   "fffff8ffffffffff",
+   "fffff8ffffffffff"
+  ],
+  "ext_bytes_rm": [
+   "48c744242015000000",
+   "4c8d0de6155603",
+   "4c8d7dd0",
+   "ba15000000",
+   "4c89f9",
+   "e8a710faff",
+   "41f68424c80000000e",
+   "7514",
+   "410fb64c2472",
+   "c1e110"
+  ],
+  "ext_mask_rm": [
+   "fffff8ffffffffffff",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "ffffffffff",
+   "fffff8",
+   "ffffffffff",
+   "fffff8ffffffffffff",
+   "ffff",
+   "fffffff8ffff",
+   "fff8ff"
+  ],
   "bytes": [
    "488d6c2460",
    "48c745f8feffffff",
@@ -3597,7 +11681,31 @@
   "pat": "488d6c246048c745f8feffffff4989d64989cc0f57c00f2945d048c745e00000000048c745e80f000000",
   "pmask": "ffffffff00ffffff0000000000ffffffffffffffffffffffff00ffffff0000000000ffffff0000000000",
   "distinct": 5,
-  "size": 42
+  "size": 42,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_FindMethodByNameA",
+   "GIMeta_FindTypeByName2",
+   "GIMeta_GetClassInfo",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_Helper_510CE0",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType",
+   "GIMeta_SetupEventsLocked",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupMethodsLocked",
+   "GIMeta_SetupNestedLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupPropertiesLocked",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_SetupTypeLocked2",
+   "GIMeta_TypeInfoDispatcher",
+   "GIMeta_TypePredicateA",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "GIMeta_Helper_5158B0",
@@ -3649,6 +11757,162 @@
    "mov|Md-20,R",
    "mov|R,i60"
   ],
+  "ext_bytes": [
+   "4c8975d0",
+   "0f85a0020000",
+   "4989cd",
+   "488b0d3df55b05",
+   "ff153f496303",
+   "49397518",
+   "0f8575020000",
+   "488b05ce005c05",
+   "488945e0",
+   "b960000000"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffff00000000",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffff00000000",
+   "ffffff00000000",
+   "ffffff00",
+   "ff00000000"
+  ],
+  "bytes_disp": [
+   "488dac2480000000",
+   "0f2975f0",
+   "48c745e8feffffff",
+   "4d89c6",
+   "488955d8",
+   "4c8b4118",
+   "48be5b05067efc58b514",
+   "4939f0"
+  ],
+  "mask_disp": [
+   "ffffffff00000000",
+   "ffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "4c8975d0",
+   "0f85a0020000",
+   "4989cd",
+   "488b0d3df55b05",
+   "ff153f496303",
+   "49397518",
+   "0f8575020000",
+   "488b05ce005c05",
+   "488945e0",
+   "b960000000"
+  ],
+  "ext_mask_disp": [
+   "ffffff00",
+   "ffffffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffffffffff",
+   "ffffff00000000",
+   "ffffff00",
+   "ffffffffff"
+  ],
+  "bytes_regs": [
+   "488dac2480000000",
+   "0f2975f0",
+   "48c745e8feffffff",
+   "4d89c6",
+   "488955d8",
+   "4c8b4118",
+   "48be5b05067efc58b514",
+   "4939f0"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ffffffff",
+   "ffffc0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "4c8975d0",
+   "0f85a0020000",
+   "4989cd",
+   "488b0d3df55b05",
+   "ff153f496303",
+   "49397518",
+   "0f8575020000",
+   "488b05ce005c05",
+   "488945e0",
+   "b960000000"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ff",
+   "ffffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ff",
+   "ffffffffffff",
+   "f8ffc0ffffffff",
+   "f8ffc0ff",
+   "ffffffffff"
+  ],
+  "bytes_rm": [
+   "488dac2480000000",
+   "0f2975f0",
+   "48c745e8feffffff",
+   "4d89c6",
+   "488955d8",
+   "4c8b4118",
+   "48be5b05067efc58b514",
+   "4939f0"
+  ],
+  "mask_rm": [
+   "fffff8ffffffffff",
+   "fffff8ff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ff",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "4c8975d0",
+   "0f85a0020000",
+   "4989cd",
+   "488b0d3df55b05",
+   "ff153f496303",
+   "49397518",
+   "0f8575020000",
+   "488b05ce005c05",
+   "488945e0",
+   "b960000000"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "ffffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff",
+   "ffffffffffff",
+   "fffff8ffffffff",
+   "fffff8ff",
+   "ffffffffff"
+  ],
   "bytes": [
    "488dac2480000000",
    "0f2975f0",
@@ -3672,7 +11936,15 @@
   "pat": "488dac24800000000f2975f048c745e8feffffff4d89c6488955d84c8b411848be5b05067efc58b5144939f0",
   "pmask": "ffffffff00000000ffffff00ffffff0000000000ffffffffffff00ffffff00ffff0000000000000000ffffff",
   "distinct": 8,
-  "size": 44
+  "size": 44,
+  "callees": [
+   "GIMeta_DecodeDefaultValue",
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_IterNestedTypes",
+   "GIMeta_RegisterType"
+  ]
  },
  {
   "name": "GIMeta_GetMethodDeclClass",
@@ -3724,6 +11996,162 @@
    "test|Mdc8,ie",
    "mov|R,Md10"
   ],
+  "ext_bytes": [
+   "0f84a3000000",
+   "488b7810",
+   "48b9f669c4332ffc7c7a",
+   "4839cf",
+   "0f8521010000",
+   "41f6472f20",
+   "0f85ca000000",
+   "498b4f08",
+   "f681c80000000e",
+   "458b4710"
+  ],
+  "ext_mask": [
+   "ffff00000000",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ffffff",
+   "ffff00000000",
+   "ffffff0000",
+   "ffff00000000",
+   "ffffff00",
+   "ffff0000000000",
+   "ffffff00"
+  ],
+  "bytes_disp": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4989cf",
+   "488b0d95d65a05",
+   "ff156f1f6203",
+   "498b4730",
+   "49be0a963bccd0038385",
+   "4885c0"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff",
+   "ffffff00000000",
+   "ffff00000000",
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff"
+  ],
+  "ext_bytes_disp": [
+   "0f84a3000000",
+   "488b7810",
+   "48b9f669c4332ffc7c7a",
+   "4839cf",
+   "0f8521010000",
+   "41f6472f20",
+   "0f85ca000000",
+   "498b4f08",
+   "f681c80000000e",
+   "458b4710"
+  ],
+  "ext_mask_disp": [
+   "ffffffffffff",
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffffffffff",
+   "ffffff00ff",
+   "ffffffffffff",
+   "ffffff00",
+   "ffff00000000ff",
+   "ffffff00"
+  ],
+  "bytes_regs": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4989cf",
+   "488b0d95d65a05",
+   "ff156f1f6203",
+   "498b4730",
+   "49be0a963bccd0038385",
+   "4885c0"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0",
+   "f8ffc0ffffffff",
+   "ffc0ffffffff",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0"
+  ],
+  "ext_bytes_regs": [
+   "0f84a3000000",
+   "488b7810",
+   "48b9f669c4332ffc7c7a",
+   "4839cf",
+   "0f8521010000",
+   "41f6472f20",
+   "0f85ca000000",
+   "498b4f08",
+   "f681c80000000e",
+   "458b4710"
+  ],
+  "ext_mask_regs": [
+   "ffffffffffff",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "ffffffffffff",
+   "f8ffc0ffff",
+   "ffffffffffff",
+   "f8ffc0ff",
+   "ffc0ffffffffff",
+   "f8ffc0ff"
+  ],
+  "bytes_rm": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4989cf",
+   "488b0d95d65a05",
+   "ff156f1f6203",
+   "498b4730",
+   "49be0a963bccd0038385",
+   "4885c0"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8",
+   "fffff8ffffffff",
+   "fff8ffffffff",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8"
+  ],
+  "ext_bytes_rm": [
+   "0f84a3000000",
+   "488b7810",
+   "48b9f669c4332ffc7c7a",
+   "4839cf",
+   "0f8521010000",
+   "41f6472f20",
+   "0f85ca000000",
+   "498b4f08",
+   "f681c80000000e",
+   "458b4710"
+  ],
+  "ext_mask_rm": [
+   "ffffffffffff",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "ffffffffffff",
+   "fffff8ffff",
+   "ffffffffffff",
+   "fffff8ff",
+   "fff8ffffffffff",
+   "fffff8ff"
+  ],
   "bytes": [
    "488d6c2420",
    "48c74500feffffff",
@@ -3747,7 +12175,17 @@
   "pat": "488d6c242048c74500feffffff4989cf488b0d95d65a05ff156f1f6203498b473049be0a963bccd00383854885c0",
   "pmask": "ffffffff00ffffff0000000000ffffffffffff00000000ffff00000000ffffff00ffff0000000000000000ffffff",
   "distinct": 7,
-  "size": 46
+  "size": 46,
+  "callees": [
+   "GIMeta_DecryptString",
+   "GIMeta_GetMethodDeclClass",
+   "GIMeta_GetMethodInfoFromIndex",
+   "GIMeta_GetTypeInfoByIndex",
+   "GIMeta_SetupFieldsLocked",
+   "GIMeta_SetupParameters",
+   "GIMeta_SetupTypeInfoLocked",
+   "GIMeta_TypeInfoDispatcher"
+  ]
  },
  {
   "name": "MetaStr_AppendObject",
@@ -3799,6 +12237,162 @@
    "mov|R,R",
    "call|I"
   ],
+  "ext_bytes": [
+   "488b4618",
+   "4889c2",
+   "4829ca",
+   "4839fa",
+   "731c",
+   "4c89442420",
+   "4889f1",
+   "4c89c2",
+   "4989d9",
+   "e8f08effff"
+  ],
+  "ext_mask": [
+   "ffffff00",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ff00",
+   "ffffffff00",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ff00000000"
+  ],
+  "bytes_disp": [
+   "b201",
+   "e8b8410500",
+   "488b5818",
+   "4889d9",
+   "e8cc4a7e01",
+   "4889c7",
+   "4989c0",
+   "488b4e10"
+  ],
+  "mask_disp": [
+   "ffff",
+   "ffffffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00"
+  ],
+  "ext_bytes_disp": [
+   "488b4618",
+   "4889c2",
+   "4829ca",
+   "4839fa",
+   "731c",
+   "4c89442420",
+   "4889f1",
+   "4c89c2",
+   "4989d9",
+   "e8f08effff"
+  ],
+  "ext_mask_disp": [
+   "ffffff00",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffff",
+   "ffffffff00",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffff"
+  ],
+  "bytes_regs": [
+   "b201",
+   "e8b8410500",
+   "488b5818",
+   "4889d9",
+   "e8cc4a7e01",
+   "4889c7",
+   "4989c0",
+   "488b4e10"
+  ],
+  "mask_regs": [
+   "ffff",
+   "ffffffffff",
+   "f8ffc0ff",
+   "f8ffc0",
+   "ffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff"
+  ],
+  "ext_bytes_regs": [
+   "488b4618",
+   "4889c2",
+   "4829ca",
+   "4839fa",
+   "731c",
+   "4c89442420",
+   "4889f1",
+   "4c89c2",
+   "4989d9",
+   "e8f08effff"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0ff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "ffff",
+   "f8ffc0c0ff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffff"
+  ],
+  "bytes_rm": [
+   "b201",
+   "e8b8410500",
+   "488b5818",
+   "4889d9",
+   "e8cc4a7e01",
+   "4889c7",
+   "4989c0",
+   "488b4e10"
+  ],
+  "mask_rm": [
+   "ffff",
+   "ffffffffff",
+   "fffff8ff",
+   "fffff8",
+   "ffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8ff"
+  ],
+  "ext_bytes_rm": [
+   "488b4618",
+   "4889c2",
+   "4829ca",
+   "4839fa",
+   "731c",
+   "4c89442420",
+   "4889f1",
+   "4c89c2",
+   "4989d9",
+   "e8f08effff"
+  ],
+  "ext_mask_rm": [
+   "fffff8ff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "ffff",
+   "fffff8ffff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "ffffffffff"
+  ],
   "bytes": [
    "b201",
    "e8b8410500",
@@ -3822,7 +12416,12 @@
   "pat": "b201e8b8410500488b58184889d9e8cc4a7e014889c74989c0488b4e10",
   "pmask": "ff00ff00000000ffffff00ffffffff00000000ffffffffffffffffff00",
   "distinct": 4,
-  "size": 29
+  "size": 29,
+  "callees": [
+   "GIMeta_TypeInfoDispatcher",
+   "MetaStr_AppendChar",
+   "MetaStr_AppendN"
+  ]
  },
  {
   "name": "MetaStr_Reserve",
@@ -3874,6 +12473,162 @@
    "mov|R,R",
    "shr|R,i1"
   ],
+  "ext_bytes": [
+   "4889d3",
+   "4989ce",
+   "4c01e3",
+   "4c8b7918",
+   "4889d8",
+   "4883c80f",
+   "48b90000000000000080",
+   "783f",
+   "4c89ff",
+   "48d1ef"
+  ],
+  "ext_mask": [
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ff00",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "4c8b6110",
+   "48beffffffffffffff7f",
+   "4c89e0",
+   "4831f0",
+   "4839d0",
+   "0f8204010000"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffffff"
+  ],
+  "ext_bytes_disp": [
+   "4889d3",
+   "4989ce",
+   "4c01e3",
+   "4c8b7918",
+   "4889d8",
+   "4883c80f",
+   "48b90000000000000080",
+   "783f",
+   "4c89ff",
+   "48d1ef"
+  ],
+  "ext_mask_disp": [
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "4c8b6110",
+   "48beffffffffffffff7f",
+   "4c89e0",
+   "4831f0",
+   "4839d0",
+   "0f8204010000"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffffff"
+  ],
+  "ext_bytes_regs": [
+   "4889d3",
+   "4989ce",
+   "4c01e3",
+   "4c8b7918",
+   "4889d8",
+   "4883c80f",
+   "48b90000000000000080",
+   "783f",
+   "4c89ff",
+   "48d1ef"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "f8ffc0",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "488d6c2430",
+   "48c745f8feffffff",
+   "4c8b6110",
+   "48beffffffffffffff7f",
+   "4c89e0",
+   "4831f0",
+   "4839d0",
+   "0f8204010000"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "ffffffffffff"
+  ],
+  "ext_bytes_rm": [
+   "4889d3",
+   "4989ce",
+   "4c01e3",
+   "4c8b7918",
+   "4889d8",
+   "4883c80f",
+   "48b90000000000000080",
+   "783f",
+   "4c89ff",
+   "48d1ef"
+  ],
+  "ext_mask_rm": [
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "fffff8",
+   "fffff8"
+  ],
   "bytes": [
    "488d6c2430",
    "48c745f8feffffff",
@@ -3897,7 +12652,8 @@
   "pat": "488d6c243048c745f8feffffff4c8b611048beffffffffffffff7f4c89e04831f04839d00f8204010000",
   "pmask": "ffffffff00ffffff0000000000ffffff00ffff0000000000000000ffffffffffffffffffffff00000000",
   "distinct": 8,
-  "size": 42
+  "size": 42,
+  "callees": []
  },
  {
   "name": "MetaStr_AppendChar",
@@ -3949,6 +12705,162 @@
    "mov|R,R",
    "shr|R,i1"
   ],
+  "ext_bytes": [
+   "4889d3",
+   "4989cd",
+   "4c01fb",
+   "4c8b6118",
+   "4889d8",
+   "4883c80f",
+   "48b90000000000000080",
+   "783f",
+   "4c89e6",
+   "48d1ee"
+  ],
+  "ext_mask": [
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ff00",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4c8b7910",
+   "49beffffffffffffff7f",
+   "4c89f8",
+   "4c31f0",
+   "4839d0",
+   "0f821d010000"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffffff"
+  ],
+  "ext_bytes_disp": [
+   "4889d3",
+   "4989cd",
+   "4c01fb",
+   "4c8b6118",
+   "4889d8",
+   "4883c80f",
+   "48b90000000000000080",
+   "783f",
+   "4c89e6",
+   "48d1ee"
+  ],
+  "ext_mask_disp": [
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4c8b7910",
+   "49beffffffffffffff7f",
+   "4c89f8",
+   "4c31f0",
+   "4839d0",
+   "0f821d010000"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffffff"
+  ],
+  "ext_bytes_regs": [
+   "4889d3",
+   "4989cd",
+   "4c01fb",
+   "4c8b6118",
+   "4889d8",
+   "4883c80f",
+   "48b90000000000000080",
+   "783f",
+   "4c89e6",
+   "48d1ee"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "f8ffc0",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "4c8b7910",
+   "49beffffffffffffff7f",
+   "4c89f8",
+   "4c31f0",
+   "4839d0",
+   "0f821d010000"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "ffffffffffff"
+  ],
+  "ext_bytes_rm": [
+   "4889d3",
+   "4989cd",
+   "4c01fb",
+   "4c8b6118",
+   "4889d8",
+   "4883c80f",
+   "48b90000000000000080",
+   "783f",
+   "4c89e6",
+   "48d1ee"
+  ],
+  "ext_mask_rm": [
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "fffff8",
+   "fffff8"
+  ],
   "bytes": [
    "488d6c2420",
    "48c74500feffffff",
@@ -3972,7 +12884,8 @@
   "pat": "488d6c242048c74500feffffff4c8b791049beffffffffffffff7f4c89f84c31f04839d00f821d010000",
   "pmask": "ffffffff00ffffff0000000000ffffff00ffff0000000000000000ffffffffffffffffffffff00000000",
   "distinct": 8,
-  "size": 42
+  "size": 42,
+  "callees": []
  },
  {
   "name": "MetaStr_AppendN",
@@ -4024,6 +12937,162 @@
    "mov|R,R",
    "shr|R,i1"
   ],
+  "ext_bytes": [
+   "4889d6",
+   "4989cf",
+   "4801fe",
+   "4c8b6918",
+   "4889f0",
+   "4883c80f",
+   "48b90000000000000080",
+   "7843",
+   "4c89eb",
+   "48d1eb"
+  ],
+  "ext_mask": [
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffff00",
+   "ffff0000000000000000",
+   "ff00",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_disp": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "488b7910",
+   "49beffffffffffffff7f",
+   "4889f8",
+   "4c31f0",
+   "4839d0",
+   "0f823e010000"
+  ],
+  "mask_disp": [
+   "ffffffff00",
+   "ffffff00ffffffff",
+   "ffffff00",
+   "ffffffffffffffffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffffffffff"
+  ],
+  "ext_bytes_disp": [
+   "4889d6",
+   "4989cf",
+   "4801fe",
+   "4c8b6918",
+   "4889f0",
+   "4883c80f",
+   "48b90000000000000080",
+   "7843",
+   "4c89eb",
+   "48d1eb"
+  ],
+  "ext_mask_disp": [
+   "ffffff",
+   "ffffff",
+   "ffffff",
+   "ffffff00",
+   "ffffff",
+   "ffffffff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "ffffff",
+   "ffffff"
+  ],
+  "bytes_regs": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "488b7910",
+   "49beffffffffffffff7f",
+   "4889f8",
+   "4c31f0",
+   "4839d0",
+   "0f823e010000"
+  ],
+  "mask_regs": [
+   "f8ffc0c0ff",
+   "f8ffc0ffffffffff",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "ffffffffffff"
+  ],
+  "ext_bytes_regs": [
+   "4889d6",
+   "4989cf",
+   "4801fe",
+   "4c8b6918",
+   "4889f0",
+   "4883c80f",
+   "48b90000000000000080",
+   "7843",
+   "4c89eb",
+   "48d1eb"
+  ],
+  "ext_mask_regs": [
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0",
+   "f8ffc0ff",
+   "f8ffc0",
+   "f8ffc0ff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "f8ffc0",
+   "f8ffc0"
+  ],
+  "bytes_rm": [
+   "488d6c2420",
+   "48c74500feffffff",
+   "488b7910",
+   "49beffffffffffffff7f",
+   "4889f8",
+   "4c31f0",
+   "4839d0",
+   "0f823e010000"
+  ],
+  "mask_rm": [
+   "fffff8ffff",
+   "fffff8ffffffffff",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "ffffffffffff"
+  ],
+  "ext_bytes_rm": [
+   "4889d6",
+   "4989cf",
+   "4801fe",
+   "4c8b6918",
+   "4889f0",
+   "4883c80f",
+   "48b90000000000000080",
+   "7843",
+   "4c89eb",
+   "48d1eb"
+  ],
+  "ext_mask_rm": [
+   "fffff8",
+   "fffff8",
+   "fffff8",
+   "fffff8ff",
+   "fffff8",
+   "fffff8ff",
+   "ffffffffffffffffffff",
+   "ffff",
+   "fffff8",
+   "fffff8"
+  ],
   "bytes": [
    "488d6c2420",
    "48c74500feffffff",
@@ -4047,6 +13116,7 @@
   "pat": "488d6c242048c74500feffffff488b791049beffffffffffffff7f4889f84c31f04839d00f823e010000",
   "pmask": "ffffffff00ffffff0000000000ffffff00ffff0000000000000000ffffffffffffffffffffff00000000",
   "distinct": 8,
-  "size": 42
+  "size": 42,
+  "callees": []
  }
 ]

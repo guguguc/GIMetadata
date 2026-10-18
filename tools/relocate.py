@@ -111,23 +111,48 @@ class Data:
 
 # ------------------------------------------------------------------ 探测器
 def probe_fdv(d, off, typeCount, maxn=80000):
-    v0 = d.f32(off, 12, maxn, 0)
-    if v0 is None: return None
-    inc = int((d.np.diff(v0) > 0).sum())
-    # 找一个"连续严格递增前缀"
-    good = d.np.diff(v0) > 0
-    run = 0
-    for g in good:
-        if not g: break
-        run += 1
-    if run < 5000: return None
-    v8 = d.f32(off, 12, run, 8)
-    v4 = d.f32s(off, 12, run, 4)
-    if v8 is None or v4 is None: return None
-    if int(v8.max()) < typeCount:
-        return ('fieldDefaultValuesOffset', run, "12B, +0 严格递增 %d 项, +8 全为合法 Il2CppType 索引" % run)
-    if int((v4 == -1).sum()) > 0:
-        return ('parameterDefaultValuesOffset', run, "12B, +0 严格递增 %d 项, +4 含 -1 哨兵" % run)
+    """fieldDefaultValues / parameterDefaultValues（12B）。
+
+    7.0 实测：字段顺序被置换
+      7.1 {fieldIndex@0, dataIndex@4, typeIndex@8}
+      7.0 {dataIndex@0, typeIndex@4, fieldIndex@8}
+    所以这里**遍历** (mono, type, sentinel) 的所有字段组合，不再写死 +0。
+    """
+    import numpy as np
+    stride = 12
+    if off + stride * 10 > len(d.raw):
+        return None
+    maxn = min(maxn, (len(d.raw) - off) // stride)
+    cols = {k: d.f32s(off, stride, maxn, k) for k in (0, 4, 8)}
+    for mono in (0, 4, 8):
+        v = cols[mono]
+        if v is None or len(v) < 100:
+            continue
+        good = np.diff(v) > 0
+        run = int(len(good)) if bool(good.all()) else int(np.argmin(good))
+        if run < 5000:
+            continue
+        for typ in (0, 4, 8):
+            if typ == mono or cols[typ] is None:
+                continue
+            tv = cols[typ][:run]
+            if int(tv.min()) < 0 or int(tv.max()) >= max(typeCount, 2_000_000):
+                continue
+            # mono 必须是「合理的小索引」：0..2M 且严格递增
+            mv = v[:run]
+            if int(mv.min()) < 0 or int(mv.max()) > 2_000_000:
+                continue
+            for sent in (0, 4, 8):
+                if sent in (mono, typ) or cols[sent] is None:
+                    continue
+                sv = cols[sent][:run]
+                neg = int((sv == -1).sum())
+                if neg >= 50 and neg >= 0.01 * run:      # -1 必须成规模，不是随机 0xFFFFFFFF
+                    return ('parameterDefaultValuesOffset', run,
+                            '12B, mono@+%d, sentinel@+%d (-1 %d/%d)，%d 项'
+                            % (mono, sent, neg, run, run))
+            return ('fieldDefaultValuesOffset', run,
+                    '12B, mono@+%d, type@+%d (<%d)，%d 项' % (mono, typ, typeCount, run))
     return None
 
 
@@ -212,20 +237,22 @@ def probe_method_slot_table_DISABLED(d, off, methodsCount=733442):
 
 
 def probe_method_slot_table(d, off, n=4096):
-    """methodSlotTable（6B）：第 i 行的 `+4`(u16) == i。
+    """methodSlotTable：第 i 行的某个 u16 字段 == i（步长/字段位置遍历）。
 
-    **纯结构不变量**，不需要任何逐索引 key → 跨版本可用。
-    实测 7.1：前 2000 行 2000/2000 命中。
+    7.1 实测 stride=6, +4 == i。7.0 的 stride/字段可能不同，所以不写死。
     """
     import numpy as np
-    if off + 6 * n + 6 > len(d.raw):
-        return None
     b = d.ub
-    idx = off + np.arange(n, dtype=np.int64) * 6
-    v = b[idx + 4].astype(np.int64) | (b[idx + 5].astype(np.int64) << 8)
-    if int((v == np.arange(n)).sum()) < n * 0.999:
-        return None
-    return ('methodSlotTableOffset', n, "6B, 前 %d 行 `+4`(u16)==行号（纯结构，无需 key）" % n)
+    for stride in (4, 6, 8):
+        if off + stride * n + stride > len(d.raw):
+            continue
+        idx = off + np.arange(n, dtype=np.int64) * stride
+        for fo in range(0, stride - 1, 2):
+            v = b[idx + fo].astype(np.int64) | (b[idx + fo + 1].astype(np.int64) << 8)
+            if float((v == np.arange(n)).mean()) >= 0.99:
+                return ('methodSlotTableOffset', n,
+                        '%dB, +%d(u16)==行号 (>=99%%, %d 行)' % (stride, fo, n))
+    return None
 
 
 def probe_attributes_info(d, off, n=1024):
@@ -807,6 +834,7 @@ def main():
     ap.add_argument('--keyless', action=argparse.BooleanOptionalAction, default=True,
                     help='无密钥反解 typeDefinitions（哨兵+连续性+全表校验）；默认开，--no-keyless 关')
     ap.add_argument('--emit', default=None, help='把识别出的布局写成 JSON（可直接填 version.json）')
+    ap.add_argument('--hint', default=None, help='已知版本的 version.json（默认根 version.json）')
     ap.add_argument('--typedefs-base', default=None,
                     help='已知 typeDefinitions 基址（hex）；给了就做布局搜索')
     args = ap.parse_args()
@@ -894,7 +922,8 @@ def main():
 
     # ---- 读旧 version.json 当「提示」（阶梯用；任何一步都要过二次证据才接受）----
     hint = {}
-    vj0 = os.path.join(ROOTDIR, 'version.json')
+    vj0 = args.hint if args.hint else os.path.join(ROOTDIR, 'version.json')
+    if not os.path.isabs(vj0): vj0 = os.path.join(ROOTDIR, vj0)
     if os.path.exists(vj0):
         try:
             J0 = load_json_with_comments(vj0)
@@ -1190,7 +1219,8 @@ def main():
 
     _mark('④b 打印')
     print("\n== ⑤ 与现有 version.json 对照（自测：应全部一致）==")
-    vj = os.path.join(ROOTDIR, 'version.json')
+    vj = args.hint if args.hint else os.path.join(ROOTDIR, 'version.json')
+    if not os.path.isabs(vj): vj = os.path.join(ROOTDIR, vj)
     if os.path.exists(vj):
         J = load_json_with_comments(vj)
         ok = bad = 0

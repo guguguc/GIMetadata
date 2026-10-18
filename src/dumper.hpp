@@ -105,8 +105,9 @@ void imageDef()
         // typeStart 的混淆公式仍是旧版本的常量，未重新定位 —— 保持原样不动
         uint32_t typeStart = (imageDefinition->typeStart ^ 0x5AF8F775) - key - 0x605F970E - 290428500;
 
-        // nameIndex 属于解密部分：本版本改为 offset(24)+length(8) 打包格式
-        uint32_t nameIndex = img_.DecodeStringEntry((uint32_t)imageDefinition->nameIndex, key);
+        // nameIndex 属于解密部分：offset(24)+length(8)；字段偏移/解码形状由 version.json 决定
+        uint32_t rawNameIndex = *(const uint32_t*)((const uint8_t*)imageDefinition + ver::kIl2CppImageDefinitionNameIndexOffset);
+        uint32_t nameIndex = img_.DecodeImageName(rawNameIndex, imageIndex);
 
         std::string name{img_.GetStringFromIndex(nameIndex)};
 
@@ -131,8 +132,8 @@ std::vector<FieldInfo> collectFields(const Il2CppTypeDefinition* typeDefinition)
     // [V] fieldStart +0x1C ^ 0x29010897 ; field_count +0x38 ^ 0x51A8
     //     fields 数组 MHY[0x18C] - 336578260，步长 8，nameIndex @ +4
     //     字段偏移 MHY[0x204] - 450622139，步长 4
-    int32_t трушный_старт = img_.typeFieldStart((uint32_t)typeDefinition->fieldStart);
-    int32_t count = img_.typeFieldCount((uint16_t)typeDefinition->field_count);
+    int32_t трушный_старт = img_.typeFieldStart((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionFieldStartOffset));
+    int32_t count = img_.typeFieldCount((uint16_t)img_.tdU16(typeDefinition, ver::kIl2CppTypeDefinitionFieldCountOffset));
     if (count <= 0 || count > 4096) return out;
     int32_t end = трушный_старт + count;
 
@@ -141,24 +142,40 @@ std::vector<FieldInfo> collectFields(const Il2CppTypeDefinition* typeDefinition)
         uint32_t fieldIndex = (uint32_t)(трушный_старт + j);
         const Il2CppFieldDefinition* fieldDefinition = img_.GetFieldDefinitionFromIndex((int32_t)fieldIndex);
 
-        // 字段偏移表：低 29 位是偏移，高 3 位是静态标志
-        uint32_t v35 = *(uint32_t*)(img_.s_GlobalMetadataHeader + img_.header.fieldOffset + 4 * (fieldIndex - (uint32_t)трушный_старт));
+        // 字段偏移表：
+        //   7.1：低 29 位偏移，高 3 位静态标志，直接用 local field index。
+        //   7.0：base 表（MHY[0x14C]）给出该 type 的偏移基址，再查 fieldOffsetTable（MHY[0x13C]）。
+        uint32_t local = (uint32_t)j;
+        if (ver::kFieldOffsetBaseTable && ver::kFieldIndexTable)
+        {
+            const uint64_t tdIndex = ((const uint8_t*)typeDefinition
+                - (img_.s_GlobalMetadataHeader + img_.header.typeDefinitionsOffset)) / 70;
+            const uint32_t hash = (uint32_t)(-1963413621u * (uint32_t)((70 * tdIndex) >> 1));
+            const int32_t idx = *(const int32_t*)(img_.s_GlobalMetadataHeader
+                + (uint32_t)ver::kFieldIndexTable + 4ull * hash);
+            if (idx >= 0 && idx < 1000000)
+            {
+                const uint8_t* ft = img_.s_GlobalMetadataHeader
+                    + (uint32_t)ver::kFieldOffsetBaseTable + 12ull * idx;
+                local += *(const uint32_t*)(ft + 8);
+            }
+        }
+        uint32_t v35 = *(uint32_t*)(img_.s_GlobalMetadataHeader + img_.header.fieldOffset + 4ull * local);
 
         std::string name{ img_.GetStringFromIndex(
             img_.fieldNameIndex((uint32_t)fieldDefinition->nameIndex, fieldIndex)) };
 
         // typeIndex 在字段条目 +0，与 nameIndex 同一个 key（sub_140512870）
-        int32_t typeIndexDec = (int32_t)(img_.fieldKey(fieldIndex)
-            ^ (uint32_t)fieldDefinition->typeIndex ^ (uint32_t)ver::kFieldTypeIndex.key);
+        int32_t typeIndexDec = img_.fieldTypeIndex((uint32_t)fieldDefinition->typeIndex, fieldIndex);
         if (typeIndexDec == -1) continue;
         const Il2CppType* type = img_.GetIl2CppTypeFromIndex(typeIndexDec);
         if (!type) continue;
 
         std::string typeName{ img_.NameFromIl2CppType(type) };
 
-        // 低 29 位 = 实例内偏移；0xC0000000 标记 static
-        uint32_t offset = (v35 & 0x1FFFFFFF);
-        bool isStatic = (v35 & 0xE0000000u) == 0xC0000000u;
+        uint32_t offset = v35 & (uint32_t)ver::kFieldOffsetMask;
+        bool isStatic = (v35 & (uint32_t)ver::kFieldStaticMask) == (uint32_t)ver::kFieldStaticValue;
+        if (isStatic && ver::kFieldStaticZero) offset = 0;   // 7.0：静态字段没有实例偏移
 
         out.push_back({ fieldIndex, std::move(name), type, std::move(typeName), offset });
     }
@@ -169,9 +186,9 @@ std::vector<FieldInfo> collectFields(const Il2CppTypeDefinition* typeDefinition)
     // ===== 上一版（本样本之前）的实现，原样保留，等 fieldTableOffset / fieldIndexTableOffset
     // 在本版本验证后放开。它走的是 typeIndex -> fieldTableOffset/fieldIndexTableOffset 的
     // 两级间接，而上面那条路径是直接用 typeDefinition 的 fieldStart + 字段偏移表。 =====
-    int32_t start = typeFieldStart((uint32_t)typeDefinition->fieldStart);
+    int32_t start = typeFieldStart((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionFieldStartOffset));
     int32_t tr_start = start - 0x2318D1B4;
-    int32_t count_old = typeFieldCount((uint16_t)typeDefinition->field_count);
+    int32_t count_old = typeFieldCount((uint16_t)img_.tdU16(typeDefinition, ver::kIl2CppTypeDefinitionFieldCountOffset));
     if (count_old == 0) return out;
 
     int32_t end_old = tr_start + count_old;
@@ -197,7 +214,7 @@ std::vector<FieldInfo> collectFields(const Il2CppTypeDefinition* typeDefinition)
         uint32_t offset = (v35 & 0x01000000) ? (v35 & 0xFFFFFF) : v35;
 
         // Il2CppObject
-        bool isValueType = img_.typeIsValueType(typeDefinition->bitfield) != 0;
+        bool isValueType = img_.typeIsValueType(img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionBitfieldOffset)) != 0;
         if (isValueType && offset > 0x0 && !(type->attrs & (FIELD_ATTRIBUTE_STATIC | FIELD_ATTRIBUTE_LITERAL))) offset -= 0x10;
 
         out.push_back({ fieldIndex, std::move(name), type, std::move(typeName), offset });
@@ -233,10 +250,10 @@ std::string fieldDef(const Il2CppTypeDefinition* typeDefinition)
 
         std::string constValue{};
         const Il2CppFieldDefaultValue* entry = img_.GetDefaultValueForField(field.index);
-        if (entry != NULL && entry->dataIndex != -1)
+        if (entry != NULL && img_.fdvDataIndex(entry) != -1)
         {
-            auto* consttype = img_.GetIl2CppTypeFromIndex(entry->typeIndex);
-            uint8_t* defaultValuesData = (uint8_t*)((const char*)img_.s_GlobalMetadataHeader + entry->dataIndex + img_.header.fieldAndParameterDefaultValueDataOffset);
+            auto* consttype = img_.GetIl2CppTypeFromIndex(img_.fdvTypeIndex(entry));
+            uint8_t* defaultValuesData = (uint8_t*)((const char*)img_.s_GlobalMetadataHeader + img_.fdvDataIndex(entry) + img_.header.fieldAndParameterDefaultValueDataOffset);
             Il2CppTypeEnum code = consttype ? consttype->type : Il2CppImage::Il2CppTypeEnum::IL2CPP_TYPE_END;
             constValue = img_.GetConstantValueFromBlob(code, defaultValuesData);
         }
@@ -255,8 +272,8 @@ std::string methodDef(const Il2CppTypeDefinition* typeDefinition)
 
     std::string full{};
     // 已验证：methodStart ^ 0x4D8127F2，method_count - 0xED3A
-    int32_t start = img_.typeMethodStart((uint32_t)typeDefinition->methodStart);
-    int32_t count = (int32_t)((uint16_t)((uint16_t)typeDefinition->method_count - 0xED3A));
+    int32_t start = img_.typeMethodStart((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionMethodStartOffset));
+    int32_t count = (int32_t)img_.typeMethodCount((uint16_t)img_.tdU16(typeDefinition, ver::kIl2CppTypeDefinitionMethodCountOffset));
     if (start < 0) start = 0;
     if (count <= 0 || count > (int32_t)img_.header.methodsCount) return "";
 
@@ -268,11 +285,11 @@ std::string methodDef(const Il2CppTypeDefinition* typeDefinition)
 
         // 已验证：methodDefinition.nameIndex 在 +0x00，逐索引 key 后解包 entry
         std::string name{img_.GetStringFromIndex(
-            img_.methodNameIndex((uint32_t)methodDefinition->nameIndex, (uint32_t)index))};
+            img_.methodNameIndex(img_.mdU32(methodDefinition, ver::kIl2CppMethodDefinitionNameIndexOffset), (uint32_t)index))};
 
         // [V] flags / iflags（先算，方法指针要用到 VIRTUAL 位）
-        uint16_t flags  = img_.methodFlags((uint16_t)methodDefinition->flags, (uint32_t)index);
-        uint16_t iflags = img_.methodIFlags((uint16_t)methodDefinition->iflags, (uint32_t)index);
+        uint16_t flags  = img_.methodFlags(img_.mdU16(methodDefinition, ver::kIl2CppMethodDefinitionFlagsOffset), (uint32_t)index);
+        uint16_t iflags = img_.methodIFlags(img_.mdU16(methodDefinition, ver::kIl2CppMethodDefinitionIflagsOffset), (uint32_t)index);
 
         // [V] 方法地址双路径（文章：虚/重写取 +0x90[slot]，其余取 +0x80[index]）：
         //   非虚     = *(T0+0x60)[ MHY[0x94][methodIndex] ]
@@ -320,9 +337,9 @@ std::string methodDef(const Il2CppTypeDefinition* typeDefinition)
         std::string params;
         std::string lastParamType;   // 最后一个参数的类型（属性 setter / 事件用）
         {
-            uint32_t c = img_.methodParamCount(methodDefinition->parameterCount, (uint32_t)index);
+            uint32_t c = img_.methodParamCount(img_.mdU8(methodDefinition, ver::kIl2CppMethodDefinitionParameterCountOffset), (uint32_t)index);
             if (c > 32) c = 32;
-            uint32_t ps = img_.methodParamStart((uint32_t)methodDefinition->parameterStart, (uint32_t)index);
+            uint32_t ps = img_.methodParamStart(img_.mdU32(methodDefinition, ver::kIl2CppMethodDefinitionParameterStartOffset), (uint32_t)index);
             const uint8_t* pbase = img_.s_GlobalMetadataHeader + img_.header.parametersOffset;
             for (uint32_t k = 0; k < c; k++)
             {
@@ -338,7 +355,7 @@ std::string methodDef(const Il2CppTypeDefinition* typeDefinition)
                 // 参数默认值：表已定位并验证（25374 项）。原文这行在旧版的 #if 0 里，漏接了。
                 if (auto* dv = img_.GetParamDefault(pi))
                 {
-                    std::string cv = img_.GetDefaultValueData(dv->typeIndex, dv->dataIndex);
+                    std::string cv = img_.GetDefaultValueData(img_.pdvTypeIndex(dv), img_.pdvDataIndex(dv));
                     if (!cv.empty()) params += " = " + cv;
                 }
             }
@@ -378,7 +395,7 @@ std::string methodDef(const Il2CppTypeDefinition* typeDefinition)
             auto it = gByMethod.find(index);
             if (it != gByMethod.end())
             {
-                std::string ownerName{ img_.GetStringFromIndex(img_.typeNameIndex((uint32_t)typeDefinition->nameIndex)) };
+                std::string ownerName{ img_.GetStringFromIndex(img_.typeNameIndex((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionNameIndexOffset))) };
                 if (size_t q = ownerName.find('`'); q != std::string::npos) ownerName.resize(q);
                 std::string instances;
                 for (uint32_t t : it->second)
@@ -396,12 +413,15 @@ std::string methodDef(const Il2CppTypeDefinition* typeDefinition)
         }
         // [V] declaringType 一致性诊断：methodDefinition+0x0C 解出的声明类型应等于当前类型索引。
         //   不一致说明该方法在元数据里被挂到了别的类型下（正常不应发生）-> 输出标注。
-        int32_t declType = img_.methodDeclaringType(
-            (uint32_t)methodDefinition->declaringType, (uint32_t)index);
         std::string declNote;
         const int32_t selfTypeIdx = (int32_t)(((const uint8_t*)typeDefinition
                                   - (img_.s_GlobalMetadataHeader + img_.header.typeDefinitionsOffset)) / 70);
-        if (declType != selfTypeIdx) declNote = std::format("/* declaringType={} */ ", declType);
+        // [V] 7.1 实测 methodDeclaringType == 当前 typeDef：697727/697727；
+        //     7.0 的 SetupMethodsLocked 也是 v17[1] = a1（当前 typeDef）。
+        //     7.0 的 method 记录没有 declaringType 字段 -> 统一用当前 typeDef。
+        //     7.1 输出不变（declNote 永远为空，与修改前一致）。
+        const int32_t declType = selfTypeIdx;
+        (void)declType;
 
         // ⚠️ 这条赋值原本在下面的 #if 0 里（旧版遗留），而活动路径在它之前就 continue 了
         //    -> methods 向量**永远是空的** -> 属性的 getter/setter 名、事件 add/remove/raise 名全丢。
@@ -442,7 +462,7 @@ std::string methodDef(const Il2CppTypeDefinition* typeDefinition)
         uint64_t methodPointer = 0;
         uint64_t v30 = 0;
 
-        if (((typeDefinition->bitfield << 6) & 0x40) != 0)
+        if (((img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionBitfieldOffset) << 6) & 0x40) != 0)
         {
             uint8_t* v27 = img_.s_GlobalMetadataHeader + (*(uint32_t*)(img_.s_MHYTable + 126 * 4) - 2095267037u);
             uint8_t* v28 = v27;
@@ -516,7 +536,7 @@ LABEL_25:
 
             std::string constValue;
             if (auto* data = img_.GetParamDefault(paramStartDec + paramIndex)) 
-            constValue = (data->dataIndex == -1) ? "null" : img_.GetDefaultValueData(data->typeIndex, data->dataIndex);
+            constValue = (img_.pdvDataIndex(data) == -1) ? "null" : img_.GetDefaultValueData(img_.pdvTypeIndex(data), img_.pdvDataIndex(data));
             
             params += (constValue.empty() ? "" : " = " + constValue);
         }
@@ -565,7 +585,7 @@ LABEL_25:
                     return result + ">";
                 };
 
-            std::string ownerName{ img_.GetStringFromIndex(img_.typeNameIndex((uint32_t)typeDefinition->nameIndex)) };
+            std::string ownerName{ img_.GetStringFromIndex(img_.typeNameIndex((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionNameIndexOffset))) };
             if (size_t p = ownerName.find('`'); p != std::string::npos) ownerName.resize(p);
             std::string instances;
 
@@ -600,8 +620,8 @@ std::string propDef(const Il2CppTypeDefinition* typeDefinition)
     // [V] propertyStart +0x08 - 1995389561 ; property_count +0x43 ^ 0x16
     //     properties 数组 MHY[0x150] - 0x1C3D5389，步长 10
     //     name@+0 / token@+4 / get@+6 / set@+8（0xFFFF = 无该访问器）
-    uint32_t start = img_.typePropertyStart((uint32_t)typeDefinition->propertyStart);
-    uint32_t count = img_.typePropertyCount(typeDefinition->property_count);
+    uint32_t start = img_.typePropertyStart((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionPropertyStartOffset));
+    uint32_t count = img_.typePropertyCount(img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionPropertyCountOffset));
 
     if (count == 0) return "";
 
@@ -610,18 +630,19 @@ std::string propDef(const Il2CppTypeDefinition* typeDefinition)
     for (uint32_t propertyIndex = start; propertyIndex < end; ++propertyIndex)
     {
         const Il2CppPropertyDefinition* propertyDefinition = img_.GetPropertyDefinitionFromIndex((int32_t)propertyIndex);
-        uint32_t key = img_.propertyKey(propertyIndex);
 
         std::string name {img_.GetStringFromIndex(
             img_.propertyNameIndex((uint32_t)propertyDefinition->nameIndex, propertyIndex))};
 
-        // get @+6: key ^ raw ^ 0xE5A2 ; set @+8: (raw-23324) ^ key ；0xFFFF = 无
-        uint16_t get = (uint16_t)(key ^ propertyDefinition->get ^ 0xE5A2);
-        uint16_t set = (uint16_t)(((uint16_t)propertyDefinition->set - 23324) ^ key);   // sub_1405151D0: - 23324
+        // get/set 的字段偏移与解码形状由 version.json 决定（7.0: get@+4；7.1: get@+6）
+        uint16_t rawGet = *(const uint16_t*)((const uint8_t*)propertyDefinition + ver::kIl2CppPropertyDefinitionGetOffset);
+        uint16_t rawSet = *(const uint16_t*)((const uint8_t*)propertyDefinition + ver::kIl2CppPropertyDefinitionSetOffset);
+        uint16_t get = img_.propertyGet(rawGet, propertyIndex);
+        uint16_t set = img_.propertySet(rawSet, propertyIndex);
         bool hasGet = get != 0xFFFF;
         bool hasSet = set != 0xFFFF;
 
-        int32_t methodStartDec = img_.typeMethodStart((uint32_t)typeDefinition->methodStart);
+        int32_t methodStartDec = img_.typeMethodStart((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionMethodStartOffset));
         std::string getterName, setterName;
         std::string propType;
         std::string propAttrs;
@@ -656,8 +677,8 @@ std::string eventDef(const Il2CppTypeDefinition* typeDefinition)
     // [V] eventStart +0x34 + 3330 ; event_count +0x44 + 113（0x8F 编码 0）
     //     events 数组 MHY[0x1E8] ^ 0x100547B1，步长 14，name@+4
     //     typeIndex@+0 / add@+8 / remove@+10 / raise@+12（0xFFFF = 无）
-    int32_t start = img_.typeEventStart(typeDefinition->eventStart);
-    uint32_t count = img_.typeEventCount(typeDefinition->event_count);
+    int32_t start = img_.typeEventStart(img_.tdI16(typeDefinition, ver::kIl2CppTypeDefinitionEventStartOffset));
+    uint32_t count = img_.typeEventCount(img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionEventCountOffset));
 
     if (count == 0) return "";
 
@@ -666,12 +687,11 @@ std::string eventDef(const Il2CppTypeDefinition* typeDefinition)
     for (int32_t eventIndex = start; eventIndex < end; ++eventIndex)
     {
         const Il2CppEventDefinition* eventDefinition = img_.GetEventDefinitionFromIndex(eventIndex);
-        uint32_t key = img_.eventKey((uint32_t)eventIndex);
 
         std::string name {img_.GetStringFromIndex(
             img_.eventNameIndex((uint32_t)eventDefinition->nameIndex, (uint32_t)eventIndex))};
-        // sub_140514CF0: v28 = v26 ^ (*(DWORD*)v27 - 452544412)
-        int32_t typeIndex = (int32_t)((uint32_t)eventDefinition->typeIndex - 452544412u) ^ (int32_t)key;
+        // typeIndex 解码由 version.json 的 decEventTypeIndex 决定（7.1: -452544412；7.0: -740753572）
+        int32_t typeIndex = img_.eventTypeIndex((uint32_t)eventDefinition->typeIndex, (uint32_t)eventIndex);
         if (typeIndex == -1) continue;
         const Il2CppType* type = img_.GetIl2CppTypeFromIndex(typeIndex);
         if (!type) continue;
@@ -679,17 +699,19 @@ std::string eventDef(const Il2CppTypeDefinition* typeDefinition)
 
         // [V] add/remove/raise 是**相对 methodStart 的局部索引**，解出后还要 +
         // typeMethodStart(typeDefinition) 才是全局方法索引（文章：methods[methodStartDec + add]）。
-        // 实测偏移与标签：+0x0C -> add_X（^0xBEA7）、+0x08 -> remove_X（^0xEE66）、
-        //                 +0x0A -> raise_X（(raw-30703)^key）；0xFFFF = 无。
-        uint16_t evAdd    = (uint16_t)(key ^ eventDefinition->raise  ^ (uint32_t)ver::kEventAdd.key);   // +0x0C
-        uint16_t evRemove = (uint16_t)(key ^ eventDefinition->add    ^ (uint32_t)ver::kEventRemove.key);   // +0x08
-        uint16_t evRaise  = (uint16_t)(((uint16_t)eventDefinition->remove - (uint32_t)ver::kEventRaise.key) ^ key); // +0x0A
+        // 原始字段偏移与解码由 version.json 的 structOffsets / decEvent* 决定。
+        uint16_t rawAdd    = *(const uint16_t*)((const uint8_t*)eventDefinition + ver::kIl2CppEventDefinitionAddOffset);
+        uint16_t rawRemove = *(const uint16_t*)((const uint8_t*)eventDefinition + ver::kIl2CppEventDefinitionRemoveOffset);
+        uint16_t rawRaise  = *(const uint16_t*)((const uint8_t*)eventDefinition + ver::kIl2CppEventDefinitionRaiseOffset);
+        uint16_t evAdd    = img_.eventAdd(rawAdd, (uint32_t)eventIndex);
+        uint16_t evRemove = img_.eventRemove(rawRemove, (uint32_t)eventIndex);
+        uint16_t evRaise  = img_.eventRaise(rawRaise, (uint32_t)eventIndex);
         uint16_t add = evAdd, remove = evRemove, raise = evRaise;
         bool hasRemove = remove != 0xFFFF;
         bool hasAdd = add != 0xFFFF;
         bool hasRaise = raise != 0xFFFF;
 
-        int32_t methodStartDec = img_.typeMethodStart((uint32_t)typeDefinition->methodStart);
+        int32_t methodStartDec = img_.typeMethodStart((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionMethodStartOffset));
         std::string evAttrs;
         std::string acc;
         if (hasAdd) {
@@ -728,8 +750,8 @@ std::unordered_map<int32_t, int32_t> buildNestingMap()
     const uint32_t nTypes = img_.header.typeDefinitionsCount;
     for (uint32_t t = 0; t < nTypes; t++)
     {
-        int32_t st = img_.typeNestedStart(tds[t].nestedTypesStart);
-        uint32_t cnt = img_.typeNestedCount(tds[t].nestedTypesCount);
+        int32_t st = img_.typeNestedStart(img_.tdI16(&tds[t], ver::kIl2CppTypeDefinitionNestedTypesStartOffset));
+        uint32_t cnt = img_.typeNestedCount(img_.tdU8(&tds[t], ver::kIl2CppTypeDefinitionNestedTypesCountOffset));
         for (uint32_t i = 0; i < cnt; i++)
         {
             uint32_t child = tbl[st + i];
@@ -750,14 +772,14 @@ void typeDef()
     {
         const Il2CppTypeDefinition* typeDefinition = typeDefinitions + typeIndex;
         std::string name{ img_.GetStringFromIndex(
-            img_.typeNameIndex((uint32_t)typeDefinition->nameIndex)) };
+            img_.typeNameIndex((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionNameIndexOffset))) };
         if (size_t p = name.find('`'); p != std::string::npos) name.resize(p);
 
         // [V] flags = +0x28 - 0x4159BB8E（TYPE_ATTRIBUTE）。
         //   bitfield = +0x3A（见 utils::typeIsValueType / typeIsEnum）
-        uint32_t flags = img_.typeFlags((uint32_t)typeDefinition->flags);
-        uint8_t valuetype = img_.typeIsValueType(typeDefinition->bitfield);
-        uint8_t enumtype  = img_.typeIsEnum(typeDefinition->bitfield);
+        uint32_t flags = img_.typeFlags((uint32_t)img_.tdU32(typeDefinition, ver::kIl2CppTypeDefinitionFlagsOffset));
+        uint8_t valuetype = img_.typeIsValueType(img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionBitfieldOffset));
+        uint8_t enumtype  = img_.typeIsEnum(img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionBitfieldOffset));
         uint32_t token = 0x02000000 | typeIndex;
 
         std::string serializableAttr{};
@@ -789,8 +811,8 @@ void typeDef()
         // [V] interfaces：start +0x3C ^ 0x43DA；count +0x40 + 56（0xC8 编码 0）
         //     实测：SafeGPtrArrayHandle→System.IDisposable、SecurityParser→IContentHandler、
         //           PKCS12→System.ICloneable。
-        uint16_t interfacesStart = img_.typeInterfacesStart((uint16_t)typeDefinition->interfacesStart);
-        uint32_t interfaces_count = img_.typeInterfacesCount(typeDefinition->interfaces_count);
+        uint16_t interfacesStart = img_.typeInterfacesStart((uint16_t)img_.tdU16(typeDefinition, ver::kIl2CppTypeDefinitionInterfacesStartOffset));
+        uint32_t interfaces_count = img_.typeInterfacesCount(img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionInterfacesCountOffset));
         if (interfaces_count > 256) interfaces_count = 256;   // 防越界
         for (uint32_t i = 0; i < interfaces_count; i++)
         {
@@ -803,7 +825,7 @@ void typeDef()
         std::string parent{};
         // [V] 基类：parentIndex -> Il2CppType -> 父类型。逻辑照抄 6.7 版（只换常量）。
         {
-            int32_t pIdx = img_.typeParentIndex((uint32_t)typeDefinition->parentIndex);
+            int32_t pIdx = img_.typeParentIndex((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionParentIndexOffset));
             if (pIdx != -1)
             {
                 const Il2CppType* ptype = img_.GetIl2CppTypeFromIndex(pIdx);
@@ -818,20 +840,21 @@ void typeDef()
                              && ptype->data.klassIndex != 405 && ptype->data.klassIndex != 204)
                     {
                         parent = img_.GetStringFromIndex(
-                            img_.typeNameIndex((uint32_t)typeDefinitions[ptype->data.klassIndex].nameIndex));
+                            img_.typeNameIndex((uint32_t)img_.tdI32(&typeDefinitions[ptype->data.klassIndex],
+                                ver::kIl2CppTypeDefinitionNameIndexOffset)));
                     }
                 }
             }
         }
         std::string namespaze{ img_.GetStringFromIndex(
-            img_.typeNamespaceIndex((uint32_t)typeDefinition->namespaceIndex)) };
+            img_.typeNamespaceIndex((uint32_t)img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionNamespaceIndexOffset))) };
 
         std::string fullName{};
         std::string declaringType{};
 #if 0
-        if (typeDefinition->parentIndex != 0xC52CB9C) 
+        if (img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionParentIndexOffset) != 0xC52CB9C) 
         {
-            const Il2CppType* type = img_.GetIl2CppTypeFromIndex(typeDefinition->parentIndex - 0xC52CB9D);
+            const Il2CppType* type = img_.GetIl2CppTypeFromIndex(img_.tdI32(typeDefinition, ver::kIl2CppTypeDefinitionParentIndexOffset) - 0xC52CB9D);
             auto typeCode = type->type;
 
             if (!valuetype && !enumtype)
@@ -873,7 +896,8 @@ void typeDef()
                 cur = it->second;
                 outermost = cur;
                 std::string pn{ img_.GetStringFromIndex(
-                    img_.typeNameIndex((uint32_t)typeDefinitions[cur].nameIndex)) };
+                    img_.typeNameIndex((uint32_t)img_.tdI32(&typeDefinitions[cur],
+                        ver::kIl2CppTypeDefinitionNameIndexOffset))) };
                 if (size_t q = pn.find('`'); q != std::string::npos) pn.resize(q);
                 chain.push_back(std::move(pn));
             }
@@ -885,7 +909,8 @@ void typeDef()
             // 嵌套类型的 namespaceIndex 为空 -> 继承最外层父类型的命名空间
             if (namespaze.empty() && outermost >= 0)
                 namespaze = img_.GetStringFromIndex(
-                    img_.typeNamespaceIndex((uint32_t)typeDefinitions[outermost].namespaceIndex));
+                    img_.typeNamespaceIndex((uint32_t)img_.tdI32(&typeDefinitions[outermost],
+                        ver::kIl2CppTypeDefinitionNamespaceIndexOffset)));
         }
         if (!namespaze.empty())
         {
@@ -898,7 +923,7 @@ void typeDef()
         std::string typeGenerics{};
 #if 0   // 6.7 版原始实现（常量不同），保留作为对照
         {
-            uint16_t genericContainerIndex = (typeDefinition->genericContainerIndex ^ 0x1BD3u);
+            uint16_t genericContainerIndex = (img_.tdI16(typeDefinition, ver::kIl2CppTypeDefinitionGenericContainerIndexOffset) ^ 0x1BD3u);
             const auto* container = img_.GetGenericContainerFromIndex(genericContainerIndex);
             if (container)
             {
@@ -925,7 +950,7 @@ void typeDef()
         // [V] 类泛型参数：typeDef+0x3E -> 容器 -> (argc, parameterStart) -> genericParameters[]
         //   逻辑照抄 6.7 版，常量全部换成本版本的（sub_140511DB0 / sub_14050E030 / sub_1404B7B20）。
         {
-            int32_t cIdx = img_.typeGenericContainerIndex((uint16_t)typeDefinition->genericContainerIndex);
+            int32_t cIdx = img_.typeGenericContainerIndex((uint16_t)img_.tdI16(typeDefinition, ver::kIl2CppTypeDefinitionGenericContainerIndexOffset));
             if (cIdx >= 0)
             {
                 uint32_t count = img_.genericContainerArgc((uint32_t)cIdx);
@@ -935,8 +960,8 @@ void typeDef()
                     for (uint32_t i = 0; i < count; ++i)
                     {
                         if (i) typeGenerics += ", ";
-                        typeGenerics += img_.GetStringFromIndex(
-                            img_.genericParameterNameIndex(pStart + i));
+                        typeGenerics += SanitizeGenericName(
+                            img_.GetStringFromIndex(img_.genericParameterNameIndex(pStart + i)), i);
                     }
                 }
             }
@@ -1297,9 +1322,9 @@ std::string formatEnum(const Il2CppType* enumType, uint64_t raw)
     {
         if (!(f.type->attrs & FIELD_ATTRIBUTE_LITERAL)) continue;
         const Il2CppFieldDefaultValue* d = img_.GetDefaultValueForField(f.index);
-        if (!d || d->dataIndex == -1) continue;
-        const Il2CppType* ct = img_.GetIl2CppTypeFromIndex(d->typeIndex);
-        uint8_t* blob = img_.s_GlobalMetadataHeader + d->dataIndex + img_.header.fieldAndParameterDefaultValueDataOffset;
+        if (!d || img_.fdvDataIndex(d) == -1) continue;
+        const Il2CppType* ct = img_.GetIl2CppTypeFromIndex(img_.fdvTypeIndex(d));
+        uint8_t* blob = img_.s_GlobalMetadataHeader + img_.fdvDataIndex(d) + img_.header.fieldAndParameterDefaultValueDataOffset;
         uint64_t v = 0;
         auto code = ct ? ct->type : Il2CppImage::Il2CppTypeEnum::IL2CPP_TYPE_END;
         switch (code)
@@ -1339,6 +1364,8 @@ std::string formatEnum(const Il2CppType* enumType, uint64_t raw)
 
 void customAttr()
 {
+    // 7.0 的 codeRegistration 是运行时构造，文件里不存在（version.json 里为 0）-> 直接跳过。
+    if (!img_.s_Il2CppCodeRegistration) return;
     const Il2CppCustomAttributeTypeRange* attributeTypeRange = (const Il2CppCustomAttributeTypeRange*)(img_.s_GlobalMetadataHeader + img_.header.attributesInfoOffset);
 
     int32_t customAttributeCount = *(int32_t*)(img_.s_Il2CppCodeRegistration + 0x70) - 0x2F2BD0D;

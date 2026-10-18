@@ -1,0 +1,80 @@
+{
+ "_comment": "函数内 MHY 读取顺序 -> 表名。slot/key 每版都变，函数名和读取顺序相对稳定。由 learn_ida_map.py 从已完成版本学习；换版本后可用 update.py 按位置填新 slot/op/key。",
+ "_learned_from": "version.json",
+ "funcs": {
+  "GIMeta_AllocTypeInfoArray": [
+   "typeDefinitionsOffset",
+   "typeDefinitionsCount"
+  ],
+  "GIMeta_CreateTypeInfo": [
+   "typeDefinitionsCount"
+  ],
+  "GIMeta_DecodeAttributeArg": [
+   null,
+   null
+  ],
+  "GIMeta_DecryptString": [
+   "stringLiteralDataOffset"
+  ],
+  "GIMeta_GetDefaultParameterValueObject": [
+   "parameterDefaultValuesCount"
+  ],
+  "GIMeta_GetFieldDefaultValue": [
+   null
+  ],
+  "GIMeta_GetFieldName": [
+   "fieldsOffset"
+  ],
+  "GIMeta_GetGenericParameterInfo": [
+   "typeDefinitionsOffset",
+   "typeDefinitionsCount"
+  ],
+  "GIMeta_GetMethodInfoFromIndex": [
+   "methodsOffset"
+  ],
+  "GIMeta_GetMethodName2": [
+   "methodsOffset"
+  ],
+  "GIMeta_GetMethodNameFromIndex": [
+   "methodsOffset"
+  ],
+  "GIMeta_IterNestedTypes": [
+   "nestedTypesTable"
+  ],
+  "GIMeta_RuntimeInit": [
+   "methodsCount",
+   null,
+   "imagesCount",
+   null,
+   null,
+   "imagesOffset",
+   null,
+   "genericMethodTable",
+   "genericMethodTableCount",
+   null,
+   null,
+   null
+  ],
+  "GIMeta_SetupFieldsLocked": [
+   null,
+   null,
+   "fieldsOffset"
+  ],
+  "GIMeta_SetupNestedLocked": [
+   "typeDefinitionsOffset"
+  ],
+  "GIMeta_SetupPropertiesLocked": [
+   "propertiesOffset"
+  ],
+  "GIMeta_SetupTypeInfoLocked": [
+   "interfacesTable",
+   "fieldOffset",
+   "methodSlotTableOffset",
+   "methodSlotCount",
+   null,
+   "attributesInfoOffset",
+   "attributesInfoCount",
+   "attributeTypesOffset"
+  ]
+ }
+}

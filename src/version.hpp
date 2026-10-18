@@ -77,9 +77,18 @@ inline constexpr Table kTypesCountFormula = { 0x54, '^', 0x6622B34E, 0, false, "
 // ---------------- T0/T1 字段偏移 ----------------
 inline constexpr uint32_t kT0MethodPointerIndexArray = 0x88;
 inline constexpr uint32_t kT0InvokerArray = 0x48;
-inline constexpr uint32_t kT0GenericMethodPointers = 0x60;
+inline constexpr uint32_t kT0GenericMethodPointers = 0x00;
 inline constexpr uint32_t kT1GenericInsts = 0x08;
 inline constexpr uint32_t kT1Il2CppTypes = 0x48;
+inline constexpr uint32_t kFieldOffsetBaseTable = 0;
+inline constexpr uint32_t kFieldIndexTable = 0;
+inline constexpr uint32_t kFieldOffsetMask = 0x1FFFFFFF;
+inline constexpr uint32_t kFieldStaticMask = 0xE0000000;
+inline constexpr uint32_t kFieldStaticValue = 0xC0000000;
+inline constexpr uint32_t kFieldStaticZero = 0;
+inline constexpr uint32_t kPropertyNoGetter = 0;
+inline constexpr uint32_t kGenericClassesOffset = 0xC5520;
+inline constexpr uint32_t kGenericClassesCount = 406569;
 
 // ---------------- 逐索引 key 公式参数 ----------------
 inline constexpr uint64_t kMethodKeyA = 860405619;
@@ -126,6 +135,15 @@ inline constexpr uint64_t kGenericParamKeyShift = 10;
 inline constexpr uint64_t kGenericParamKeyAdd = 1212570291;
 inline constexpr uint64_t kGenericParamKeyXor = 0x62A3A8F4;
 
+inline constexpr uint32_t keyMethod(uint32_t i) { return (uint32_t)((((uint32_t)kMethodKeyA * i) ^ kMethodKeyXor) + kMethodKeyAdd); }
+inline constexpr uint32_t keyField(uint32_t i) { return (uint32_t)(((kFieldKeyA * ((kFieldKeyB * i) ^ kFieldKeyXor)) >> kFieldKeyShift) + kFieldKeyAdd); }
+inline constexpr uint32_t keyProperty(uint32_t i) { return (uint32_t)((((kPropertyKeyA * ((kPropertyKeyB * i) >> kPropertyKeyShift1)) >> kPropertyKeyShift2)) ^ kPropertyKeyXor); }
+inline constexpr uint32_t keyEvent(uint32_t i) { return (uint32_t)((((int32_t)kEventKeyA * (int32_t)i + kEventKeyAdd) ^ kEventKeyXor)); }
+inline constexpr uint32_t keyParam(uint32_t i) { return (uint32_t)(((kParamKeyA * ((kParamKeyB * i + kParamKeyAdd1) ^ kParamKeyXor1)) >> kParamKeyShift) + kParamKeyAdd2); }
+inline constexpr uint32_t keyImage(uint32_t index) { return (uint32_t)(kImageKeyA * ((kImageKeyB * (((kImageKeyInnerMul * index) ^ kImageKeyInnerXor)) + kImageKeyInnerAdd) >> kImageKeyShift1) + kImageKeyAdd); }
+inline constexpr uint64_t keyContainer(uint32_t c) { return (kContainerKeyA * ((kContainerKeyB * ((kContainerKeyInnerMul * c + kContainerKeyInnerAdd) ^ kContainerKeyInnerXor)) ^ kContainerKeyXor)) >> kContainerKeyShift; }
+inline constexpr uint64_t keyGenericParam(uint32_t p) { return (((kGenericParamKeyB * ((kGenericParamKeyInnerMul * p + kGenericParamKeyInnerAdd) ^ kGenericParamKeyInnerXor)) >> kGenericParamKeyShift) + kGenericParamKeyAdd) ^ kGenericParamKeyXor; }
+
 // ---------------- 字段解码（每个字段一组 op/key）----------------
 inline constexpr OpKey kTypeDefNamespaceIndex = { '-', 1145778368 };  // sub:1145778368
 inline constexpr OpKey kTypeDefPropertyStart = { '-', 1995389561 };  // sub:1995389561
@@ -170,6 +188,45 @@ inline constexpr OpKey kGenericContainerParameterStart = { '^', 0x138FD4C7 };  /
 inline constexpr OpKey kGenericContainerArgc = { '-', 1053517166 };  // sub:1053517166
 inline constexpr OpKey kGenericParameterNameIndex = { '^', 0x664CCEB9 };  // xor:0x664CCEB9
 
+inline constexpr int32_t decTypeNameIndex(uint32_t raw) { return (int32_t)(raw - (uint32_t)kTypeDefNameIndex.key); }
+inline constexpr int32_t decTypeNamespaceIndex(uint32_t raw) { return (int32_t)(raw - (uint32_t)kTypeDefNamespaceIndex.key); }
+inline constexpr int32_t decTypeMethodStart(uint32_t raw) { return (int32_t)(raw ^ (uint32_t)kTypeDefMethodStart.key); }
+inline constexpr int32_t decTypeFieldStart(uint32_t raw) { return (int32_t)(raw ^ (uint32_t)kTypeDefFieldStart.key); }
+inline constexpr int32_t decTypePropertyStart(uint32_t raw) { return (int32_t)(raw - (uint32_t)kTypeDefPropertyStart.key); }
+inline constexpr int32_t decTypeParentIndex(uint32_t raw) { return (int32_t)(raw - (uint32_t)kTypeDefParentIndex.key); }
+inline constexpr int32_t decTypeGenericContainerIndex(uint16_t raw) { if (raw == 26229) return -1; return (int16_t)(uint16_t)(raw - (uint32_t)kTypeDefGenericContainerIndex.key); }
+inline constexpr uint16_t decTypeMethodCount(uint16_t raw) { return (uint16_t)(raw - (uint32_t)kTypeDefMethodCount.key); }
+inline constexpr uint16_t decTypeFieldCount(uint16_t raw) { return (uint16_t)(raw ^ (uint32_t)kTypeDefFieldCount.key); }
+inline constexpr uint8_t decTypePropertyCount(uint8_t raw) { return (uint8_t)(raw ^ (uint32_t)kTypeDefPropertyCount.key); }
+inline constexpr int16_t decTypeEventStart(int16_t raw) { return (int16_t)(raw + (uint32_t)kTypeDefEventStart.key); }
+inline constexpr uint32_t decTypeFlags(uint32_t raw) { return raw - (uint32_t)kTypeDefFlags.key; }
+inline constexpr uint16_t decTypeInterfacesStart(uint16_t raw) { return (uint16_t)(raw ^ (uint32_t)kTypeDefInterfacesStart.key); }
+inline constexpr uint8_t decTypeInterfacesCount(uint8_t raw) { return (uint8_t)(raw + (uint32_t)kTypeDefInterfacesCount.key); }
+inline constexpr int16_t decTypeNestedStart(int16_t raw) { return (int16_t)(raw + (uint32_t)kTypeDefNestedTypesStart.key); }
+inline constexpr uint32_t decTypeNestedCount(uint8_t raw) { return (uint32_t)(raw ^ (uint32_t)kTypeDefNestedTypesCount.key); }
+inline constexpr int32_t decParamNameIndex(uint32_t raw, uint32_t i) { return (int32_t)(keyParam(i) ^ (raw - (uint32_t)kParameterNameIndexBase.key) ^ (uint32_t)kParameterNameIndexXor.key); }
+inline constexpr int32_t decParamTypeIndex(uint32_t raw, uint32_t i) { return (int32_t)(keyParam(i) ^ raw ^ (uint32_t)kParameterTypeIndex.key); }
+inline constexpr uint64_t decStringKey(uint32_t offset) { return kKeyMulA * ((kKeyMulB * (uint64_t)offset) ^ kKeySeed); }
+inline constexpr uint32_t decGenericContainerArgc(uint32_t raw, uint32_t c) { return raw - (uint32_t)keyContainer(c) - (uint32_t)kGenericContainerArgc.key; }
+inline constexpr uint32_t decGenericContainerParameterStart(uint32_t raw, uint32_t c) { return (raw ^ (uint32_t)kGenericContainerParameterStart.key) - (uint32_t)keyContainer(c); }
+inline constexpr int32_t decGenericParameterNameIndex(uint32_t raw, uint32_t i) { return (int32_t)((raw ^ (uint32_t)kGenericParameterNameIndex.key) - (uint32_t)keyGenericParam(i)); }
+inline constexpr int32_t decPropertyNameIndex(uint32_t raw, uint32_t i) { return (int32_t)((raw - (uint32_t)kPropertyNameIndex.key) ^ keyProperty(i)); }
+inline constexpr int32_t decFieldNameIndex(uint32_t raw, uint32_t i) { return (int32_t)((raw - (uint32_t)kFieldNameIndexBase.key) ^ keyField(i) ^ (uint32_t)kFieldNameIndexXor.key); }
+inline constexpr int32_t decEventNameIndex(uint32_t raw, uint32_t i) { return (int32_t)(keyEvent(i) ^ (raw - (uint32_t)kEventNameIndex.key)); }
+inline constexpr uint16_t decMethodFlags(uint16_t raw, uint32_t i) { return (uint16_t)(keyMethod(i) ^ (uint32_t)raw ^ (uint32_t)kMethodFlags.key); }
+inline constexpr uint16_t decMethodIFlags(uint16_t raw, uint32_t i) { return (uint16_t)(keyMethod(i) ^ (uint32_t)(uint16_t)(raw - (uint32_t)kMethodIflags.key)); }
+inline constexpr int32_t decFieldTypeIndex(uint32_t raw, uint32_t i) { return (int32_t)(keyField(i) ^ raw ^ (uint32_t)kFieldTypeIndex.key); }
+inline constexpr uint32_t decMethodParamStart(uint32_t raw, uint32_t i) { return keyMethod(i) ^ (raw - (uint32_t)kMethodParameterStart.key); }
+inline constexpr uint8_t decMethodParamCount(uint8_t raw, uint32_t i) { return (uint8_t)(((uint8_t)(raw - 31u)) ^ ((uint8_t)keyMethod(i))); }
+inline constexpr uint32_t decImageNameIndex(uint32_t raw, uint32_t i) { return (uint32_t)(raw ^ keyImage(i) ^ kEntryXor); }
+inline constexpr uint16_t decPropertyGet(uint32_t raw, uint32_t i) { return (uint16_t)(keyProperty(i) ^ (uint16_t)raw ^ (uint16_t)kPropertyGet.key); }
+inline constexpr uint16_t decPropertySet(uint32_t raw, uint32_t i) { return (uint16_t)(((uint16_t)raw - (uint16_t)kPropertySet.key) ^ (uint16_t)keyProperty(i)); }
+inline constexpr int32_t decEventTypeIndex(uint32_t raw, uint32_t i) { return (int32_t)(((uint32_t)raw - (uint32_t)kEventTypeIndex.key) ^ keyEvent(i)); }
+inline constexpr uint16_t decEventAdd(uint32_t raw, uint32_t i) { return (uint16_t)(keyEvent(i) ^ (uint16_t)raw ^ (uint16_t)kEventAdd.key); }
+inline constexpr uint16_t decEventRemove(uint32_t raw, uint32_t i) { return (uint16_t)(keyEvent(i) ^ (uint16_t)raw ^ (uint16_t)kEventRemove.key); }
+inline constexpr uint16_t decEventRaise(uint32_t raw, uint32_t i) { return (uint16_t)(((uint16_t)raw - (uint16_t)kEventRaise.key) ^ (uint16_t)keyEvent(i)); }
+inline constexpr uint8_t decTypeBitfield(uint8_t raw) { return raw; }
+
 // ---------------- 结构体尺寸 ----------------
 inline constexpr size_t kSize_Il2CppImageDefinition = 0x28;
 inline constexpr size_t kSize_Il2CppTypeDefinition = 0x46;
@@ -189,6 +246,49 @@ inline constexpr size_t kSize_Il2CppGenericInst = 0x10;
 inline constexpr size_t kSize_Il2CppMethodSpec = 0xC;
 inline constexpr size_t kSize_Il2CppGenericMethodIndices = 0x08;
 inline constexpr size_t kSize_Il2CppGenericMethodFunctionsDefinitions = 0x0E;
+
+// ---------------- 结构体字段偏移 ----------------
+inline constexpr uint32_t kIl2CppPropertyDefinitionGetOffset = 6;
+inline constexpr uint32_t kIl2CppPropertyDefinitionSetOffset = 8;
+inline constexpr uint32_t kIl2CppImageDefinitionNameIndexOffset = 32;
+inline constexpr uint32_t kIl2CppGenericContainerArgcOffset = 8;
+inline constexpr uint32_t kIl2CppGenericContainerParameterStartOffset = 4;
+inline constexpr uint32_t kIl2CppFieldDefaultValueFieldIndexOffset = 0;
+inline constexpr uint32_t kIl2CppFieldDefaultValueDataIndexOffset = 4;
+inline constexpr uint32_t kIl2CppFieldDefaultValueTypeIndexOffset = 8;
+inline constexpr uint32_t kIl2CppParameterDefaultValueParameterIndexOffset = 0;
+inline constexpr uint32_t kIl2CppParameterDefaultValueDataIndexOffset = 4;
+inline constexpr uint32_t kIl2CppParameterDefaultValueTypeIndexOffset = 8;
+inline constexpr uint32_t kIl2CppEventDefinitionAddOffset = 12;
+inline constexpr uint32_t kIl2CppEventDefinitionRemoveOffset = 8;
+inline constexpr uint32_t kIl2CppEventDefinitionRaiseOffset = 10;
+inline constexpr uint32_t kIl2CppTypeDefinitionNamespaceIndexOffset = 0;
+inline constexpr uint32_t kIl2CppTypeDefinitionPropertyStartOffset = 8;
+inline constexpr uint32_t kIl2CppTypeDefinitionMethodStartOffset = 12;
+inline constexpr uint32_t kIl2CppTypeDefinitionParentIndexOffset = 24;
+inline constexpr uint32_t kIl2CppTypeDefinitionFieldStartOffset = 28;
+inline constexpr uint32_t kIl2CppTypeDefinitionUnknown20Offset = 32;
+inline constexpr uint32_t kIl2CppTypeDefinitionNameIndexOffset = 36;
+inline constexpr uint32_t kIl2CppTypeDefinitionFlagsOffset = 40;
+inline constexpr uint32_t kIl2CppTypeDefinitionMethodCountOffset = 48;
+inline constexpr uint32_t kIl2CppTypeDefinitionEventStartOffset = 52;
+inline constexpr uint32_t kIl2CppTypeDefinitionNestedTypesStartOffset = 54;
+inline constexpr uint32_t kIl2CppTypeDefinitionFieldCountOffset = 56;
+inline constexpr uint32_t kIl2CppTypeDefinitionBitfieldOffset = 58;
+inline constexpr uint32_t kIl2CppTypeDefinitionInterfacesStartOffset = 60;
+inline constexpr uint32_t kIl2CppTypeDefinitionGenericContainerIndexOffset = 62;
+inline constexpr uint32_t kIl2CppTypeDefinitionInterfacesCountOffset = 64;
+inline constexpr uint32_t kIl2CppTypeDefinitionPropertyCountOffset = 67;
+inline constexpr uint32_t kIl2CppTypeDefinitionEventCountOffset = 68;
+inline constexpr uint32_t kIl2CppTypeDefinitionNestedTypesCountOffset = 69;
+inline constexpr uint32_t kIl2CppMethodDefinitionNameIndexOffset = 0;
+inline constexpr uint32_t kIl2CppMethodDefinitionParameterStartOffset = 4;
+inline constexpr uint32_t kIl2CppMethodDefinitionReturnTypeOffset = 8;
+inline constexpr uint32_t kIl2CppMethodDefinitionDeclaringTypeOffset = 12;
+inline constexpr uint32_t kIl2CppMethodDefinitionIflagsOffset = 16;
+inline constexpr uint32_t kIl2CppMethodDefinitionTokenOffset = 20;
+inline constexpr uint32_t kIl2CppMethodDefinitionFlagsOffset = 22;
+inline constexpr uint32_t kIl2CppMethodDefinitionParameterCountOffset = 24;
 
 // ---------------- 锚点自检值（verify.py 会独立验证）----------------
 inline constexpr uint32_t kAnchor_FieldDefaultValues = 0x3D00478;

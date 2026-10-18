@@ -9,7 +9,7 @@ import json, re, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-JSON_PATH = os.path.join(ROOT, 'version.json')
+JSON_PATH = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'version.json')
 OUT_PATH  = os.path.join(ROOT, 'src', 'version.hpp')
 
 def load_json_with_comments(path):
@@ -132,11 +132,23 @@ def main():
     w('// ---------------- 逐索引 key 公式参数 ----------------')
     for kf, params in J.get('keyFormulas', {}).items():
         for pk, pv in params.items():
+            if pk in ('sig', 'cpp'):
+                continue
             ty = 'uint64_t' if str(pv).startswith('0x') and len(str(pv)) > 10 else ('int64_t' if str(pv).startswith('-') else 'uint64_t')
             w('inline constexpr %s k%s%s = %s%s;' % (
                 ty, cname(kf), cname(pk), num(pv),
                 'ull' if ty == 'uint64_t' and str(pv).startswith('0x') and len(str(pv)) > 10 else ''))
     w('')
+
+    # ---- 逐索引 key 公式函数（通用：由 version.json 的 sig/cpp 生成）----
+    #   没有 sig/cpp 的版本不生成函数，旧的内联公式仍然可用（向后兼容）。
+    _fn = 0
+    for kf, params in J.get('keyFormulas', {}).items():
+        if 'sig' in params and 'cpp' in params:
+            w('inline constexpr %s { %s }' % (params['sig'], params['cpp']))
+            _fn += 1
+    if _fn:
+        w('')
 
     # ---- 字段解码 ----
     w('// ---------------- 字段解码（每个字段一组 op/key）----------------')
@@ -147,10 +159,23 @@ def main():
                 cname(st), cname(fname), op, key, spec))
     w('')
 
+    # ---- 通用解码函数（decodeExpr；必须在 fieldDecode 常数之后）----
+    for name, d in J.get('decodeExpr', {}).items():
+        if 'sig' in d and 'cpp' in d:
+            w('inline constexpr %s { %s }' % (d['sig'], d['cpp']))
+    w('')
+
     # ---- 结构体尺寸 ----
     w('// ---------------- 结构体尺寸 ----------------')
     for k, v in J.get('structSizes', {}).items():
         w('inline constexpr size_t kSize_%s = %s;' % (k, num(v)))
+    w('')
+
+    # ---- 结构体字段偏移（跨版本布局差异）----
+    w('// ---------------- 结构体字段偏移 ----------------')
+    for s, fields in J.get('structOffsets', {}).items():
+        for fld, off in fields.items():
+            w('inline constexpr uint32_t k%s%sOffset = %s;' % (cname(s), cname(fld), num(off)))
     w('')
 
     # ---- 自检（verify.py 也检查这些）----

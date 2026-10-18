@@ -16,7 +16,9 @@
   3) formulas    : 含 `*` / `^` / `>>` 的内联 key(i) 表达式（原文，供人工确认）
 """
 import json
+import os
 import re
+import sys
 
 import ida_bytes
 import ida_funcs
@@ -26,16 +28,25 @@ import idautils
 
 IDA_HEADLESS = any(a in sys.argv for a in ('-A', '--headless'))
 
-import sys
-
 # 无头模式：idat64 -A -S"ida_export.py <out.json> [hits.json]" <target>
 OUT = sys.argv[1] if len(sys.argv) > 1 else '/tmp/ida_export.json'
 HITS_JSON = sys.argv[2] if len(sys.argv) > 2 else '/tmp/h.json'
 FAST = '--fast' in sys.argv      # 只反编译 sig 定位到的函数（秒级）；否则全量（小时级）
 # 额外指定函数（未命名函数里的读取点，例如 7.1 的 typeDefs 在 0x1404B1588）
 EXTRA = [int(a, 16) for a in sys.argv[2:] if a.startswith('0x') or a.startswith('0X')]
+# 可选：把每个函数的 Hex-Rays 文本落盘（用于定位 a1 等 base）
+TEXT_DIR = os.environ.get('GI_TEXT') or None
 
 HITS = {}                      # ea -> name
+# MHY 也可能以参数形式传入（a1/v5/...），不一定是全局名。
+# 只有「已知读 MHY 的表函数」才接受这些别名，避免把别的 base 误当 MHY。
+MHY_ALIASES = set()   # a1/a2/v5 都是运行时上下文/local，不是 MHY；只认 g_MHY_Table
+TABLE_FUNCS = set()
+try:
+    _tf = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'table_funcs.json')))
+    TABLE_FUNCS = {k for k in _tf if not k.startswith('_')}
+except Exception:
+    pass
 
 
 def load_hits(path=HITS_JSON):
@@ -56,15 +67,51 @@ def load_hits(path=HITS_JSON):
         print('⚠ 没读到 sig 命中表（%s）：%s' % (path, e))
         print('   -> 先用 sig.py scan --json /tmp/h.json 生成；否则只能输出 sub_xxx')
 
+# 支持**嵌套基址** + LL/L 后缀（7.0 的 de​compiler 会把表读取写成
+# `*(_DWORD *)(*(_QWORD *)(x + 152) + 28) ^ key`，旧正则只认单层 \(\w+ \+ disp\) ✗）。
 RE_TABLE = re.compile(
-    r'\*\(_DWORD \*\)\((\w+) \+ (0x[0-9A-Fa-f]+|\d+)\)\s*([-+^])\s*(0x[0-9A-Fa-f]+|\d+)')
+    r'\*\(_?(\w+) \*\)\((\w+) \+ (0x[0-9A-Fa-f]+|\d+)(?:LL|L)?\)\s*([-+^])\s*(0x[0-9A-Fa-f]+|\d+)(?:LL|L)?')
+# 允许**嵌套基址**（如 `*(int *)(*(_QWORD *)(TypeInfoByIndex + 152) + 28)`）和 LL/L 后缀。
+# 用**贪婪** `.+` 才能取到最外层：`*(_QWORD *)(x + 152) + 28) ^ key` -> base=..., disp=28 ✓
 RE_FIELD = re.compile(
-    r'\*\(_(\w+) \*\)\((\w+) \+ (0x[0-9A-Fa-f]+|\d+)\)\s*([-+^])\s*(0x[0-9A-Fa-f]+|\d+)')
+    r'\*\(_?(\w+) \*\)\((.{1,200}) \+ (0x[0-9A-Fa-f]+|\d+)(?:LL|L)?\)\s*([-+^])\s*(0x[0-9A-Fa-f]+|\d+)(?:LL|L)?')
 # 公式的形态每版可能变（乘法/移位/xor 的组合），所以**只做粗筛**：
 # 含「6 位以上大常数 + >>」的片段就抓下来，原文交给人工确认。
 # 只做粗筛：含 6 位以上大常数，并且同一行里出现 * 或 >>（key(i) 公式一定满足其一）。
 # methodKey/eventKey **没有移位**，所以不能强制要求 >>（这是之前漏掉它们的原因 ✗）。
-RE_FORMULA = re.compile(r'[^;{}\n]*\d{6,}[^;{}\n]{0,300}')
+# 局部变量数据流：`v10 = qword_xxx;` 之后 `*(v10 + slot)` 也能归到 MHY 全局
+RE_ASSIGN = re.compile(r'^\s*(\w+)\s*=\s*(.+?);\s*$')
+RE_GLOBAL = re.compile(r'^(?:\([^)]*\)\s*)?([A-Za-z_]\w*)\s*(?:\+\s*(0x[0-9A-Fa-f]+|\d+))?$')
+
+
+def _is_global_name(n):
+    return bool(re.match(r'^(?:qword_|dword_|word_|byte_|unk_|off_|p_|s_|g_)', n)) or n in (
+        'MHY_Table', 'p_MHY_Table', 's_MHYTable')
+
+
+# 数组索引形态：`*(_DWORD *)(v33 + 8 * v32)` / `... + 4)`（7.0 大量使用）
+RE_FIELD_IDX = re.compile(
+    r'\*\(_?(\w+) \*\)\((\w+) \+ (\d+) \* (\w+)(?: \+ (0x[0-9A-Fa-f]+|\d+))?\)\s*([-+^])\s*(0x[0-9A-Fa-f]+|\d+)(?:LL|L)?')
+
+RE_FORMULA = re.compile(r'[^;{}\n]*(?:0x[0-9A-Fa-f]{6,}|\d{6,})[^;{}\n]{0,300}')
+
+
+def _dedup_formulas(rows):
+    """同一函数里**原文完全相同**的行只留一条（保留 func/ea）。
+
+    为什么要去重：`formulas` 原来硬截断 400 行，把排在后面的函数（SetupParameters、
+    RuntimeInit 的一部分）切掉了 -> paramKey / imageKey 直接丢 ✗。
+    去重后行数大幅下降，就不需要截断了 ✓。
+    """
+    seen = set()
+    out = []
+    for r in rows:
+        key = (r.get('func'), r.get('text'))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(r)
+    return out
 
 
 def K(s):
@@ -112,23 +159,124 @@ def main():
         targets = list(idautils.Functions())
         print('全量模式：%d 个函数（会很慢；建议加 --fast）' % len(targets))
 
+    try:
+        import ida_auto
+        _ok = ida_auto.auto_is_ok()
+    except Exception:
+        _ok = None
+    if _ok is False:
+        print('  ⚠ 自动分析尚未完成（auto_is_ok=False）——结果可能不完整', flush=True)
+    _max = int(os.environ.get('IDA_MAX_FUNC', '0x20000'), 0)
+    _prog_path = OUT + '.progress'
+    try:
+        _prog = open(_prog_path, 'w', encoding='utf-8')
+    except Exception:
+        _prog = None
+
     for _k, ea in enumerate(targets):
-        if _k and _k % 200 == 0:
-            print('  ... %d/%d' % (_k, len(targets)))
+        _fn = ida_funcs.get_func(ea)
+        _sz = (_fn.end_ea - _fn.start_ea) if _fn else 0
+        if _sz and _sz > _max:
+            print('  ⏭ 跳过超大函数 %s 0x%X size=0x%X (>0x%X)'
+                  % (ida_funcs.get_func_name(ea), ea, _sz, _max), flush=True)
+            continue
+        print('  → %s 0x%X size=0x%X' % (ida_funcs.get_func_name(ea), ea, _sz), flush=True)
+        if _prog:
+            _prog.write('BEGIN %s 0x%X size=0x%X\n' % (ida_funcs.get_func_name(ea), ea, _sz)); _prog.flush()
         try:
             cf = ida_hexrays.decompile(ea)
-        except Exception:
+        except Exception as _e:
+            print('  ✗ 反编译异常 %s 0x%X: %s' % (ida_funcs.get_func_name(ea), ea, _e), flush=True)
             continue
         if cf is None:
+            print('  ✗ 反编译返回 None %s 0x%X' % (ida_funcs.get_func_name(ea), ea), flush=True)
+            if _prog:
+                _prog.write('NONE %s 0x%X\n' % (ida_funcs.get_func_name(ea), ea)); _prog.flush()
             continue
         nfunc += 1
         text = str(cf)
+        if _prog:
+            _prog.write('OK %s 0x%X chars=%d\n' % (ida_funcs.get_func_name(ea), ea, len(text))); _prog.flush()
         f = ida_funcs.get_func(ea)
         fstart = f.start_ea if f else ea
         name = HITS.get(fstart) or ida_funcs.get_func_name(ea) or hex(ea)
 
+        # 全量时把反编译文本也存下来；即使之后 IDA 崩了，已处理函数也已落盘
+        if TEXT_DIR:
+            try:
+                os.makedirs(TEXT_DIR, exist_ok=True)
+                tfn = os.path.join(TEXT_DIR, '%s_%X.c' % (name, fstart))
+                with open(tfn, 'w', encoding='utf-8') as _tf:
+                    _tf.write(text)
+            except Exception as _te:
+                print('  ⚠ 保存反编译文本失败 %s: %s' % (name, _te), flush=True)
+
+        # ---- 局部变量数据流（7.0 大量读取形如 v10 = qword_xxx; *(v10 + slot)）----
+        _lines = text.splitlines(keepends=True)
+        _starts = []
+        _pos = 0
+        for _ln in _lines:
+            _starts.append(_pos); _pos += len(_ln)
+
+        def _line_idx(p):
+            lo, hi = 0, len(_starts)
+            while lo < hi:
+                mid = (lo + hi) // 2
+                if _starts[mid] <= p:
+                    lo = mid + 1
+                else:
+                    hi = mid
+            return max(0, lo - 1)
+
+        _assigns = []      # (line, local, src_or_None, offset)
+        for _i, _ln in enumerate(_lines):
+            _am = RE_ASSIGN.match(_ln)
+            if not _am:
+                continue
+            _lv, _rhs = _am.group(1), _am.group(2).strip()
+            _gm = RE_GLOBAL.match(_rhs)
+            if _gm:
+                _src = _gm.group(1)
+                _off = K(_gm.group(2)) if _gm.group(2) else 0
+                # 全局、MHY 参数别名（a1/a2/v5...）、局部到局部别名、aN 都保留
+                if (_is_global_name(_src) or _src in MHY_ALIASES
+                        or re.fullmatch(r'v\d+', _src)):
+                    _assigns.append((_i, _lv, _src, _off))
+                elif re.fullmatch(r'v\d+', _lv):
+                    _assigns.append((_i, _lv, None, 0))
+            elif re.fullmatch(r'v\d+', _lv):
+                _assigns.append((_i, _lv, None, 0))    # 被别的东西覆盖 -> 失效
+
+        _loc = {}
+        _ai = 0
         for m in RE_TABLE.finditer(text):
-            g, slot, op, key = m.group(1), K(m.group(2)), m.group(3), K(m.group(4))
+            _L = _line_idx(m.start())
+            while _ai < len(_assigns) and _assigns[_ai][0] <= _L:
+                _, _lv, _src, _off = _assigns[_ai]
+                _loc[_lv] = (_src, _off) if _src else None
+                _ai += 1
+
+            _w, _base, _slot, _op, _key = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
+            # 表值都是 32 位；Hex-Rays 可能写成 DWORD / int / unsigned int / __int32 ...
+            if _w not in ('DWORD', 'int', 'unsigned', '__int32', 'u32', 'uint32_t', 'LODWORD'):
+                continue
+            _g = re.match(r'[A-Za-z_]\w*', _base)
+            _bid = _g.group(0) if _g else _base
+            g, slot, op, key = _bid, K(_slot), _op, K(_key)
+            if re.fullmatch(r'v\d+', _bid):
+                # 局部变量：解析到全局 / MHY 参数别名（a1/v5/...）；支持别名链
+                if _bid not in _loc or _loc[_bid] is None:
+                    continue
+                g, _off = _loc[_bid]
+                slot += _off
+                _seen = {_bid}
+                while g in _loc and _loc[g] is not None and g not in _seen:
+                    _seen.add(g)
+                    g2, off2 = _loc[g]
+                    slot += off2
+                    g = g2
+                if not (_is_global_name(g) or g in MHY_ALIASES):
+                    continue
             if slot > 0x400:            # 表槽位不会这么大
                 continue
             if key < 0x100:             # 太小的常数多半不是 key
@@ -162,6 +310,16 @@ def main():
                 continue
             fields.setdefault((w, loc, disp, op, key), []).append((name, hex(fstart)))
 
+        for m in RE_FIELD_IDX.finditer(text):
+            w, base, stride, idx, disp, op, key = (m.group(1), m.group(2), int(m.group(3)),
+                                                   m.group(4), K(m.group(5)) if m.group(5) else 0,
+                                                   m.group(6), K(m.group(7)))
+            if disp > 0x60 or key < 0x10:
+                continue
+            # stride 进 base，便于后续按结构体步长归属
+            fields.setdefault((w, '%s+%d*%s' % (base, stride, idx), disp, op, key), []).append(
+                (name, hex(fstart)))
+
         for m in RE_FORMULA.finditer(text):
             formulas.append({'func': name, 'func_ea': hex(fstart), 'text': m.group(0)})
 
@@ -181,7 +339,12 @@ def main():
     if mhy_name:
         for (g, slot, op, key), fns in sorted(tables.items()):
             if g != mhy_name:
-                continue
+                # 5 个 setup 函数把 MHY 指针当 a1 传入（SetupMethods/Events/
+                # IterNested/BuildMethodName/RegisterTables）；这些表以前被过滤掉。
+                if g not in MHY_ALIASES:
+                    continue
+                if not any(n in TABLE_FUNCS for n, _ in fns):
+                    continue
             val = None
             if mhy is not None:
                 raw = ida_bytes.get_dword(mhy + slot)
@@ -192,6 +355,7 @@ def main():
                 else:
                     val = (raw ^ key) & 0xFFFFFFFF
             out_tables.append({'slot': '0x%X' % slot, 'op': op, 'key': '0x%X' % key,
+                               'base': g,
                                'value': ('0x%X' % val) if val is not None else None,
                                'n_funcs': len(fns),
                                'funcs': [n for n, _ in fns[:4]],
@@ -219,7 +383,7 @@ def main():
         print('MHY 可信度：%d/%d 个值落在合理范围 ✓' % (len(plausible), len(out_tables)))
 
     res = {'mhy': (hex(mhy) if mhy else None), 'mhy_global': mhy_name,
-           'tables': out_tables, 'fieldDecode': out_fields, 'formulas': formulas[:400]}
+           'tables': out_tables, 'fieldDecode': out_fields, 'formulas': _dedup_formulas(formulas)}
     with open(OUT, 'w') as f:
         json.dump(res, f, ensure_ascii=False, indent=1)
 

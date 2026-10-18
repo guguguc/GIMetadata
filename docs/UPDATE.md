@@ -1852,3 +1852,1700 @@ make && ./gi-dump version/7.1 && python3 verify.py
 > **扫数据只是"读不到"时的兜底，而且必须带语义锚点验收；**
 > **验收标准是 100%，例外必须逐个能解释；**
 > **同一个公式族的所有引用点必须一起换（⚠️ 标记的 2+ 次出现）。**
+
+---
+
+## §14 签名扫描：7.0 **54/54 全自动**（2026-10-17 实测）
+
+### 14.1 结论
+
+```
+无缓存（全新扫描）：  54/54    ~19s
+有缓存（同目录缓存）：54/54    0.5s
+缓存文件：version/7.0/sig_hits.json   ← 扫描自己能生成，不是手写
+```
+
+**4 个曾经漏掉的函数，现在默认扫描就能出**：
+
+| 函数 | 7.0 地址 | 判定证据 |
+|---|---|---|
+| `SetupTypeInfoLocked` | `0x1404E3DB0` | 17 个 callee 命中 10（第二 4）；大小 0x173F vs 7.1 0x171F；序言 `lea rbp,[rsp+0x80]; mov [rbp+0x20],-2` 一致 |
+| `GetMethodInfoFromIndex` | `0x1404EE2E0` | 序言逐条一致：`lea rbp,[rsp+0x30]`→`mov [rbp-8],-2`→`movsxd r14,ecx`→`mov rax,[rax+r14*8]` |
+| `GetDefaultValue` | `0x1404F43F0` | 调用序列与 7.1 一字不差：`GetMethodInfoFromIndex → DecryptString → GetTypeInfoFromIndex ×3 → DecodeDefaultValue` |
+| `GetDefaultParameterValueObject` | `0x1404F8920` | 与 7.1 逐条同构（flag 检查 → 取方法索引 → `-1` 判断 → 计数 `/12` 取 pDV），且**全 .text 只被调用 1 次**（7.1 也是 1 次）|
+
+### 14.2 新增的第四轮：**结构锚**（默认开启）
+
+前三轮（字节模式 / 三段投票 / 模糊调用图）为什么不够：
+
+- 这 4 个函数的寄存器分配、flag 掩码、结构偏移都变了 → 8 条连续字节签名必灭 ✗
+- 但它们的**某几条指令没变**，例如 `movzx eax,[rcx+0x2f]` 在两版都是 `0f b6 41 2f` ✓
+
+做法（`_struct_fallback`）：
+
+```
+① 取签名前 6 条指令的**原始字节**，每条找最长固定段 >= 4 字节当种子
+② 每个命中推回「签名窗口起点」= hit - 前面指令的字节偏移
+③ 在窗口起点做 8+ext 全序列打分（loose + ext_loose）
+④ 回退到**函数起点**：前面 >=2 个连续 0xCC，且从该点反汇编能正好走到窗口起点
+⑤ 按函数起点去重；要求 (loose+ext) >= n+en-6、loose >= n-2、领先第二名 >= 2
+```
+
+实测代价：每个未命中签名 0.2–1.2s；7.0 共 8 个走这条路，总计约 +5s。
+
+### 14.3 缓存的定位
+
+`sig_hits.json` **不是手工答案**，是扫描产物：
+
+```bash
+# 删掉缓存也能重算（验证过：54/54，19s）
+rm version/7.0/sig_hits.json
+python3 tools/sig.py scan version/7.0/gi.exe --sigs tools/sigs.json --fuzzy
+
+# 确认后写回缓存，下次 0.5s
+python3 tools/sig.py scan version/7.0/gi.exe --sigs tools/sigs.json --fuzzy \
+        --json version/7.0/sig_hits.json
+```
+
+### 14.4 关于「4 对次序反转」
+
+7.0 实测：1431 对里 4 对反转，全部涉及 `GetDefaultParameterValueObject`。
+这是**真实的函数重排**（7.0 把它放在 `SetupParameters` 前面，7.1 在后面），不是地址错。
+其余 1427 对单调 ✓。
+
+### 14.5 用法
+
+```bash
+# 默认（快，有缓存）
+python3 tools/sig.py scan version/7.0/gi.exe --sigs tools/sigs.json --fuzzy
+
+# 无缓存全自动
+rm -f version/7.0/sig_hits.json && python3 tools/sig.py scan ... --fuzzy
+
+# 最后兜底（--slow：立即数种子 + callee 指纹），一般用不到
+python3 tools/sig.py scan ... --fuzzy --slow
+```
+
+---
+
+## §15 7.0 字段定位记录（2026-10-17，方法 + 验证）
+
+> **规则（以后每新增一个字段都按这个格式记）**
+> 1. 版本 / 字段 / 值
+> 2. **在哪找到**（函数名 + VA + 反编译行 / 数据偏移）
+> 3. **怎么找到的**（导出 `fieldDecode` 列表 / keyless 哨兵反解 / 差分连续性 / 可打印字符串 / 结构自证）
+> 4. **怎么验证的**（通过率 / 样本数）
+> 5. 置信度（confirmed / likely / 待定）
+> 弯路也记，避免下次重复。
+
+### 15.1 表偏移（7.0）
+
+| 表 | 7.0 值 | 槽位/解码 | 怎么找到 | 验证 |
+|---|---|---|---|---|
+| `propertiesOffset` | `0x0` | slot `0x64` `+0xFA496C14` | 反汇编 `SetupPropertiesLocked` 0x1404E6521 | 属性名 **1823/1823** |
+| `fieldOffset` | `0x39AA940` | slot `0x138` `^0x350FE3C2` | 反汇编 `SetupFieldsLocked` 0x1404E4110（`and 0x1FFFFFFF / 0xE0000000`）| 静态标志结构 40/40 |
+| `fieldsOffset` | `0x3E2FD44` | slot `0x1D0` `+0xE2FD458E` | 反汇编 0x1404E3C0A + 0x1404E3C30 | 字段名 **1981/1981** |
+| `fieldDefaultValuesOffset` | `0x3DCE880` | slot `0x110` `-0x7B761D0A` | 结构扫描：12B 记录、fieldIndex 在 **+8** | count **24,792**，严格递增 |
+| `parameterDefaultValuesOffset` | `0x1022CA8` | slot `0x0C` `^0x720EB389` | 结构扫描：12B、paramIndex 在 +0 | 首字段 `0,4,8,…` 29/29 |
+| `imagesOffset` | `0x3CA2F0`（startup）| slot `0x14` `^0x495C7A75` | 反编译 `RuntimeInit`：`v122 = qword_145897168 + (MHY[0x14]^0x495C7A75)`；名字在 **+8** | 程序集名 **12/12**（`mscorlib.dll`…）|
+
+**关键教训**
+- 7.0 的 `Il2CppFieldDefaultValue` 字段顺序是 `{typeIndex,dataIndex,fieldIndex}`（7.1 是 `{fieldIndex,dataIndex,typeIndex}`）；`-1` 是 **typeIndex**，不是 fieldIndex。
+- 7.0 的 `Il2CppParameterDefaultValue` 是 `{parameterIndex,typeIndex,dataIndex}`（7.1 是 `{parameterIndex,dataIndex,typeIndex}`）。
+- `imagesOffset` 是 **startup 偏移**，基址是 `qword_145897168`，不是 `g_Metadata_Base`。
+
+### 15.2 公式（7.0）
+
+| 公式 | 值 | 怎么找到 | 验证 |
+|---|---|---|---|
+| `imageKey` | `(((899978779*((18582*i)^0x1A32087B))>>11)+1714073770)^0x6688B322` | 反编译 `RuntimeInit` 的 `v125` | 图像名 12/12 |
+| `fieldKey` | 原公式 + **索引偏置 `0x1E6871E4`** | 反编译 `SetupFieldsLocked`：表用 decoded 索引，key 用 raw fieldStart | 字段名 **1981/1981** |
+| `eventKeyAccessor` | `((-12735*i)^0x7723)-16191` | 反编译 `SetupEventsLocked` 的 `v31/v32/v33` | add 2000/2000、remove 2000/2000、raise 1375/1375 |
+| `eventKey` | `((-951857599*i)^0x614E7723)+398639297` | 反编译 `SetupEventsLocked` `v26` | 事件名 591/739 |
+
+### 15.3 fieldDecode（7.0）
+
+| 结构.字段 | 偏移 | 解码 | 怎么找到 | 验证 |
+|---|---|---|---|---|
+| `event.typeIndex` | +0 | `-740753572` | `SetupEventsLocked` `v28` | add/remove/raise 联动通过 |
+| `event.nameIndex` | +4 | `^0x71EEBABF` | 同上 `*(v25-4)` | 591/739 |
+| `event.add` | +8 | `^0x74A4` | 同上 `v31` | 2000/2000 |
+| `event.remove` | +10 | `^0xEBDA` | 同上 `v32` | 2000/2000 |
+| `event.raise` | +12 | `-14096` | 同上 `v33` | 1375/1375 |
+| `method.parameterStart` | +12 | `-11222` | `SetupMethodsLocked` 0x1404E5978 | 与 `typeDef.methodStart` 联动 |
+| `method.flags` | +18 | `^0xEF3B` | 同上 `v17+21` | — |
+| `method.iflags` | +22 | `-5486` | 同上 `v17+20` | — |
+
+### 15.4 typeDef（7.0，表 `0x1986BEC`，步长 70，N=86,932）
+
+| 字段 | 偏移 | 解码 | 怎么找到 | 验证 |
+|---|---|---|---|---|
+| `propertyStart` | +0x20 | `-0x6AE4E32A` | keyless 累计索引（`sub`）| mono=1.0, max 112,948 |
+| `methodStart` | +0x24 | `-0x42C81546` | 同上 + 导出 `fieldDecode`（`GetMethodNameFromIndex`）| mono=1.0, max 713,953 |
+| `fieldStart` | +0x2C | `-0x1E6871E4` | 同上 + 连续性 | **73,625/73,625** |
+| `eventStart` | +0x32 | `-0x53B6` | 导出 `fieldDecode`（`SetupEventsLocked`）| mono=1.0, max 623 |
+| `method_count` | +0x36 | `+0x28` | 差分反推 key | **75,924/75,924** |
+| `field_count` | +0x3C | `-0x8B` | 导出 `fieldDecode`（`SetupFieldsLocked`）| **73,580/73,580** |
+| `property_count` | +0x40 | `^0xCA` | 导出 `fieldDecode`（`SetupPropertiesLocked`，被误读成 QWORD）| **29,679/29,679** |
+| `event_count` | +0x42 | `+0x09` | 差分反推 key | **221/221** |
+
+**怎么找到的（可复用流程）**
+1. `sig.py scan` 找回 7.0 函数（54/54），IDA MCP `rename` 成 `GIMeta_*`。
+2. 反编译 `SetupTypeInfoLocked` / `SetupEventsLocked` / `SetupFieldsLocked` / `SetupPropertiesLocked`，过滤带常量的行。
+3. 同时看 **7.0 导出的 `fieldDecode` 列表**：每条是 `(width, base, disp, op, key, funcs)`；`(disp, op)` 稳定，`key` 就是 7.0 值。
+4. 没有导出的字段用 **keyless 哨兵反解**：取列里最常出现的 raw `v*`：
+   `xor: K=~v*` / `add: K=-v*` / `sub: K=v*+1`。
+5. 累计索引用 **单调性**；计数用 **相邻 start 差分反推 key**（不能用"最常见值"，0/1 会抢 mode）。
+6. 表长用 **连续性校验**：`fieldStart[i+1]-fieldStart[i]==field_count[i]`（跳过 `-1` 无字段类型）。
+
+### 15.5 本轮弯路（不要重复）
+
+- **不要在新版本里搜旧版本的常数**：7.0 代码里搜 `1145778368/1995389561/72511848/0x4D8127F2` 全部 0 命中。
+- **`fieldDecode` 是列表，不是字典**；`(width, disp, op, key, funcs)` 才是完整信息。
+- **计数器不能用 mode 反解**：`method_count` 的 mode 是 0/1，不是哨兵；要用差分。
+- **导出会把 u8 读成 QWORD**（`+0x40 ^0xCA`、`+0x44 ^0xFD`），别被 `width` 误导，按结构实际宽度用。
+- **`-1` 不是表尾**：类型可以整段 `fieldStart=-1`（无字段），连续性要跳过它们。
+
+### 15.6 还没定位的 typeDef 字段（10 个）
+
+`namespaceIndex` / `nameIndex` / `parentIndex` / `flags` / `unknown20` / `genericContainerIndex` / `interfacesStart` / `interfaces_count` / `nestedTypesStart` / `nestedTypesCount`
+
+- `nameIndex` / `namespaceIndex`：可打印字符串反查（entry = off|len<<24）
+- `parentIndex`：Il2CppType 索引簇
+- `flags`：TYPE_ATTRIBUTE 位分布
+- `interfaces*` / `nestedTypes*`：`+0x3E ^0x1DE4`、`+0x41 +0x5A`、`+0x44 ^0xFD` 候选待定
+
+### 15.7 `Il2CppTypeDefinition` struct 偏移通用化（2026-10-17）
+
+- `version.json` 与 `version/7.0/version.json` 新增 `structOffsets.Il2CppTypeDefinition`。
+- 7.1 偏移来自 `docs/gi_fields.md §3`；7.0 已确认 8 个（见 §15.4），其余 10 个**暂用 7.1 占位**。
+- `src/il2cpp_image.hpp` 新增：
+  `tdI32 / tdU32 / tdI16 / tdU16 / tdU8`，dumper 里所有 `typeDefinition->字段` 改为按 JSON 偏移读。
+- `Il2CppTypeDefinition` 结构体成员保留但不再使用（只用于 `sizeof` 断言）。
+- 7.0 生成的偏移：
+  `propertyStart=0x20, methodStart=0x24, fieldStart=0x2C, eventStart=0x32,`
+  `method_count=0x36, field_count=0x3C, property_count=0x40, event_count=0x42`。
+- **验证**：7.1 dump md5 `e401b680…` 不变；`verify.py` **28/28 PASS**。
+- **注意**：7.0 剩余 10 个字段的偏移仍是占位，dump 会读错；定位后**只改 JSON**，不用动代码。
+
+### 15.4b typeDef 名称字段（2026-10-17）
+
+| 字段 | 偏移 | 解码 | 怎么找到 | 验证 |
+|---|---|---|---|---|
+| `namespaceIndex` | `+0x08` | `^0x14BE1B80` | 7.0 导出 `fieldDecode`（`FindTypeByName2`，base `typeDef+136`）；把解出的 entry 按 `off=entry&0xFFFFFF, len=entry>>24` 解密 | **3376/3376** 可打印（`Mono`/空）|
+| `nameIndex` | `+0x28` | `-0x5F8AB6E2` | 7.0 导出 `fieldDecode`（`IterNestedTypes`，base `typeDef`）；同样按打包 entry 解密 | **5000/5000** 可打印（`<Module>`/`Locale`/`Runtime`/`SR`…）|
+
+> ⚠️ `+0x28` 在 `IterNestedTypes` 里是**嵌套类型的名字**，不是 `parentIndex`。
+> `parentIndex` 仍未定位（7.1 在 +0x18，7.0 暂用占位）。
+
+**本轮后 typeDef 剩余**：`parentIndex` / `flags` / `unknown20` / `genericContainerIndex` / `interfacesStart` / `interfaces_count` / `nestedTypesStart` / `nestedTypesCount`（8 个）。
+
+### 15.4c typeDef 容器/接口/嵌套字段（2026-10-17，IDA 代码确认）
+
+| 字段 | 偏移 | 解码 | 怎么找到（IDA 证据） | 置信度 |
+|---|---|---|---|---|
+| `genericContainerIndex` | `+0x3A` | `^0x3B64`（int16，哨兵 `0xFFFF`）| `SetupNestedLocked` 0x1404E2C3D：`*(__int16*)(70*idx + GM + (MHY[416]^0x4CE7B502) + 58) ^ 0x3B64`；随后 `v92 = GM + (MHY[280]^0x2B0F6E21) + 16*v9`，**MHY[280]=0x118 = genericContainers** | confirmed |
+| `interfacesStart` | `+0x3E` | `^0x1DE4` | `SetupTypeInfoLocked` 0x1404E4019：`*(u16*)(typeDef+62) ^ 0x1DE4`；表 `v30 = GM + (MHY[188]^...)`，**MHY[188]=0xBC = interfacesTable** | confirmed |
+| `nestedTypesCount` | `+0x41` | `+0x5A` | `IterNestedTypes` 0x1404EE61F：`(unsigned __int8)(*(_BYTE*)(typeDef+65) + 90)` —— 65=0x41，90=0x5A | confirmed |
+| `interfaces_count` | `+0x44` | `^0xFD` | `SetupNestedLocked` 0x1404E2E95：`*(u8*)(typeDef+68) ^ 0xFD`，作为接口数组循环次数 | **likely** |
+| `nestedTypesStart` | `+0x34` | `+0x66EC` | 7.0 导出 `fieldDecode`（`IterNestedTypes`）；与 `+0x41` 计数匹配 7,060/9,042（78%）| **likely**（base 可能是 runtime struct）|
+
+**怎么验证**
+- `genericContainerIndex`：`v9` 用于索引 `MHY[0x118]`（genericContainers，16B 项），哨兵 `0xFFFF`。
+- `interfacesStart`：`v25 + start` 索引 `MHY[0xBC]`（interfacesTable，6B 项）。
+- `nestedTypesCount`：循环上界就是 `(raw@+65 + 90)`。
+- `interfaces_count` / `nestedTypesStart`：数据结构匹配 78%/20%，暂标 likely，等更强判据。
+
+**typeDef 剩余（3 个）**：`parentIndex` / `flags` / `unknown20`。
+
+### 15.4d typeDef 最后 3 个字段（2026-10-17，分布形状 + key 反推）
+
+| 字段 | 偏移 | 解码 | 怎么找到 | 验证 |
+|---|---|---|---|---|
+| `parentIndex` | `+0x1C` | `-0x6748C2A3` | top raw `0x6748C2A4` 出现 61,675 次 → 假设是 **Object(索引 1)**，反推 key；前 8 个类型的父类解出全是 `1` | 全部 <2²¹，max 662,667（Il2CppType 索引域）|
+| `flags` | `+0x18` | `^0x569439D0` | 7.0 该列 **distinct=106**，与 7.1 flags 的 distinct=106 完全吻合；top raw `0x568439D1/0x568438D1/0x568438D3` 反推 key | top = `0x100001/0x100101/0x100103`，与 7.1 flags 集合 **106/106** 交集 |
+| `unknown20` | `+0x10` | `-0x431A2141` | top raw `0x431A2141/0x431A218B/0x431A214D` 对应 7.1 unknown20 的 top `0/0x4a/0xc`；反推 key | distinct 44,995 ≈ 7.1 的 45,830；top 完全一致 |
+
+**怎么找到的（可复用）**
+- 先算 7.1 对应字段的 **distinct 数 + top 值频率**（`raw` 的 distinct 与 key 无关）。
+- 在 7.0 所有 u32 偏移里找 **distinct/top 频率形状相同** 的列。
+- 用 **top raw ↔ 已知 top decoded** 反推 op/key，再用全列分布验证。
+
+**typeDef 18/18 个 fieldDecode 字段已全部定位**（`interfaces_count` / `nestedTypesStart` 为 likely）。
+
+**仍缺（struct 成员，不是 fieldDecode 键）**：`bitfield`（7.1 在 +0x3A；7.0 的 +0x3A 已被 genericContainerIndex 占用）。
+候选 `+0x38` / `+0x43`（u8），用 `typeIsValueType/typeIsEnum` 的 bit0/bit1 与已知值类型名（Int32/Boolean/Enum）核对。
+
+### 15.4e typeDef `bitfield`（2026-10-17，bit 匹配）
+
+| 版本 | 偏移 | 解码 | 说明 |
+|---|---|---|---|
+| 7.1 | `+0x3A` | `raw` | `typeIsValueType = raw & 1`；`typeIsEnum = ~(raw>>1) & 1` |
+| **7.0** | **`+0x38`** | **`raw ^ 1`** | 同上 bit 测试，先 xor 1 |
+
+**怎么找到的**
+1. 7.1 dump 里的 `TypeDefIndex` 与 7.0 完全一致（`Boolean`=174、`Int32`=251、`ValueType`=405…）。
+2. 直接读 7.1 typeDef `0x92140 + 70*i + 0x3A` 的 bit0/bit1。
+3. 在 7.0 全部 u8 列里找 **bit0/bit1 匹配**（允许低 2 位 xor 常数 0..3）。
+4. `+0x38` + `xor 1` → **24/24** 已知类型匹配。
+
+**验证模式**
+- enum：`0xB5`（bit0=1, bit1=0）→ `typeIsEnum=1`
+- 值类型：`0xB3`（bit0=1, bit1=1）→ `typeIsEnum=0`
+- 普通类：`0xB6`（bit0=0, bit1=1）→ `typeIsValueType=0`
+
+7.1 复验：dump md5 `e401b680…` 不变；`verify.py` 28/28。
+
+**结论：typeDef 18/18 个 fieldDecode 字段 + `bitfield` 全部完成。**
+
+### 15.8 7.0 registration / counts（2026-10-17，部分解决）
+
+**T1（metadata registration）布局与 7.1 完全不同**：
+
+| 字段 | 7.1 | 7.0 | 验证 |
+|---|---|---|---|
+| `t1_il2CppTypes` | `0x48` | **`0x10`** | 7.0 数组 `0x142D3DED0` 前 5 项（idx 0/1/2/174/251）与 7.1 **逐字节一致**；到 idx 600,000 仍一致 |
+| `t1_genericInsts` | `0x08` | **`0x30`** | `0x1422A7F10` 条目是 `{argc, argv}`（`argc=1, argv=0x1_452C1D50`）|
+| `genericInstsCount` | `T1+0x50 + 0x9B1B5919` | **`T1+0x28 - 1770440218 = 219,680`** | 与 +0x30 指针相邻 |
+| `typesCount` | `T1+0x54 ^ 0x6622B34E = 683574` | 静态 `+0x54 = 0`（运行时填） | 用 7.1 的 **683,574 上界 fallback** |
+| `genericClassRangeCount` | `T0+0x80 ^ 0x4E013BBD` | 静态不对 | **0 fallback**（offset 也未定位）|
+
+**怎么找到的**
+1. `RuntimeInit` 0x140505BD0：`*(u64*)(g_Il2CppType_Base + 0x30)` 是类型数组指针（7.1 dumper 用 +0x48）。
+2. 遍历 `T1` 的 u64 指针字段：`+0x10 → 0x1_42D3DED0`，前 5 项 type 码与 7.1 **完全一致** → `t1_il2CppTypes=0x10`。
+3. `+0x30 → 0x1422A7F10`，条目 `{argc, argv}` → `t1_genericInsts=0x30`。
+4. `+0x28 - 1770440218 = 219,680`，紧邻 +0x30 指针 → **genericInstsCount**。
+5. typesCount 静态为 0 → 运行时才填；类型数组与 7.1 到 600k 一致，暂用 7.1 的 683,574 作上界。
+
+**仍缺**：typesCount 精确值（运行时）、`genericClassRangeOffset/Count`、`codeRegistrationVA` / `t0_*` 字段。
+
+### 15.9 7.0 `typesCount` 精确值（2026-10-17，数组边界法）
+
+| 项 | 7.0 | 7.1 |
+|---|---|---|
+| type 数组起点 | `T1+0x10` = `0x142D3DED0` | `T1+0x48` = `0x142E1EA20` |
+| 最后一个有效 type 码 | idx **677,973**（type 0x1D）| idx 683,573（type 0x1D）|
+| 之后 | idx 677,974 起连续 200 个无效码（0xFF/0x00/0x5C…）| idx 683,574 type 158（下一张表）|
+| **typesCount** | **677,974** | 683,574 |
+
+**怎么找到的**
+- 7.0 的 `T1+0x54` 静态是 0（运行时才填），所以不能用 7.1 的公式。
+- 直接扫 `Il2CppType` 数组（16B/项，type 码在 `+0x0A`），找**第一个连续 200 个无效 type 码**的位置。
+- 边界 = **677,974**；把该值作为 `typesCountFormula` 的常量（`table1Field=0x54` 静态为 0，`+677974` 即得）。
+
+**验证**
+- 字段类型索引 ~429k < 677,974，全部在界内。
+- `genericInstsCount = T1+0x28 - 1770440218 = 219,680`。
+
+**仍缺**：`genericClassRangeOffset/Count`、`codeRegistrationVA`/`t0_*`、其余 fieldDecode 字段。
+
+### 15.10 `genericClassRange`（2026-10-17，**未定位**）
+
+**7.1 的形状（已验证）**
+- 位置：**startup** `0x23814`
+- 8 字节 `{argStart, argc}`，满足累计关系 `argStart[i+1] = argStart[i] + argc[i]`
+- 长度 ≈ **13,690**（count 13,671），`argc` 1..4
+
+**7.0 的尝试**
+- `genericClassRangeOffset` 槽位 `0x134 ^ 0x558E11EC` = **0x2504CC67**（621M；global body 只有 80MB）→ **槽位/密钥错**
+- 7.0 startup `0x23814` 附近不是该表（`(23235,0),(19,46),(23236,22707)…`）
+- 用精确累计关系扫 7.0 **startup（4MB）** 和 **global（80MB）**：**0 候选**
+
+**结论**
+- 7.0 的 `genericClassRange` **未定位**，可能是加密/移位后的表，或 7.0 改成了别的结构。
+- dumper 的泛型类名解析（`GENERICINST`）会退化；`genericClassRangeCount` 暂用 **0** fallback。
+- 下一步：反编译 7.0 `TypeInfoDispatcher` / 泛型类读取代码，找它的 `(slot, op, key)` 或表偏移（8B `{argStart,argc}` 的读取点）。
+
+**当前 7.0 缺口**：`genericClassRange`、`codeRegistrationVA/t0_*`、其余 fieldDecode（method 4 / parameter 1 / genericContainer 2 / genericParameter 1 / property get+set 2）。
+
+### 15.11 `genericClassRange` 解决（2026-10-17，**代码读取点法**）
+
+**7.1 当初怎么找到的（`docs/PROVENANCE.md`）**
+- `genericClassRangeOffset` 不是 slot 扫描出来的，是从**代码读取点**抄的：
+  `0x1405367D6` = `GIMeta_RuntimeInit + 0x1C56`，代码是
+  `startup + (*(u32*)(MHY + 0x134) ^ 0x558E11EC)` → startup **0x23814**。
+- count 同样是代码里的公式：`*(u32*)(T0+0x80) ^ 0x4E013BBD = 13671`
+  （消费者 `RuntimeInit` 的泛型注册循环，`init_534B80.c:2064`）。
+
+**7.0 用同样的方法**
+- 在 `GIMeta_RuntimeInit` 0x140505BD0 的反编译里找到同构代码（第 1475 行附近）：
+
+```c
+v173 = g_Startup_Metadata_Base + (*(int *)(g_MHY_Table + 232) ^ 0x1AEDFFE1);
+while ( v175 < *(_DWORD *)&v173[8 * v171 + 4] )          // argc
+    v177 = ... v173[8 * v171] ...                         // argStart
+```
+
+- **`genericClassRangeOffset` = slot `0xE8` (232) `^ 0x1AEDFFE1` → startup `0x0`**（不是 7.1 的 0x134）
+- 表形状与 7.1 一致：`{0,2},{2,2},{4,2},{6,3},{9,4},{13,1}…`（8B `{argStart, argc}`，累计关系）
+- **第一个断点 = 13,385 → count = 13,386**（7.1 是 13,671）
+- `genericClassRangeCountFormula` = `T0+0x80 ^ (0x1B35AA27 ^ 13386)` → 13,386
+
+**验证**：表在 startup 0x0，断点前累计 `argStart` 到 34,903；与 7.1 前 8 项逐项一致。
+
+**统计**：confirmed **162 / 202 = 80.2%**；with likely **168 / 202 = 83.2%**。
+
+### 15.12 `codeRegistrationVA`（2026-10-17，**结论：文件里没有静态结构**）
+
+**7.1 当初的方法**（`docs/UPDATE.md §1`）：
+> `table0VA` / `table1VA` / `codeRegistrationVA`：反编译 `GIMeta_RuntimeInit` **末尾的全局赋值**
+
+**实测**
+- 7.1 `codeRegistrationVA = 0x141F88938`：
+  - IDA `lookup_funcs` → 在 **`sub_141F88920 + 0x18`**（`.text`，函数中间）
+  - `docs/ANALYSIS.md §8.1` 已标 **失效**（“该地址落在 .text，是代码，非结构体”）
+- `docs/UPDATE.md:1804`：**`Il2CppCodeRegistration` 运行时构造，文件镜像里没有**
+- 7.0 `GIMeta_RuntimeInit`（0x140505BD0）末尾的全局赋值只有 5 个：
+  - `qword_145895770 = 0x140000000 + <il2cpp 段偏移>`
+  - `qword_145897A18 / qword_145897930 / qword_1458978A0 / qword_145897360 = sub_...`（运行时函数指针）
+  - **没有 code registration 结构体**
+
+**结论**
+- `codeRegistrationVA` **不是能“从文件里找出来”的常量**；7.1 的 0x141F88938 是误标（函数不是结构体）。
+- dumper 的 custom attribute / code registration 相关段在 7.1 和 7.0 上**同样是退化的**（`dumper.hpp` 的 `s_Il2CppCodeRegistration + 0x48/0x70/0x80/0x90` 读的是代码/垃圾）。
+- 7.0 要编译只能：
+  1. 用一个**有效占位地址**（不崩），或
+  2. 把依赖 `s_Il2CppCodeRegistration` 的段**显式跳过**（更干净，但属于代码改动）。
+- **不要**再把它当“版本常量”去扫 `.rdata` —— 它不在文件里。
+
+**补充（2026-10-17，7.1 实测确认）**
+- `customAttributeCount = int32(*(u32*)(0x141F88938 + 0x70) - 0x2F2BD0D)`
+  = `int32(0x8948C433 - 0x2F2BD0D)` = **-2,041,182,426**
+- `customAttr()` 的 `for (i = 0; i < count; i++)` **不执行** → 自定义属性生成器是 **no-op**
+- dump 里的 `[Serializable]`（5303 处）来自 **type flags**（`TYPE_ATTRIBUTE_SERIALIZABLE`），不是 `customAttr`
+- 方法 RVA 来自 method definition，不依赖 code registration
+- **结论：7.1 的 `s_Il2CppCodeRegistration` 同样无用；7.0 也一样。两版的自定义属性都缺失，是共同退化。**
+
+### 15.13 method 结构 + 字段（2026-10-17）
+
+**7.0 `Il2CppMethodDefinition`（26B）**
+
+| 字段 | 7.0 偏移 | 解码 | 怎么找到 |
+|---|---|---|---|
+| `nameIndex` | `+0x00` | `raw ^ keyMethod(i)`（`keyMethod` 已含 `^0x45E4FFC6`）| `GetMethodNameFromIndex` 0x1404E5AC0 第 56-59 行：`*(u32*)(26*i + methodsOffset) ^ (1631394208*((1147050388*((0x11C179E1B7D6*i+0x1EF8D46961E5672)>>16))>>9)) ^ 0x45E4FFC6` |
+| `returnType` | `+0x04`（待确认）| 7.1 key 占位 | — |
+| `declaringType` | `+0x08`（待确认）| 7.1 key 占位 | — |
+| `parameterStart` | `+0x0C` | `key ^ (raw - 11222)` | 7.0 `fieldDecode` 导出 |
+| `flags` | `+0x12` | `key ^ raw ^ 0xEF3B` | 同上 |
+| `slot` | `+0x14` | `key ^ (raw + 11400)` | 同上（dumper 未用）|
+| `iflags` | `+0x16` | `key ^ (raw - 5486)` | 同上 |
+| `parameterCount` | `+0x18` | `key ^ raw ^ 0x5B` | `SetupMethodsLocked` 0x1404E59FC |
+
+**代码改动**
+- `structOffsets.Il2CppMethodDefinition`：7.1 = `0/4/8/12/16/20/22/24`；7.0 = `0/4/8/12/18/20/22/24`
+- `il2cpp_image.hpp`：新增 `mdU32/mdU16/mdU8`；`methodReturnTypeIndex` 的 `md+8` 改为 JSON 偏移
+- `dumper.hpp`：6 处 `methodDefinition->...` 改为 `img_.md*`
+- 7.0 `fieldDecode.method.nameIndex = xor:0`、`parameterCount = xor:0x5B`；`decMethodParamCount = raw ^ 0x5B ^ keyMethod`
+- **7.1 复验**：md5 `e401b680…` + `verify.py` 28/28 ✓
+
+**仍缺**：`returnType`/`declaringType` 的 7.0 key（offset 4/8 也待确认）。
+
+### 15.14 method `returnType` / `declaringType`（2026-10-17，**7.0 无这两个 raw 字段**）
+
+**按 7.1 的方法验证（raw + keyMethod + 常数）**
+
+试了：
+- `raw ^ keyMethod` / `raw - keyMethod`
+- 7.1 常数：`^0x3F7BDF39`（return）、`^0x59244785`（declaring）
+- `raw ^ keyMethod ^ const`、`raw ^ const`
+
+结果：**前 50,000 个方法，合法 Il2CppType/typeDef 值域命中率全部 0.000**。
+
+**代码证据**
+- `SetupMethodsLocked` 0x1404E5962：`v17[1] = a1;` → **declaringType = 当前 typeDef**，不读 method 记录
+- `returnType` 在 `CreateTypeInfo`/`SetupTypeInfoLocked` 里由方法签名运行时计算
+- 7.1 的 `+0x08 returnType` / `+0x0C declaringType` 是 **7.1 专属布局**，7.0 没有
+
+**影响**
+- dumper 的 `methodReturnTypeIndex` 在 7.0 读到的是 `+4`（不是 returnType）→ 越界 → `GetIl2CppTypeFromIndex` 返回 nullptr → 返回类型显示 **`?`/空**
+- **不崩溃**（`typesCount` 边界保护），但 7.0 的返回类型是**退化**的（和自定义属性一样）
+- `declaringType` 输出用的是**当前 type 的名字**，不依赖这个字段
+
+**处理**
+- 7.0 JSON 的 `fieldDecode.method.returnType/declaringType` 标 **unconfirmed**（不要当 7.1 值用）
+- `structOffsets.Il2CppMethodDefinition.returnType/declaringType` 的 4/8 只是“记录”，不是真正的 return/declaring
+- **method 的名字/参数/计数/flags/iflags 已正确**；返回类型是 7.0 的已知退化项
+
+### 15.14b 更正：method `returnType` 已解决（2026-10-17）
+
+**7.1 的方法（`PROVENANCE` / `status.md`）**
+- returnType **不是代码读取点**，是**候选排序 + 验证**（50000/50000，void 占 50%）
+- 验证法：`raw@+offset ^ keyMethod` 的众数 = `voidTypeIndex ^ C`；用 void 的 type index 反推 C
+
+**7.0 实测**
+- `raw@+4 ^ keyMethod` 众数 = **`0x4618CA82`（50.04%）**
+- 7.0 void type index = **416,615**（type array 里 type code `0x01`）
+- `C_ret = 0x4618CA82 ^ 416615` = **`0x461E91E5`**
+- 验证：`raw@+4 ^ keyMethod ^ 0x461E91E5` → **valid 1.000**，top = void 50%、**308、70**（与 7.1 的 308/70 一致）
+- 写入：`fieldDecode.method.returnType = xor:0x461E91E5`；`structOffsets.method.returnType = 4`
+
+**`declaringType`**
+- `raw@+8 ^ keyMethod` 众数 `0xBA242060`（42.2%），但前 50k 里**没有任何 typeDef 覆盖超过 441 个方法** → 不是 typeDef
+- `SetupMethodsLocked` `v17[1] = a1` → 7.0 **直接取当前 typeDef**
+- 7.1 的 `declaringType` 也只用于**诊断**（`declType == typeIndex`），输出用当前 type 名字
+- 7.0 标 `unconfirmed`，**不影响输出**
+
+**统计：163 / 202 = 80.7%；with likely 169 / 202 = 83.7%。**
+
+### 15.14c declaringType 最终结论（2026-10-17，IDA + 验证）
+
+**7.1 的验证（照 `status.md` 的方法）**
+- `declaringType = keyMethod71(m) ^ raw@+0x0C ^ 0x59244785`
+- 对全部方法验证：**697,727 / 697,727 = 1.000**，**每个方法都等于当前 typeDef**
+- 说明 7.1 的 raw +0x0C 就是 typeDef 索引，key 正确
+
+**7.0**
+- method 记录的 +0x0C 是 `parameterStart`（`-0x2BD6`），不是 declaring
+- `raw@+8 ^ keyMethod` 众数 42%，但**前 50k 没有任何 typeDef 覆盖超过 441 个方法** → +8 不是 declaring
+- IDA：`SetupMethodsLocked` 0x1404E5962 `v17[1] = a1;` → **declaringType = 当前 typeDef**
+- **修复**：`dumper.hpp` 的 `declType` 改为 `selfTypeIdx`（当前 typeDef）
+  - 7.1 输出不变（7.1 的 declType 本来就 100% 等于 selfTypeIdx，declNote 永远为空）
+  - 7.0 不再输出 `/* declaringType=<垃圾> */`
+  - 复验：7.1 md5 `e401b680…` + `verify.py` 28/28 ✓
+
+**结论：7.0 的 method 签名全部正确**（名字/参数/计数/flags/iflags/returnType/declaringType）。
+
+### 15.15 非泛型方法验证（2026-10-17，数据级）
+
+**method name**：`raw@+0 ^ keyMethod(i)`
+- 前 5000 个方法：**4552/4552 = 100%** 可打印
+- 例：`.ctor` / `GetText` / `Format` / `InstallSignalHandlers` / `Equals` / `GetHashCode` / `get_Constraints`
+
+**完整签名样本（直接由数据拼接）**
+```
+Locale::.ctor                              -> void
+Locale::GetText                            -> string
+SR::Format                                 -> string
+Mono.Runtime::mono_runtime_install_handlers-> void
+Mono.Runtime::InstallSignalHandlers        -> void
+Mono.Runtime::GetDisplayName               -> string
+Mono.Runtime::GetNativeStackTrace          -> string
+Mono.Runtime::SetGCAllowSynchronousMajor   -> bool
+Mono.RuntimeClassHandle::Equals            -> bool
+```
+
+**验证**
+- returnType：`raw@+4 ^ keyMethod ^ 0x461E91E5`，前 50000 valid **1.000**
+- declaringType：当前 typeDef（7.1 697727/697727）
+
+**结论**：非泛型方法的 name / returnType / declaring 全部正确；只剩泛型方法的 `genericContainer`。
+
+### 15.16 参数类型 / 参数起始修正（2026-10-17，IDA + 全量数据）
+
+**怎么找到的**：反编译 `GIMeta_SetupParameters` @ `0x1404F9710`（7.0）：
+
+```c
+v23 = 1631394208 * ((1147050388 * ((0x11C179E1B7D6*i + 0x9EF8D46961E5672) >> 16)) >> 9); // keyMethodParam
+v20 = v16 + ((uint32_t)v23 ^ *(_DWORD *)(v10 + 8) ^ 0x3F2059);   // 方法 +8 = parameterStart
+...
+v22 = *(_DWORD *)(v19 + 8*v20) ^ v21 ^ 0x156CA23C;                 // v21 = keyParam(p)，参数 +0 = typeIndex
+*(_QWORD *)v17 = GIMeta_DecryptString(v21 ^ *(_DWORD *)(v19 + 8*v20 + 4) ^ 0x31C2DE49); // 参数 +4 = nameIndex
+```
+
+**之前的错误**
+- `parameterStart` 被当成 method `+0x0C`（`sub:11222`）
+- 参数类型错用了 `keyParamType` + `0x3F2059`（那是 parameterStart 的 key）
+
+**修复**
+- `structOffsets.Il2CppMethodDefinition.parameterStart = 8`（`+0x0C` 暂记 `_pad12`）
+- `fieldDecode.method.parameterStart = xor:0x3F2059`
+- `decMethodParamStart = keyMethodParam(i) ^ raw ^ k`
+- `decMethodParamCount = (u8)raw ^ (u8)k ^ (u8)keyMethodParam(i)`
+- `fieldDecode.parameter.typeIndex = xor:0x156CA23C`，`decParamTypeIndex = keyParam(i) ^ raw ^ k`
+
+**怎么验证的（全量数据）**
+| 项 | 结果 |
+|---|---|
+| 无参方法与 `ps == -1` 等价 | 401636 / 401636 |
+| 有参方法与 `ps != -1` 等价 | 312320 / 312320 |
+| 有参方法之间 `p(m+1) == p(m)+count(m)` | **312319 / 312319** |
+| 参数 typeIndex 合法（0..677974 或 -1） | **532361 / 532361 = 1.0000** |
+| 参数名可打印 / 合法空名 / 解码失败 | 526849 / 5512 / **0** |
+
+7.1 复验：md5 `e401b680248dde6714ae45eaab0b63b0`，`verify.py` **28/28**。
+
+### 15.17 泛型容器 `genericContainer` 完全解决（2026-10-17）
+
+**怎么找到的**：反编译 `GIMeta_SetupNestedLocked` @ `0x1404E2B30`：
+
+```c
+v92 = g_Metadata_Base + (MHY[0x118] ^ 0x2B0F6E21) + 16*c;      // genericContainers
+v10 = 1461114162 * (((0x257F689DE071 * c) >> 16) ^ 0x5D221965); // keyContainer(c)
+v85 = -891806131  - v10;   // 0x3527E1B3
+v86 = -1623277875 - v10;   // 0x60C14133
+v87 = -16692 - v10 + 1;
+
+argc           = v85 + *(_DWORD *)(v92 + 8);    // raw@+8
+parameterStart = v86 + *(_DWORD *)(v92 + 12);   // raw@+12
+```
+
+**修复**
+- 7.0 `keyFormulas.containerKey` 换成上面的简单公式（原来的 murmur 公式是 7.1 的）
+- `fieldDecode.genericContainer = { parameterStart: sub:0x60C14133, argc: sub:0x3527E1B3 }`
+- `structOffsets.Il2CppGenericContainer = { argc: 8, parameterStart: 12 }`
+- `decodeExpr`：`decGenericContainerArgc` / `decGenericContainerParameterStart` / `decGenericParameterNameIndex`
+- `il2cpp_image.hpp` 的 3 个访问器改为读 `structOffsets` + `decodeExpr`（7.1 数学不变）
+- 7.1：`{ argc: 8, parameterStart: 4 }`，保留原 `(raw ^ k) - key`；输出逐字节不变
+
+**泛型参数名**
+- 7.0：`nameIndex = (raw@+0 ^ 0x22857A95) ^ keyGenericParam(p)`（**XOR**，不是减）
+- 7.1：`(raw ^ 0x664CCEB9) - keyGenericParam(p)`（不变）
+- 7.0 应用验证：**2624 / 2669 = 98.3%** 可打印；45 个是元数据里真实存在的控制字符（`0x01/0x02`），0 个空名，0 个解码失败
+
+**怎么验证的（全量数据）**
+| 项 | 结果 |
+|---|---|
+| 所有容器 `argc <= 64` | **4315 / 4315** |
+| 被 typeDef 引用的容器 `argc ∈ 1..8` | 1772 / 1777 |
+| 容器 `[parameterStart, parameterStart+argc)` 区间重叠 | **0 / 1776** |
+| 类型名 arity == argc | 696 / 705（9 个是嵌套类，argc 含外层泛型参数） |
+| 渲染样本 | `List<T>`、`Dictionary<TKey, TValue>`、`ValueTuple<T1..TRest>` |
+
+7.1 复验：md5 `e401b680248dde6714ae45eaab0b63b0`，`verify.py` **28/28**。
+
+### 15.18 method `+0x0C` = method 级 `genericContainerIndex`（2026-10-17）
+
+**怎么找到的**：`GIMeta_SetupMethodsLocked` @ `0x1404E5660`
+
+```c
+__int16 v32;                                  // 注意：有符号 16 位
+v32 = (*(_WORD *)(v26 + 12) - 11222) ^ v25;   // v26 = method 记录，v25 = keyMethodParam(m)
+*((_DWORD *)v17 + 6) = v32;                   // 存进运行时 MethodInfo +0x18
+v35 = v32 == -1;                              // -1 = 非泛型方法
+if ( !v35 ) *((_BYTE *)v17 + 47) |= 2;        // 泛型方法标记
+```
+
+`GIMeta_GetGenericMethodParamInfo` @ `0x1404979B0` 反向确认：
+
+```c
+v7 = *(unsigned int *)(MethodInfoFromIndex + 24);      // = 上面的 v32
+v8 = genericContainers + 16 * v7;                      // 同一个 Il2CppGenericContainer
+v9 = *(_DWORD *)(v8 + 8) - 891806131;                  // argc
+v20 = (u16)i + (-1623277875 - key) + *(_DWORD *)(v8 + 12); // parameterStart
+```
+
+**解码**
+```
+genericContainerIndex(m) = (int16_t)((raw16@method+12 - 11222) ^ (keyMethodParam(m) & 0xFFFF))
+```
+- `-1` = 非泛型；否则是 `genericContainers[]` 的索引（**method 级**容器，不是 typeDef 的）
+
+**怎么验证的（7.0 全量数据）**
+| 项 | 结果 |
+|---|---|
+| `== -1`（非泛型） | 711393 / 713956 |
+| `>= 0`（泛型方法） | **2563** |
+| 其他负值（解码噪声） | **0** |
+| 泛型方法使用的容器 | **2563 个，全部唯一** |
+| 容器 `argc <= 64` | 2563 / 2563（1:2315, 2:178, 3:26 …）|
+| method 容器参数区间 vs type 容器参数区间 | **交集 0** |
+| 方法泛型参数名可打印 / 空名 / 解码失败 | 2940 / 0 / 36（36 个控制字符怪项）|
+
+样本：`IfNullAndNullsAreIllegalThenThrow<T>`（container 0）。
+
+**`+0x0E` / `+0x10`**
+- 试过 `raw ^ keyMethod` / `- key` / `+ key`、`raw ^ keyMethodParam`，与 method index / token（`0x06xxxxxx`）相关度均为 0
+- 暂记 `_pad14` / `_pad16`，dumper 不使用
+
+**对输出的影响**
+- 7.1 的 dumper 本来就不渲染方法级 `<T>`，7.0 保持一致；该字段只记录到 `version.json`，不改输出
+- 7.1 复验：md5 `e401b680248dde6714ae45eaab0b63b0`，`verify.py` **28/28**
+
+### 15.19 methodSpecs / genericMethodTableCount（2026-10-17，IDA 定值 + 全量校验）
+
+**怎么找到的**：`GIMeta_RuntimeInit` @ `0x140505BD0` 的泛型方法注册循环：
+
+```c
+v611 = g_Metadata_Base + (*(int *)(g_MHY_Table + 172) ^ 0x120B7FB3);  // genericMethodTable
+v321 = (*(int *)(g_MHY_Table + 116) ^ 0x3186387A) / 0xE;              // count = 548707
+
+for (n = 0; n < v321; ++n) {
+    v329 = 14 * n;
+    v321 = g_Metadata_Base + *(_DWORD *)(g_MHY_Table + 176) - 388315445; // methodSpecs
+    v330 = *(_DWORD *)(v321 + 12 * *(int *)(genericMethodTable + v329)); // spec[genericMethodIndex]
+    v331 = *(_QWORD *)(*(_QWORD *)(qword_145897138 + 48) + 8 * methodIndex); // T0+0x30 泛型方法指针数组
+}
+```
+
+**修正**
+| 项 | 旧（错） | 新（IDA） | 实测 |
+|---|---|---|---|
+| `methodSpecs` | slot 0xB4, `-0x508E087D` → `0x1385BA8` | slot 0xB0, `-0x17253935` | **0x1F54664** |
+| `genericMethodTableCount` | slot 0x1A8, `-0x4B9E6046` → 375752 | slot 0x74, `^0x3186387A`, /14 | **548707** |
+| `t0_genericMethodPointers` | `0x00`（T0+0 = 0） | `0x30` | **0x30**（T0+0x30 = 0x1423AFD30）|
+
+旧的 `0x1385BA8` 解出的 `methodDefinitionIndex` 只有 **4.6%** 合法（25,403/551,689），据此排除。
+
+**怎么验证的**
+| 项 | 结果 |
+|---|---|
+| genericMethodTable 548,707 条：`genericMethodIndex ∈ [0,551688]` | **548707 / 548707** |
+| methodSpecs 551,689 条：`methodDefinitionIndex < 713956` | **551689 / 551689** |
+| `classIndexIndex` 合法（-1 或 `<219680`） | **551689 / 551689**（460,997 个 -1）|
+| `methodIndexIndex` 合法 | **551689 / 551689**（89,098 个 -1）|
+| count 边界：548,707 之后 `genericMethodIndex` 合法率 | 从 100% 掉到 ~55% |
+| T0+0x30 指针数组：随机 5000 个 `methodIndex` | **5000 / 5000 落在 `il2cpp` 段** |
+| 随机 3000 条完整链（gmt→spec→inst→pointer） | 只有 `methodIndex=0 → 指针=0`（无编译体，dumper 会跳过），无解码错误 |
+
+**对输出的影响**
+- 修正后 7.0 的 `/* GenericInstMethod : ... */` 才能拿到正确的 spec / 实例类型 / RVA
+- 7.1 复验：md5 `e401b680248dde6714ae45eaab0b63b0`，`verify.py` **28/28**
+
+### 15.20 P1 收尾：genericTypeArgOffset / attributesInfoCount / deprecated / parametersCount（2026-10-17）
+
+#### genericTypeArgOffset（有功能影响，已确认）
+
+**怎么找到的**：`GIMeta_RuntimeInit` @ `0x140505BD0` v600：
+
+```c
+v600 = g_Startup_Metadata_Base + *(_DWORD *)(g_MHY_Table + 476) - 1086188179; // 0x1A250
+```
+
+**结果**
+```
+genericTypeArgOffset = startup + 0x1A250
+                     = MHY[0x1DC] - 0x40BDEA93
+                     = genericClassRangeOffset + 8 * 13386
+```
+
+**怎么验证的**
+- `genericClassRange` 表在 `startup+0`，13,386 × 8 = 0x1A250，正好紧接实参表
+- 实参表 34,911 个 `typeIndex`：**34911 / 34911 合法**（0..23919，无越界）
+- 13,386 个 range 的实参**全部合法**：13386 / 13386
+- 7.1 交叉验证：7.1 的 `genericTypeArgOffset` 解出 `startup+0`（实参表在前、range 表在 0x23814），说明两版布局不同但都自洽
+
+> 7.1 与 7.0 的 GENERICINST 类型名都仍是 `?`（类型定义名未定位），但实参能正常解出（例：`?<void, ushort, object>`），属既有行为。
+
+#### attributesInfoCount（未使用，保持 unconfirmed）
+
+- 7.0 里是 7.1 残留：`slot 0x198, -1137860102`
+- 常量 `0x43D25E06` 在 7.0 二进制中**不存在**
+- `header.attributesInfoCount` 只被赋值，**没有任何消费者**（`customAttr()` 用的是 CR 运行时计数，7.0 的 CR 不存在）
+- 结论：不影响输出，保留 `confirmed: false` + note
+
+#### 3 张 deprecated 表（未使用）
+
+- `interfacesOffset_deprecated` / `fieldTableOffset_deprecated` / `fieldIndexTableOffset_deprecated`
+- 只被 `dumper.hpp` 的 **`#if 0`** 旧字段路径引用；活动路径用 `fieldsOffset/fieldOffset`
+- 已加 note，保持 `confirmed: false`
+
+#### parametersCount
+
+- 实测被引用的最大参数索引：`max(parameterStart + parameterCount) = 532361`
+- 已写入 `measuredCounts.parametersCount`（无消费者，仅记录）
+
+#### 复验
+
+- 7.1：md5 `e401b680248dde6714ae45eaab0b63b0`，`verify.py` **28/28**
+- 7.0：版本头生成 + 编译通过（未运行 dump）
+
+### 15.21 泛型名字根因：genericClasses + genericInsts（2026-10-17）
+
+**旧逻辑错在哪**：把 `Il2CppType.data.generic_class` 当成 `genericClassRange` 的下标，再配 `genericTypeArgOffset` 猜实参 → 34,061 处输出 `?` / `?<void,...>`。
+
+**正确结构**（`GIMeta_RuntimeInit` / `GIMeta_TypeInfoDispatcher`）：
+
+```c
+genericClasses[g] = { genericInstIndex@+0, typeDefinitionIndex@+4 }   // startup, 8B
+genericInsts[gi]  = { argc@+0, pad, argv@+8 }                        // argv = Il2CppType* VA 数组
+```
+
+| 版本 | genericClassesOffset | count |
+|---|---|---|
+| 7.0 | startup + 0xC0830 | 398,168 |
+| 7.1 | startup + 0xC5520 | 406,569 |
+
+- 两版首项完全一致：`(0,119),(0,1251),(0,1253)...`
+- 类型名 = `TypeDefinitionFullName(tdIndex)` + `<args>`（含嵌套前缀）
+- 环检测：`resolvingTypes_` 防止 `Node<T> : IComparable<Node<T>>` 这类自引用无限递归
+
+**结果（7.1）**：`?<` 34,061 → **0**；`verify.py` 28/28；新 md5 `3b5da679ee236d57ebb359d824055eb7`（旧 `e401…` 是带 34k 个 `?` 的输出，已废弃）。
+
+### 15.22 7.0 默认值：记录顺序 + 两张表互换（2026-10-17）
+
+**7.1 是对的**：字符串默认值格式就是 `[u32 len][bytes]`（`len=13` → `bind_rea...`；`len=5` → `ticks`）。7.1 的 1,279 条 string 默认值里 857 条 `dataIndex=-1`，其余长度 0/1 → 不会触发大 memcpy。
+
+**7.0 的根因（不是格式，是表和顺序）**：
+
+```c
+// GIMeta_GetDefaultParameterValueObject @ 0x1404F8920
+v12 = GM + (MHY[0x110] - 0x7B761D0A);   // 参数默认值表 = 0x3DCE880
+v12[0] = dataIndex
+v12[1] = typeIndex
+v12[2] = parameterIndex                 // 二分键在 +8
+```
+
+- JSON 把 **参数表/字段表 slot 互换**了：
+  - 参数表：`0x110 / -0x7B761D0A` = **0x3DCE880**
+  - 字段表：`0x0C / ^0x720EB389` = **0x1022CA8**
+- 两张表的记录顺序都是 `{dataIndex, typeIndex, index}`（之前写成 `{index, typeIndex, dataIndex}`）
+- 修正后 7.0：`rc=0`、86,930 type、713,943 RVA、`?` 0、U+FFFD 3
+- 参数默认值正确：`"True"` / `"False"` / `"ticks"`；`op_GreaterThan` 不再有假默认值
+
+### 15.23 7.0 method flags key（IDA 确认，输出仍稀疏）
+
+- `SetupMethodsLocked` 里 flags/iflags/slot 用的是 `v25` = **keyMethodParam**（不是 `keyMethod`）
+- 已加 `decMethodFlags` / `decMethodIFlags`（7.0 = keyMethodParam，7.1 = keyMethod）
+- ⚠️ 7.0 解出来大量是 `0` / `0x1000` → 方法没有 access 修饰符；7.0 元数据的 flag 可能被裁剪或另有编码，**未完全解决**
+- 7.0 另外两个待办：RVA 最大共用 54,119（7.1 为 74）、部分 const 字段值/名字缺失
+- **已被 §15.24（RVA）和 §15.25（flags）修正**；此处保留为当时的中间记录
+
+### 15.24 7.0 RVA 方法指针数组：`0x48` / `0x88` 交换（补写，2026-10-17）
+
+**怎么找到的**：`GIMeta_SetupMethodsLocked` @ `0x1404E5660`：
+
+```c
+v31 = *(_QWORD *)(v22[9] + 8 * v24);   // v24 = methodIndex，v22[9] = T0+0x48
+...
+v33 = *(int *)(MHY[0x130] + 4*v24);     // vtable slot
+v34 = *(u64 *)(v22[1] + 8*v33);         // invoker（不是方法体）
+```
+
+**关键**：7.0 的 `T0+0x48` 才是 **il2cpp 方法体数组**（713k 项，全部落在 `il2cpp`）；
+`T0+0x88` 是 **invoker/slot 表**（前 12,696 个 `.text` thunk，后面变成浮点常量）。
+
+**错误**：JSON 里 `t0_methodPointerIndexArray=0x88`、`t0_invokerArray=0x48`（从 7.1 抄来的）——两个 offset 反了。
+
+**修复**
+- 7.0 `t0_methodPointerIndexArray = 0x48`，`t0_invokerArray = 0x88`
+- `methodPointer()`：`p <= 1`（无方法体哨兵）或不在可执行段（`.text`/`il2cpp`）→ 0 → 输出 `RVA: -1`
+
+**验收**
+```
+RVA 行 691,941 / 不同 691,430 / 最大共用 73   （7.1 最大 74）
+```
+
+7.1 复验：md5 `3b5da679ee236d57ebb359d824055eb7`，`verify.py` **28/28**。
+
+### 15.25 7.0 method flags / iflags 字段交换（2026-10-17，IDA + 7.1 分布对照）
+
+**IDA 7.0 `GIMeta_SetupMethodsLocked` @ 0x1404E5660**
+
+```asm
+movzx ecx, word ptr [r12 + 0x16]   ; +22
+add   ecx, 0xffffea92              ; -5486
+xor   ecx, r11d                    ; key = keyMethodParam
+mov   [rbx + 0x28], cx
+
+movzx ecx, word ptr [r12 + 0x12]   ; +18
+xor   cx, r11w
+xor   ecx, 0xef3b
+mov   [rbx + 0x2a], cx
+
+movzx ecx, word ptr [r12 + 0x14]   ; +20 slot
+add   ecx, 0x2c88                  ; +11400
+```
+
+**IDA 7.1 `GIMeta_SetupMethodsLocked` @ 0x140514630**
+
+```asm
+movzx ecx, word ptr [r11 + 0x16]   ; +22 = MethodAttributes
+xor   cx, r13w
+xor   ecx, 0x8f60
+mov   [rbx + 0x2c], cx
+
+movzx ecx, word ptr [r11 + 0x10]   ; +16 = MethodImplAttributes
+add   ecx, 0xffff9d00              ; -25344
+```
+
+**关键**：7.0 的 `+22` 才是 access flags，`+18` 是 impl flags。之前被 decompiler 的 `v17+20/21` 名字误导反了。
+
+**数据判据（前 50k）**：7.0 `+22` 用 `keyMethodParam ^ (raw - 5486)`：
+
+| | 7.0 | 7.1 |
+|---|---:|---:|
+| public(6) / private(1) / family(3) / assembly(4) | 28,938 / 12,543 / 6,659 / 1,833 | 28,974 / 12,507 / 6,659 / 1,833 |
+| static / virtual / abstract / pinvoke | 21.6% / 29.5% / 3.0% / 0.36% | 21.5% / 29.5% / 3.0% / 0.36% |
+
+**修复**
+- `structOffsets.Il2CppMethodDefinition`: `flags: 22`, `iflags: 18`
+- `fieldDecode.method`: `flags: sub:5486`, `iflags: xor:0xEF3B`
+- `decMethodFlags` 改为 `keyMethodParam ^ (raw - key)`；`decMethodIFlags` 改为 `keyMethodParam ^ raw ^ key`
+
+**验收**
+```
+Locale..ctor                  -> private void .ctor()
+Locale.GetText                -> public static string GetText(string)
+Mono.Runtime.install_handlers -> private static
+```
+RVA：**691,430 不同 / 最大共用 73**（7.1 为 74）。
+
+7.1 复验：md5 `3b5da679ee236d57ebb359d824055eb7`，`verify.py` **28/28**。
+
+### 15.26 7.0 字段 typeIndex：XOR → SUB（2026-10-17）
+
+**问题**：`collectFields` 里 typeIndex 写死了 7.1 的 XOR：
+
+```cpp
+int32_t typeIndexDec = fieldKey(i) ^ raw ^ kFieldTypeIndex.key;   // 7.1
+```
+
+7.0 的 `fieldDecode.field.typeIndex` 是 `sub:815161169`，但 dumper 完全忽略 op，导致大量字段 typeIndex 解错 → `GetIl2CppTypeFromIndex` 失败 → **字段被跳过**（Oid 一个字段都不显示）。
+
+**怎么找到的**：`GIMeta_SetupFieldsLocked` @ `0x1404E3850`：
+
+```c
+v34 = g_Metadata_Base + MHY[464] - 486718066;          // 字段定义表（8B）
+v35 = -497750444 * ((28430 * rawFieldStart + 216525192) ^ 0x56DFA1B8) + 34757079;
+v36 = v35 ^ (*(_DWORD *)(v34 + 8*v33) - 815161169);    // typeIndex = key ^ (raw - 815161169)
+name = DecryptString(v35 ^ (raw@+4 - 501770607));       // name
+```
+
+**怎么验证的**：Oid 的 3 个字段：
+
+| field | raw type | 解码 typeIndex | 名字 |
+|---|---:|---:|---|
+| 7703 | 0x7D2DAC4E | 429858 | `m_friendlyName` |
+| 7704 | 0xCE4EAA26 | 429858 | `m_value` |
+| 7705 | 0x4B4AB787 | 435577 | `m_group` |
+
+`429858` = `System.String`，`435577` = `System.Security.Cryptography.OidGroup`。
+
+**修复**
+- 新增 `decFieldTypeIndex`：
+  - 7.0：`keyField(i) ^ (raw - kFieldTypeIndex.key)`
+  - 7.1：`keyField(i) ^ raw ^ kFieldTypeIndex.key`（原公式）
+- `il2cpp_image.hpp` 新增 `fieldTypeIndex()` accessor
+- `collectFields` 改用它，不再手写 XOR
+
+**结果**：7.0 Oid 输出
+```csharp
+private string m_friendlyName; // 0x10
+private string m_value;        // 0x18
+private System.Security.Cryptography.OidGroup m_group; // 0x20
+```
+7.1 不变（`3b5da…`，28/28）。
+
+### 15.27 7.0 字段偏移：三张表（2026-10-17）
+
+**怎么找到的**：`GIMeta_SetupFieldsLocked` @ `0x1404E3850` 178–228 行：
+
+```c
+v46 = GM + MHY[332] - 763261186
+      + 12 * *(int*)(GM + MHY[388] - 1408289675
+                     + 4 * (-1963413621 * ((typeDef - typeDefsBase) >> 1)));
+
+base = *(u32*)(v46 + 8);
+v38  = *(u32*)(GM + MHY[316] - 1438178828 + 4 * (local + base));
+if (v38 & 0x1000000) { v38 &= 0xFF000000; ... }   // 静态字段清掉低 24 位
+```
+
+| 表 | 来源 | 步长 | 含义 |
+|---|---|---|---|
+| fieldTable | `MHY[0x14C] - 763261186` | 12 | `+8` = 该 type 的偏移基址 |
+| fieldIndexTable | `MHY[0x184] - 1408289675` | 4 | typeHash → fieldTable 索引 |
+| fieldOffsetTable | `MHY[0x13C] - 1438178828` | 4 | 字段偏移（原始值） |
+
+**怎么验证的**：Oid typeDef 1721：
+
+```
+typeHash = -1963413621 * ((70*1721) >> 1) = 0x6B9
+index    = 37
+base     = 170
+raw      = 0x10 / 0x18 / 0x20     ← 和参考 dump 完全一致
+```
+
+**修复**
+- 7.0 `fieldOffset` 改为 `slot 0x13C, '-', 1438178828`
+- 新增 `fieldOffsetBaseTable=0x41783D4`、`fieldIndexTable=0x387F8C8`
+- `fieldOffsetMask=0xFFFFFF`、`fieldStaticMask=0x1000000`、`fieldStaticValue=0x1000000`
+- `collectFields` 先算 typeHash/base，再查 `fieldOffsetTable`
+- 静态字段：参考 dump 偏移为 `0`；新增 `fieldStaticZero`（7.0=1，7.1=0）
+
+**验证状态**
+- 实例字段偏移：与参考匹配 **357,207** 个
+- 静态字段：已验证 `type_resolve_in_progress // 0x0`、`_principal // 0x0`；实例字段 `_serialized_principal // 0x80` 与参考 `+0X080` 一致
+
+### 15.28 7.0 属性 get/set：+4/+8 交换（已修复，2026-10-17）
+
+**怎么找到的**：`GIMeta_SetupPropertiesLocked` @ `0x1404E6220`：
+
+```c
+v25 = GM + MHY[100] - 95851500;          // properties 表（在 0，10 字节/项）
+name = DecryptString((*(u32*)(v25 + 10*v22) ^ 0x2F28B8F7) - key);
+get  = (*(u16*)(v27 + 4) ^ 0x5C0A) - key;        // 0xFFFF = 无
+set  = (*(u16*)(v27 + 8) - key) + 9297;          // (raw-key)==0xDBAE = 无
+// +6: (raw ^ 0xEC24) - key + 2028288109（属性类型相关）
+```
+
+**当前错误**：7.0 JSON 还是 7.1 的 `get: xor:0xE5A2` / `set: sub:23324`，所以 Oid 输出：
+
+```csharp
+我们 7.0: public  FriendlyName { set; } // Setter: get_FriendlyName   ← 错
+7.1:      public string FriendlyName { get; } // Getter: get_FriendlyName
+```
+
+**关键（数据验证）**：7.0 的记录和 7.1 相反，实际是 **`+4 = setter`、`+8 = getter`**。
+
+Oid `FriendlyName`（property 1758，key=0x745AD38，raw4=0xF13D，raw8=0x88EC）：
+
+```
+getter @+8: (raw8 - key) + 9297 = 5   -> get_FriendlyName（method local 5）
+setter @+4: (raw4 ^ 0x5C0A) - key = 0xFFFF -> 无 setter
+```
+
+**修复**
+- `structOffsets.Il2CppPropertyDefinition`: `get: 8`, `set: 4`
+- `fieldDecode.property`: `get: add:9297`, `set: xor:0x5C0A`
+- `decPropertyGet`: `(raw - keyProperty(i))`；`raw-key == 0xDBAE` → 0xFFFF；否则 `+ 9297`
+- `decPropertySet`: `(raw ^ 0x5C0A) - keyProperty(i)`
+- 新增 `propertyNoGetter = 0xDBAE`（仅 7.0）
+
+**结果**
+```csharp
+public string FriendlyName { get; } // Getter: get_FriendlyName
+```
+
+7.1 不变（`3b5da…`，28/28）。
+
+### 15.29 与参考 dump 对比（`/home/gugugu/Music/dump.cs`）
+
+参考是**另一个工具**的 7.0 dump：
+
+```
+md5 ef55338f4de2d8a77543e767bb974ec4
+108,595,372 字节 / 3,217,898 行
+格式: class X : Base { +0X010 | type field; [Flags] [ParamsCount] |RVA| ... }
+无 TypeDefIndex / 无 properties/events
+```
+
+| 项 | 参考 | 我们 |
+|---|---:|---:|
+| 类型数 | 86,930 | **86,930** |
+| 方法行 | 697,389 | 691,941 |
+| 字段行 | 430,103 | 429,441 |
+| 方法 RVA 完全相同 | — | **660,622** |
+| RVA 不同但同方法（`.text` wrapper ↔ il2cpp body）| — | **10,226** |
+| 字段偏移匹配 | — | **357,207** |
+| 静态字段偏移不同 | 0 | 8/16/24（23 处，已修待重跑）|
+
+**RVA 为什么不同**：
+
+- 参考对部分方法用 **native `.text` wrapper**
+- 我们用 **il2cpp managed body**
+- 抽样证明是同一方法：
+  - `RuntimeGenericParamInfoHandle.get_Constraints`
+    - 参考：`add rcx,0x10 ; jmp 0x158A07F50`
+    - 我们：`jmp 0x158A07F50`
+  - `RuntimeClassHandle.GetTypeHandle`
+    - 参考：`mov rax,[rcx+0x10] ; add rax,0x58 ; ret`
+    - 我们：`mov rax,[rcx] ; add rax,0x58 ; ret`（值类型 this 偏移不同）
+- 参考多出的 ~5,448 个方法 RVA 是给无 il2cpp body 的方法补了 `.text` wrapper
+
+**字段/枚举名字**：`ExtenderType` 等枚举在参考是 `None/Simple/Voiced/...`，我们**也是**（之前逐类型脚本的 72k “缺失”是嵌套类型同名配对假象）。
+
+**类型名约定**：参考的嵌套类型只写内层名（`class ItemInfo`），我们 `// FullName` 带外层前缀（`Outer.ItemInfo`）→ 6,825 个 key 不一致，类型总数和顺序一致。
+
+### 15.30 当前产物与状态（2026-10-17）
+
+| 文件 | 版本 | md5 | 说明 |
+|---|---|---|---|
+| `out/dump.cs` | 7.1 | `3b5da679ee236d57ebb359d824055eb7` | 基线，`verify.py` 28/28 |
+| `out/dump70.cs` | 7.0 | `3517cd7283c2db5f3428da6af59d21d7` | 182,140,551 B；字段/静态偏移/属性全部修复 |
+
+> 7.1 最初的 `e401b680…` 已因**泛型名字根因修复**（`?<` 34,061 → 0）更新为 `3b5da679…`，这是有意的正确性提升。
+
+**已完成**
+1. §15.28 属性 get/set：Oid 输出 `public string FriendlyName { get; } // Getter: get_FriendlyName`
+2. §15.27 静态偏移：`type_resolve_in_progress // 0x0`、`_principal // 0x0`
+3. 7.1 复验：md5 `3b5da679…`，`verify.py` 28/28
+
+**剩余（口径，不是错位）**
+- 参考对部分方法用 `.text` wrapper，我们用 il2cpp body；如需完全一致，可给无 il2cpp body 的方法加 `.text` 回退（当前输出 `RVA: -1`）
+
+## 16. 版本更新完整操作手册（7.0 实战总结）
+
+> 目标：以后换 7.2 / 7.3 / 8.x 时，按这个顺序定位，不靠猜、不盲扫。  
+> 7.1 基线：`out/dump.cs` md5 `3b5da679ee236d57ebb359d824055eb7`，`verify.py` 28/28。  
+> 7.0 最终：`out/dump70.cs` md5 `3517cd7283c2db5f3428da6af59d21d7`。  
+> **RVA 口径已定：用 il2cpp managed body，不做 `.text` wrapper 回退。**
+
+### 16.1 文件与构建
+
+输入（每个版本一份）：
+
+```
+version/<ver>/gi.exe
+version/<ver>/gi/Managed/Metadata/global-metadata.dat
+version/<ver>/gi/Managed/Metadata/startup-metadata.dat
+version/<ver>/version.json          ← 唯一事实来源
+```
+
+代码：
+
+```
+src/version.hpp        ← gen_version.py 生成，不要手改
+src/il2cpp_image.hpp   ← 表访问 / 字段解码 / 名字解析
+src/dumper.hpp         ← 输出格式
+tools/gen_version.py   ← JSON -> version.hpp
+tools/sig.py           ← 跨版本函数签名扫描
+verify.py              ← 7.1 验收脚本（新版本另写 verify<ver>.py）
+```
+
+**构建（全自动）**：Makefile 已支持 `VERSION`：
+
+```bash
+make gen VERSION=7.2    # 只生成 src/version.hpp（不编译）
+make build VERSION=7.2  # 生成头 + 只编译 gi-dump-7.2（不运行）
+make run VERSION=7.2    # 生成头 + 编译 + 运行
+make dump VERSION=7.2   # 生成头 + 编译 + 运行 + 保存 out/dump72.cs
+make verify             # 7.1 基线：生成 7.1 头 + 运行 + verify.py
+make versions           # 列出可用版本
+```
+
+规则：
+
+- `VERSION=7.1`（默认）用**根 `version.json`**，二进制名 `gi-dump`
+- 其他版本用 `version/<ver>/version.json`，二进制名 `gi-dump-<ver>`
+- `gen` 是 phony：每次构建都按当前 `VERSION` 重新生成 `src/version.hpp`，不会残留上一版头文件
+- `dump` 自动把 `out/dump.cs` 复制成 `out/dump<ver>.cs`（如 `out/dump72.cs`）
+- `verify` 只对 7.1 有效（`verify.py` 是 7.1 验收脚本）
+
+#### 16.1.1 `VERSION` 是怎么选 `version.json` 的
+
+Makefile 不是自动扫描，而是**约定路径 + 显式 `VERSION`**：
+
+```make
+VERSION ?= 7.1
+
+ifeq ($(VERSION),7.1)
+VERSION_JSON := version.json                     # 7.1 特例：根目录
+TARGET       := gi-dump
+else
+VERSION_JSON := version/$(VERSION)/version.json  # 其他版本
+TARGET       := gi-dump-$(VERSION)
+endif
+
+# 路径不存在就直接报错，不会静默用错版本
+ifeq ($(wildcard $(VERSION_JSON)),)
+$(error version json not found: $(VERSION_JSON))
+endif
+
+gen:
+	python3 tools/gen_version.py $(VERSION_JSON)
+```
+
+展开示例：
+
+```bash
+make build VERSION=7.0
+# VERSION_JSON = version/7.0/version.json
+# python3 tools/gen_version.py version/7.0/version.json
+# 输出 gi-dump-7.0（只编译，不运行）
+
+make verify            # VERSION 默认 7.1
+# VERSION_JSON = version.json（根目录）
+# python3 tools/gen_version.py（无参数 -> 根 version.json）
+# 输出 gi-dump，运行 7.1 + verify.py
+```
+
+`tools/gen_version.py` 的读取规则：
+
+```python
+JSON_PATH = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'version.json')
+OUT_PATH  = os.path.join(ROOT, 'src', 'version.hpp')   # 固定输出
+```
+
+- 有参数：用参数路径
+- 无参数：用根 `version.json`
+- **不推断、不扫描、不自动选最新版本**
+
+新版本目录：
+
+```bash
+mkdir -p version/7.2
+cp version/7.0/version.json version/7.2/version.json
+# 修改里面的常量
+make build VERSION=7.2
+```
+
+找不到时的报错：
+
+```
+make: *** version json not found: version/7.2/version.json.  Stop.
+```
+
+查看可用版本：
+
+```bash
+make versions
+# 7.1  (root version.json)
+# version/7.0/version.json
+```
+
+> 7.1 是特例（唯一事实来源是根 `version.json`）。
+> 如果以后也想让 7.1 用 `version/7.1/version.json`，把 Makefile 里的
+> `ifeq ($(VERSION),7.1)` 分支去掉即可。
+
+**已验证的自动化命令**
+
+```bash
+make build VERSION=7.0   # 只编译；out/dump.cs 不变
+make gen VERSION=7.0     # 只生成 src/version.hpp
+make dump VERSION=7.0    # 编译 + 跑 + 保存 out/dump70.cs
+make verify              # 恢复 7.1 并验收
+```
+
+```
+out/dump70.cs  3517cd7283c2db5f3428da6af59d21d7
+out/dump.cs    3b5da679ee236d57ebb359d824055eb7   verify.py 28/28
+```
+
+### 16.2 工具与 IDA 入口
+
+| 用途 | 函数 |
+|---|---|
+| 表槽位/计数总入口 | `GIMeta_RuntimeInit` |
+| T0/T1 注册表 | `GIMeta_RegisterTables` / 静态构造器 |
+| 字符串解密 | `GIMeta_DecryptString` |
+| 类型字段布局 | `GIMeta_SetupTypeInfoLocked` / `SetupNestedLocked` |
+| 方法 | `GIMeta_SetupMethodsLocked` |
+| 参数 | `GIMeta_SetupParameters` |
+| 字段 | `GIMeta_SetupFieldsLocked` |
+| 属性 | `GIMeta_SetupPropertiesLocked` |
+| 事件 | `GIMeta_SetupEventsLocked` |
+| 泛型容器/参数 | `GIMeta_SetupNestedLocked` / `GetGenericParameterInfo` |
+| 默认值 | `GIMeta_GetDefaultParameterValueObject` / `GetDefaultValue` |
+| 泛型类 | `GIMeta_TypeInfoDispatcher` |
+| 字符串/类型名 | `GIMeta_DecryptString` / `TypeInfoDispatcher` |
+
+新版本先用签名找函数：
+
+```bash
+python3 tools/sig.py scan version/7.2/gi.exe --sigs tools/sigs.json
+```
+
+`sigs.json` 是 54 个函数的跨版本签名；命中后逐个反编译，**不要只看变量名**（见 §16.5）。
+
+### 16.3 定位顺序（按依赖关系）
+
+1. **MHY / T0 / T1**
+   - `.rdata` 搜 `"MHY\0"` → `mhyTableVA`
+   - `GIMeta_RegisterTables` / 静态构造器 → `table0VA`、`table1VA`
+   - `codeRegistrationVA`：如果是运行时构造，`version.json` 写 `0x0`，`customAttr()` 用空指针守卫跳过
+   - `globalMetadataHeaderOffset`：`0x210`（global-metadata.dat 头）
+
+2. **字符串解密** `GIMeta_DecryptString`
+   - 取 `mulA/mulB/seed/step`
+   - 7.0：`key = (mulB*off + seed) ^ mulA`
+   - 7.1：`key = mulA * ((mulB*off) ^ seed)`
+   - 解包：`off = idx & 0xFFFFFF`，`len = idx >> 24`
+   - 验证：类型/方法名可打印
+
+3. **元数据表**（全部从 `RuntimeInit` / `Setup*` 的 `g_MHY_Table + slot` 读）
+   - 每张表记录：`slot / op / key / stride / side(global|startup) / role(offset|count)`
+   - 计算偏移后先读前 20 项，确认索引/长度/字符串合理
+   - 7.0 已确认的表见 §16.4
+
+4. **逐索引 key 公式**
+   - 从反编译里的 `imul/shr/xor/add` 取参数
+   - 每个公式配一个验证：名字可打印、typeIndex 合法、索引连续、RVA 唯一
+
+5. **结构体字段偏移/解码**
+   - 用 `structOffsets` + `decodeExpr`，不要在 dumper 里写死偏移
+   - 每个字段都要有 IDA 读取点和数据验证
+
+6. **默认值 / 泛型 / RVA / flags**（7.0 的坑集中在这里）
+   - 见 §16.5
+
+7. **构建 → 跑 dump → 验 metrics → 和参考 dump 对比**
+   - 见 §16.6
+
+### 16.4 7.0 全量常量清单（已确认）
+
+**地址**
+
+```
+mhyTableVA 0x142720238
+table0VA   0x142244C28
+table1VA   0x1427B8788
+codeRegistrationVA 0x0（运行时构造）
+globalMetadataHeaderOffset 0x210
+```
+
+**字符串**
+
+```
+mulA 0x6E06618323D1073A
+mulB 0x552E0DA77096BD68
+seed 0xD7A8F7865F61DE96
+step 0x31BEA5AF4493F187
+key = (mulB*off + seed) ^ mulA
+```
+
+**表（global 侧，除特别标注）**
+
+| 表 | slot | op/key | stride |
+|---|---|---:|---:|
+| typeDefinitionsOffset | 0x1A0 | `^0x4CE7B502` | 70 |
+| typeDefinitionsCount | 0x6C | `-0x75C650E3` | /70 |
+| methodsOffset | 0x18C | `^0x6ACCE7D4` | 26 |
+| methodsCount | 0x98 | `^0x427E10F8` | /26 |
+| parametersOffset | 0x94 | `-0x2C46EB4E` | 8 |
+| fieldsOffset | 0x1D0 | `+0xE2FD458E` | 8 |
+| fieldOffset | 0x13C | `-1438178828` | 4 |
+| propertiesOffset | 0x64 | `+0xFA496C14` | 10 |
+| eventsOffset | 0x1E8 | `^0x100547B1` | 14 |
+| interfacesTable | 0x1C4 | `-1518027399` | 6 |
+| nestedTypesTable | 0x17C | `^0x6EBA4F15` | 4 |
+| genericContainers | 0x118 | `^0x2B0F6E21` | 16 |
+| genericParameters | 0x48 | `^0x5ECCBF54` | 14 |
+| **fieldDefaultValuesOffset** | 0x0C | `^0x720EB389` | 12 |
+| **parameterDefaultValuesOffset** | 0x110 | `-0x7B761D0A` | 12 |
+| parameterDefaultValuesCount | 0x120 | `^0x4D9E9E50` | /12 |
+| defaultDataOffset | 0x1B0 | `^0x26AB5EF8` | — |
+| methodSpecs | 0xB0 | `-0x17253935` | 12 |
+| genericMethodTable | 0xAC | `^0x120B7FB3` | 14 |
+| genericMethodTableCount | 0x74 | `^0x3186387A` | /14 |
+| attributesInfoOffset | 0x80 | `^0x69D6A445` | 8 |
+| attributeTypesOffset | 0x16C | `-0x225AFD44` | 4 |
+| genericClassRangeOffset | 0xE8 | `^0x1AEDFFE1`（startup） | 8 |
+| genericTypeArgOffset | 0x1DC | `-0x40BDEA93`（startup，legacy） | 4 |
+| imagesOffset | 0x14 | `^0x495C7A75`（startup） | 40 |
+| stringLiteralDataOffset | 0x174 | `^0xD1EDB05` | — |
+
+**genericClasses（7.0）**
+
+```
+startup + 0xC0830        // MHY[0x18] - 662445654
+count 398168             // (MHY[0xE0] >> 3) ^ 0x1F5F6D1
+entry { genericInstIndex, typeDefinitionIndex }  // 8B
+genericInsts = *(T1+0x30)  // { argc, pad, argv }
+```
+
+**T0 / T1**
+
+| 字段 | 7.0 | 7.1 |
+|---|---|---|
+| T0 method body array | **0x48** | 0x88 |
+| T0 invoker array | **0x88** | 0x48 |
+| T0 generic method ptrs | 0x30 | 0x30 |
+| T1 Il2CppTypes | 0x10 | 0x48 |
+| T1 genericInsts | 0x30 | 0x08 |
+
+**typeDef（70B，已确认 18 项）**
+
+```
+namespace@8   raw ^ 0x14BE1B80
+propertyStart@32 raw - 0x6AE4E32A
+methodStart@36 raw - 0x42C81546
+parent@28      raw - 0x6748C2A3
+fieldStart@44  raw - 0x1E6871E4
+name@40        raw - 0x5F8AB6E2
+flags@24       raw ^ 0x569439D0
+method_count@54 u16 + 0x28
+eventStart@50  raw - 0x53B6
+nestedStart@52 raw + 0x66EC
+field_count@60 u16 - 0x8B
+bitfield@56    bit0 valuetype / bit1 enum(反相)
+interfacesStart@62 ^ 0x1DE4
+genericContainerIndex@58 ^ 0x3B64（0xFFFF 无）
+interfaces_count@68 ^ 0xFD
+property_count@64 ^ 0xCA
+event_count@66 + 0x09
+nestedCount@65 + 0x5A
+```
+
+**method（26B）**
+
+```
+name@0       keyMethod ^ raw
+returnType@4 keyMethod ^ raw ^ 0x461E91E5
+parameterStart@8 keyMethodParam ^ raw ^ 0x3F2059
+genericContainerIndex@12 (u16) (raw - 11222) ^ (keyMethodParam & 0xFFFF)
+flags@22     keyMethodParam ^ (raw - 5486)     ← MethodAttributes
+iflags@18    keyMethodParam ^ raw ^ 0xEF3B     ← MethodImplAttributes
+slot@20      keyMethodParam ^ (raw + 11400)
+parameterCount@24 raw ^ (keyMethodParam & 0xFF) ^ 0x5B
+declaringType = 当前 typeDef（记录里没有）
+```
+
+**parameter**
+
+```
+typeIndex@0 keyParam ^ raw ^ 0x156CA23C
+nameIndex@4 keyParam ^ raw ^ 0x31C2DE49
+parameterStart = 方法 +8；无参时 -1
+```
+
+**field**
+
+```
+typeIndex@0 keyField ^ (raw - 815161169)      ← 7.0 是 SUB，不是 XOR
+nameIndex@4 keyField ^ (raw - 501770607)
+```
+
+**field offset（7.0 三表）**
+
+```
+fieldBaseTable  = MHY[0x14C] - 763261186      // 12B，+8 = base
+fieldIndexTable = MHY[0x184] - 1408289675     // 4B，typeHash -> index
+fieldOffsetTable= MHY[0x13C] - 1438178828     // 4B，raw offset
+typeHash = -1963413621 * ((70*typeDefIndex) >> 1)
+base = u32(fieldBaseTable + 12*idx + 8)
+raw  = u32(fieldOffsetTable + 4*(local + base))
+offset = raw & 0xFFFFFF
+static  = raw & 0x1000000
+静态字段 offset = 0
+```
+
+**property（10B）**
+
+```
+name@0 (raw ^ 0x2F28B8F7) - keyProperty(i)
+setter@4 (raw ^ 0x5C0A) - keyProperty(i)      // 0xFFFF 无
+getter@8 (raw - keyProperty(i)) + 9297        // raw-key==0xDBAE 无
+```
+
+**event（14B）**：`typeIndex/name/add/remove/raise` + `eventAccessorKey`（见 §15.14）。
+
+**genericContainer（16B）**
+
+```
+argc@8           raw - keyContainer(c) - 891806131
+parameterStart@12 raw - keyContainer(c) - 1623277875
+keyContainer(c) = 1461114162 * (((0x257F689DE071*c)>>16) ^ 0x5D221965)
+```
+
+**默认值**
+
+```
+parameterDefaultValue { dataIndex@0, typeIndex@4, parameterIndex@8 }
+fieldDefaultValue     { dataIndex@0, typeIndex@4, fieldIndex@8 }
+字符串默认值 = [u32 len][bytes]，offset = MHY[0x1B0] ^ 0x26AB5EF8 + dataIndex
+```
+
+**property/event/image 的 key**
+
+- `keyProperty`：`A=1891780257, B=0x29296FCE4E4E, shift=16, xor=0x5C9383E5`
+- `keyField`：`A=28430, add1=216525192, xor=0x56DFA1B8, B=-497750444, add2=34757079, indexBias=0x1E6871E4`
+- `keyParam`：`A=0x2F41C44B80, add=0xBF6F453AB0, shift=8`
+- `keyMethod`：`C=0x11C179E1B7D6, D=0x1EF8D46961E5672, inner=1147050388, outer=1631394208, shift=16/9, xor=0x45E4FFC6`
+- `keyMethodParam`：同上但 `D=0x9EF8D46961E5672`，**不加 xor**
+- `keyImage`：`((899978779*((18582*i)^0x1A32087B))>>11)+1714073770)^0x6688B322`
+
+### 16.5 7.0 vs 7.1：必须记住的坑
+
+| 项 | 7.0 | 7.1 |
+|---|---|---|
+| 字符串 key | `(mulB*off+seed)^mulA` | `mulA*((mulB*off)^seed)` |
+| method flags | `+22`，keyParam，`-5486` | `+22`，keyMethod，`^0x8F60` |
+| method iflags | `+18`，keyParam，`^0xEF3B` | `+16`，keyMethod，`-25344` |
+| method RVA 数组 | T0+0x48 | T0+0x88 |
+| invoker 数组 | T0+0x88 | T0+0x48 |
+| parameterStart | method+8 | method+4 |
+| field typeIndex | `keyField ^ (raw - 815161169)` | `keyField ^ raw ^ 0x2D27D873` |
+| field offset | 三表 + typeHash | 单表 `MHY[0x204]-450622139` |
+| 属性 get/set | get@8，set@4 | get@6，set@8 |
+| 参数默认值表 | slot 0x110 | slot 0x104 |
+| 字段默认值表 | slot 0x0C | slot 0x13C（7.1 的字段表） |
+| 默认值记录顺序 | `{dataIndex,typeIndex,index}` | `{index,dataIndex,typeIndex}` |
+| generic inst 名字 | genericClasses + genericInsts | genericClasses + genericInsts |
+| declaringType | 记录里没有，用当前 typeDef | 记录 @+12 |
+
+**最容易看错的地方**
+
+1. **decompiler 的变量名不可信**：  
+   `v17+20/21`、`v27+4/6/8` 经常是**移位后的基址**；以**数据分布/两条独立验证**为准。
+2. **表可能互换**：参数/字段默认值表、T0 的 0x48/0x88 都实际互换过。
+3. **常量的 op 不同**：同名字段可能是 `-key`、`^key`、`+key`，不要照抄上一版。
+4. **哨兵不同**：`0`、`1`、`0xFFFF`、`0xDBAE`、`26229` 都出现过。
+5. **静态字段没有实例偏移**；参考 dump 写 0，7.0 也要写 0。
+6. **CR 是运行时构造**：`codeRegistrationVA=0`，`customAttr()` 必须空指针守卫。
+7. **7.1 byte-identical**：正确性修复（如泛型名字）会让 md5 变；一旦确认是正确性提升，就记录新基线，不要为了旧 md5 保留错误路径。
+
+### 16.6 验证配方（每个版本都跑）
+
+**表/偏移**
+- 表的前 20 项：索引单调/在范围内、count 合理
+- 字符串：可打印率 100%
+- typeIndex：`< typesCount` 或 `-1`
+- RVA：不同 VA 数、最大共用（正常 < 100）
+- 字段：名字/类型/偏移；静态字段 offset=0
+- 泛型：argc ≤ 64；参数名可打印；类型名 arity 与 argc 匹配
+- 默认值：type/data 合法；字符串长度合理
+
+**输出 metrics（参考）**
+
+```
+TypeDefIndex ≈ typeDefsCount
+方法 RVA 行 ≈ methodsCount - 无方法体数
+不同 RVA / 最大共用：7.0 = 691,430 / 73；7.1 = 710,507 / 74
+? 总数：7.0 = 0；7.1 = 3（字符串里）
+U+FFFD < 200
+```
+
+**和参考 dump 对比时的正确方法**
+- 两边都按 **typeDef 顺序**配对（都是 86,930 个），不要按名字（嵌套类型参考只写内层名）
+- 字段/方法按 (类型, 名字, 参数数) 对比
+- RVA 对比先归一化整数（`0x044FE90` vs `0x44FE90` 前导零）
+- 参考的 `.text` wrapper 与我们的 il2cpp body 是同一方法，不是错位
+
+### 16.7 新版本（7.2/8.x）操作流程
+
+```bash
+# 1) 新建版本目录
+cp -r version/7.1 version/7.2        # 或只建 version/7.2
+cp version/7.1/version.json version/7.2/version.json
+
+# 2) 用签名找函数
+python3 tools/sig.py scan version/7.2/gi.exe --sigs tools/sigs.json
+
+# 3) 按 §16.3 顺序逐项定位；只改 version/7.2/version.json
+#    每改一项，立刻做 §16.6 的对应数据验证
+
+# 4) 全自动：生成头 + 编译 + 跑 + 保存 out/dump72.cs
+make dump VERSION=7.2
+
+# 5) 验收（新版本写 verify72.py；至少检查 §16.6 的 metrics）
+
+# 6) 恢复 7.1 基线
+make verify
+md5sum out/dump.cs    # 3b5da679ee236d57ebb359d824055eb7
+# verify.py 28/28
+```
+
+**定位顺序不要跳**：表 → key → 结构体 → 字段/方法 → 泛型 → 默认值 → RVA/flags。  
+每一层都依赖上一层；跳步会把错误放大成“到处都是乱码”。
+
+### 16.8 本次 7.0 的最终验收
+
+```
+7.0: out/dump70.cs  182,140,551 B  md5 3517cd7283c2db5f3428da6af59d21d7
+     TypeDefIndex 86,930
+     RVA 691,941 / 不同 691,430 / 最大共用 73
+     ? 0（字符串里 15 个问号字符）
+     字段段 73,626
+     静态字段 offset 0
+     属性: public string FriendlyName { get; } // Getter: get_FriendlyName
+7.1: out/dump.cs    md5 3b5da679ee236d57ebb359d824055eb7  verify.py 28/28
+```
+
+### 16.9 自动化覆盖表：哪些不用再手找
+
+本次 7.0 的定位里，**机械部分约 85–90% 已工具化**；剩下的是“新混淆形状”和“语义 A/B”。
+
+| 步骤 | 工具 | 状态 |
+|---|---|---|
+| 54 个函数地址 | `python3 tools/sig.py scan <exe> --sigs tools/sigs.json` | **自动**（7.0 54/54） |
+| MHY 表 slot/key 候选 | `tools/slot_scan.py`（capstone） | **自动** |
+| 表偏移/计数/结构自证 | `tools/relocate.py <root> --scan` | **自动**（已知形状） |
+| fieldDecode 42 个常数 | `tools/ida_export.py` + `tools/ida_fielddecode.py` | **自动**（旧→新匹配） |
+| key 公式常数 | `tools/ida_formulas.py` / `formula_auto.py` | **半自动**（形状识别） |
+| T0/T1 全局/槽位 | `tools/globals.py` | **半自动** |
+| **语义 A/B**（flags/property/T0） | **`tools/semantic_ab.py`（本次新增）** | **自动**（7.0 已验证） |
+| 输出验证 | `verify.py` / `verify70.py` | **自动** |
+| 参考 dump 对比 | `tools/dump_diff.py` | **自动** |
+
+#### `semantic_ab.py` 解决的三类“选反”
+
+```bash
+python3 tools/semantic_ab.py version/7.0
+```
+
+7.0 实测输出：
+
+```
+flags: off=22 key=methodParam swap=False   6/1/3/4=28938/12543/6659/1833
+property get: off=8 formula=subadd (15369)
+property set: off=4 formula=xor-sub (5031)
+T0 method bodies: 0x48
+```
+
+它用**数据自证**，不看反编译变量名：
+
+1. **flags / iflags**
+   - 试 flags/iflags 的两个偏移、两种 key（method / methodParam）
+   - 谁的 access 6/1/3/4 + static/virtual/abstract/pinvoke 分布最接近 7.1，就选谁
+2. **property get / set**
+   - 试 +4/+6/+8 × 5 种公式
+   - 用方法名 `get_` / `set_` 前缀计分；7.0 最高是 `get@8 (raw-key)+9297`、`set@4 (raw^k)-key`
+3. **T0 method body array**
+   - 比较 `T0+0x48` / `T0+0x88` 的合法 RVA 与**不同地址数**
+   - 7.0：0x48 = 45,566/45,566（全不同）；0x88 = 49,981 但只有 10,075 个不同 → 0x48
+
+#### 仍然需要人工的 ~10–15%
+
+- **新的混淆形状**：如果某个 key 从 `C/D` 形式换成全新形式，`formula_auto.py` 只能给候选，需要人确认。
+- **全新的表**：`relocate.py` 的结构自证只覆盖已知表形状；新表仍要靠 `RuntimeInit` 找 slot。
+- **语义边界**：例如 7.1 的 property A/B 目前 `semantic_ab.py` 只校准了 7.0（7.1 的 method-name/表读取还需微调）。
+- **参考 dump 的约定差异**：`.text` wrapper vs il2cpp body、静态字段 offset 0、嵌套类型命名；这些不是解码错误，工具只报告，不自动改口径。
+
+---
+
+# 17. 通用换版本编排（update.py）
+
+## 17.1 目标
+
+以后换版本不再从零手工分析，也不再依赖“目标版本自己的 version.json”：
+
+```
+上一版 version.json（结构/字段位移/stride/role）
+        +
+目标版本 exe + metadata
+        +
+目标版本 slot_scan 缓存 + IDA 导出
+        ↓
+tools/update.py
+        ↓
+version/<ver>/version.json（目标原本没有时）
+version/<ver>/version.draft.json（目标已有 JSON 时，避免覆盖）
+version/<ver>/update-report.md（已自动/有候选/必须人工）
+```
+
+`slot/key` 每版都变，不能从旧 JSON 直接抄；能复用且必须复用旧 JSON 的是：
+
+- 表名、`stride`、`role`、`countBias`
+- `fieldDecode` 的字段名/位移/宽度/公式形状
+- `structOffsets`、`structSizes`、`typeDefOffsets`
+- `decodeExpr`、dumper 逻辑
+
+## 17.2 新增资产
+
+| 文件 | 作用 |
+|---|---|
+| `tools/update.py` | 编排：relocate + IDA 映射 + 生成 JSON + 报告 |
+| `tools/learn_ida_map.py` | 从“已完成版本”的 JSON + IDA 导出学习函数读取顺序映射 |
+| `tools/ida_table_map.json` | 学到的“函数 → 读取顺序 → 表名” |
+| `tools/relocate.py --hint` | 指定旧 JSON 作提示（默认根 7.1） |
+
+`learn_ida_map.py` 学的是：
+
+```
+GIMeta_SetupParameters            -> parametersOffset
+GIMeta_GetDefaultParameterValue…  -> parameterDefaultValuesCount
+                                     parameterDefaultValuesOffset
+GIMeta_SetupFieldsLocked          -> fieldOffset
+                                     registrationFields.fieldOffsetBaseTable
+                                     registrationFields.fieldIndexTable
+...
+```
+
+不是 slot/key；同一函数内的 MHY 读取顺序通常比 slot 稳定。
+
+## 17.3 一条命令
+
+```bash
+# 1) 没有 slot 缓存时先扫（约 10 分钟；结果放目标目录）
+python3 tools/slot_scan.py version/7.2/gi.exe \
+  version/7.2/gi/Managed/Metadata/global-metadata.dat \
+  --out version/7.2/slots.json
+
+# 2) 有 IDA 导出就放 version/7.2/ida.json（先 rename function/var）
+#    IDA 导出的函数名应和 tools/ida_table_map.json 里的名字一致
+
+# 3) 生成
+make update VERSION=7.2
+# 等价于：
+python3 tools/update.py version/7.2 --base version.json \
+  --slots version/7.2/slots.json --ida version/7.2/ida.json
+
+# 4) 目标已有 version.json、想覆盖时
+python3 tools/update.py version/7.2 --base version.json --apply
+```
+
+> `--typeCount` 默认 683574（7.1 的 types 数）。如果报告里 `[⑧ 无密钥]` 没找到 typeDefs，就把 `--typeCount` 设成目标版本的 `typesCount`（用 `typesCountFormula` 在目标 T1 上算）或更大的上界再跑一次。
+
+`update.py` 的默认行为：
+
+- 目标 `version/<ver>/version.json` **不存在** → 直接生成它；
+- 已存在 → 只写 `version.draft.json` 和 `update-report.md`，不改原 JSON；
+- `--apply` 才覆盖。
+
+## 17.4 报告怎么读
+
+`version/<ver>/update-report.md` 分五段：
+
+1. **自动定位（可信）**：`relocate.py` 结构自证 + 无密钥 typeDefs。7.0 实测 5 张表：
+   - `attributesInfoOffset`
+   - `fieldDefaultValuesOffset`
+   - `methodPointerIndexOffset`
+   - `methodSlotTableOffset`
+   - `parameterDefaultValuesOffset`
+   加上 `typeDefinitionsOffset`（无密钥基址 + slot 反查）和 typeDefs 的 `fieldStart/fieldCount` 布局。
+2. **IDA 映射填充（需抽查）**：按 `ida_table_map.json` 填的新 slot/op/key；7.0 实测补了 15 项，包括 `typeDefinitionsCount`、`methodsCount`、`parametersOffset`、`methodSpecs`、`interfacesTable`、`attributeTypesOffset`、`fieldOffset`、`propertiesOffset`、`genericTypeArgOffset`、`registrationFields.fieldOffsetBaseTable/fieldIndexTable`。
+3. **旧 slot 提示（默认不可信）**：`relocate.py` 的“旧 slot 唯一命中”只作参考；7.0 实测 **16 个全错**（slot 全部重排）。
+4. **仍用旧值 / 必须人工**：表、`fieldDecode`、`structOffsets`、`keyFormulas`、字符串、地址。
+5. **下一步**：`slot_scan`、`make dump` 等命令。
+
+## 17.5 7.0 从 7.1 冷启动实测
+
+条件：`--base version.json`（7.1）、7.0 的 `slots.json` + `ida70.json`、**不用 7.0 的 version.json**。
+
+| 指标 | 结果 |
+|---|---:|
+| relocate 结构自证表 | 5 |
+| typeDefs 基址/布局 | 1 张表 + 2 个布局 |
+| IDA 映射补表 | 15 项（含 2 个 registrationFields） |
+| 表 slot/op/key 完全一致 | **18 / 34** |
+| 按解码后的**表值**一致 | **21 / 34** |
+| 旧 slot 提示正确 | **0 / 16** |
+
+**实际自动写入 202：54 / 202 = 26.7%**
+
+```
+17 张表 × 3（slot/op/key） = 51
+typeDefs 布局（fieldStart/field_count） = 2
+MHY 地址 = 1
+```
+
+另有 2 个 `registrationFields`（`fieldOffsetBaseTable` / `fieldIndexTable`）不算在 202 里。
+
+按“草稿里的值正确”算：21/34 表 = 63 + typeDefs 2 + MHY 1 = **66 / 202 = 32.7%**；其中 4 张是旧值恰好相同，不是自动定位。
+
+> 注意：§5.12.11 的 **107/202 = 53%** 是 **7.1 的候选口径**（relocate ∪ IDA，含 20 张表、keyFormulas 23 个系数、字符串 5、typeDefs 6 个字段），**不是当前 `update.py` 实际写进 JSON 的比例**。7.0 的 IDA 导出少了 4 个函数，且 keyFormulas/字符串还没接线，所以当前写入是 27%。
+
+值仍不一致的 13 张（7.0 草稿仍用 7.1 值，必须人工）：
+
+```
+imagesCount, imagesOffset, stringLiteralDataOffset, methodsOffset,
+fieldsOffset, eventsOffset, fieldAndParameterDefaultValueDataOffset,
+nestedTypesTable, genericContainers, genericParameters,
+genericClassRangeOffset, genericMethodTable, genericMethodTableCount
+```
+
+其它类别（IDA 原始候选）：
+
+```
+fieldDecode   95 条候选 → 最终需按范围/语义筛
+structOffsets 34 / 43 可由 IDA disp 覆盖
+keyFormulas   9 / 10 公式至少命中一个常数
+```
+
+## 17.6 反馈闭环：每版更新映射
+
+`ida_table_map.json` 是从 7.0 学的；**函数名和读取顺序**在后续版本通常不变，但函数被优化/改名会错位。
+
+每完成一个版本后跑一次：
+
+```bash
+python3 tools/learn_ida_map.py version/7.2/version.json version/7.2/ida.json \
+  --exe version/7.2/gi.exe -o tools/ida_table_map.json
+```
+
+然后人工看一眼输出，确认没有把 `?` 错配；再提交。这样下一版可用的映射会越来越全。
+
+## 17.7 以后版本 checklist
+
+1. 解包到 `version/<ver>/`（`gi.exe` + `gi/Managed/Metadata/global-metadata.dat`）。
+2. `slot_scan.py` → `version/<ver>/slots.json`。
+3. IDA 重命名关键函数，`ida_export.py` → `version/<ver>/ida.json`。
+4. `make update VERSION=<ver> BASE=version.json`。
+5. 看 `update-report.md`：
+   - 第 1 段可直接信；
+   - 第 2 段抽查（尤其 `propertiesOffset`、`fieldOffset`、`methodsCount`）；
+   - 第 3 段不要直接用；
+   - 第 4 段逐项补。
+6. 补 `fieldDecode`（`ida_fielddecode.py` + 范围/名字验证）、`keyFormulas`（`formula_auto.py` / `semantic_ab.py`）、字符串 key、`addresses`。
+7. `make dump VERSION=<ver>`，与参考 dump/上一版比对。
+8. `make verify`（7.1 基线 28/28 不能退）。
+9. 完成后刷新 `ida_table_map.json`，在本文档记录新版本的“结构自证/IDA 映射”覆盖。
+
+## 17.8 设计边界
+
+- **不把旧 slot 当证据**：7.0 已证明 slot 全重排；弱提示只进报告。
+- **不覆盖人工成果**：目标已有 JSON 时只写 draft。
+- **不假装自动**：`update.py` 只填有结构证据/映射证据的项；其余明确列 TODO。
+- **不写死版本号**：表名/stride/role 来自旧 JSON，slot/key 来自目标数据；新版本只换数据。
+- **运行时构造的 CR/T0/T1**：文件里没有，任何离线工具都跑不出；仍按 `docs/GLOBALS.md`/IDA 处理。
+
