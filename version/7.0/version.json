@@ -756,6 +756,8 @@
    "parameterIndex": 8
   },
   "Il2CppEventDefinition": {
+   "typeIndex": 0,
+   "nameIndex": 4,
    "add": 8,
    "remove": 10,
    "raise": 12
