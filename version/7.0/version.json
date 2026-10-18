@@ -1,0 +1,818 @@
+{
+ "version": "7.0 (partial)",
+ "addresses": {
+  "mhyTableVA": "0x142720238",
+  "table0VA": "0x142244C28",
+  "table1VA": "0x1427B8788",
+  "codeRegistrationVA": "0x0",   // 运行时构造，不在文件里；customAttr 由空指针守卫跳过
+  "globalMetadataHeaderOffset": 528
+ },
+ "stringDecrypt": {
+  "keyMulA": "0x6E06618323D1073A",
+  "keyMulB": "0x552E0DA77096BD68",
+  "keySeed": "0xD7A8F7865F61DE96",
+  "keyStep": "0x31BEA5AF4493F187",
+  "offsetMask": "0xFFFFFF",
+  "lengthShift": 24,
+  "entryXor": "0x0"
+ },
+ "tables": {
+  "imagesCount": {
+   "slot": "0x1A4",
+   "op": "^",
+   "key": "0x47DBC620",
+   "stride": 40,
+   "side": "global",
+   "role": "bytes",
+   "confirmed": true
+  },
+  "imagesOffset": {
+   "slot": "0x14",
+   "op": "^",
+   "key": "0x495C7A75",
+   "stride": 40,
+   "side": "startup",
+   "role": "offset",
+   "confirmed": true,
+   "note": "MHY[0x14]^0x495C7A75 -> startup 0x3CA2F0；+8 名字节，12/12 真程序集名"
+  },
+  "stringLiteralDataOffset": {
+   "slot": "0x174",
+   "op": "^",
+   "key": "0xD1EDB05",
+   "stride": 0,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "typeDefinitionsOffset": {
+   "slot": "0x1A0",
+   "op": "^",
+   "key": "0x4CE7B502",
+   "stride": 70,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "typeDefinitionsCount": {
+   "slot": "0x6C",
+   "op": "-",
+   "key": "0x75C650E3",
+   "stride": 70,
+   "side": "global",
+   "role": "count_div",
+   "countBias": -2,
+   "confirmed": true
+  },
+  "methodsOffset": {
+   "slot": "0x18C",
+   "op": "^",
+   "key": "0x6ACCE7D4",
+   "stride": 26,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "methodsCount": {
+   "slot": "0x98",
+   "op": "^",
+   "key": "0x427E10F8",
+   "stride": 26,
+   "side": "global",
+   "role": "count_div",
+   "confirmed": true
+  },
+  "methodPointerIndexOffset": {
+   "slot": "0x130",
+   "op": "+",
+   "key": "0xA3B3FC56",
+   "stride": 4,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "methodSlotTableOffset": {
+   "slot": "0x1F8",
+   "op": "^",
+   "key": "0x5A7DB1D1",
+   "stride": 6,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "methodSlotCount": {
+   "slot": "0x2C",
+   "op": "^",
+   "key": "0x25C585C2",
+   "stride": 6,
+   "side": "global",
+   "role": "count_div",
+   "confirmed": true
+  },
+  "parametersOffset": {
+   "slot": "0x94",
+   "op": "-",
+   "key": "0x2C46EB4E",
+   "stride": 8,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "propertiesOffset": {
+   "slot": "0x64",
+   "op": "+",
+   "key": "0xFA496C14",
+   "stride": 10,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "fieldsOffset": {
+   "slot": "0x1D0",
+   "op": "+",
+   "key": "0xE2FD458E",
+   "stride": 8,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "eventsOffset": {
+   "slot": "0xA8",
+   "op": "^",
+   "key": "0x519F5FD4",
+   "stride": 14,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "fieldOffset": {
+   "slot": "0x13C",
+   "op": "-",
+   "key": "1438178828",
+   "stride": 4,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "interfacesTable": {
+   "slot": "0xBC",
+   "op": "-",
+   "key": "0xAB2A6A9",
+   "stride": 6,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "nestedTypesTable": {
+   "slot": "0x17C",
+   "op": "^",
+   "key": "0x6EBA4F15",
+   "stride": 4,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "genericContainers": {
+   "slot": "0x118",
+   "op": "^",
+   "key": "0x2B0F6E21",
+   "stride": 16,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "genericParameters": {
+   "slot": "0x48",
+   "op": "^",
+   "key": "0x5ECCBF54",
+   "stride": 14,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "fieldDefaultValuesOffset": {
+   "slot": "0x0C",
+   "op": "^",
+   "key": "0x720EB389",
+   "stride": 12,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true,
+   "note": "12B 记录顺序 {dataIndex,typeIndex,fieldIndex}；fieldIndex@+8，count 由严格递增扫描"
+  },
+  "fieldAndParameterDefaultValueDataOffset": {
+   "slot": "0x1B0",
+   "op": "^",
+   "key": "0x26AB5EF8",
+   "stride": 0,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "parameterDefaultValuesOffset": {
+   "slot": "0x110",
+   "op": "-",
+   "key": "0x7B761D0A",
+   "stride": 12,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true,
+   "note": "IDA GIMeta_GetDefaultParameterValueObject：MHY[0x110]-0x7B761D0A = 0x3DCE880；记录 {dataIndex,typeIndex,parameterIndex}"
+  },
+  "parameterDefaultValuesCount": {
+   "slot": "0x120",
+   "op": "^",
+   "key": "0x4D9E9E50",
+   "stride": 12,
+   "side": "global",
+   "role": "bytes",
+   "confirmed": true
+  },
+  "attributesInfoOffset": {
+   "slot": "0x80",
+   "op": "^",
+   "key": "0x69D6A445",
+   "stride": 8,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "attributesInfoCount": {
+   "slot": "0x198",
+   "op": "-",
+   "key": "1137860102",
+   "stride": 8,
+   "side": "global",
+   "role": "count_div",
+   "confirmed": false,
+   "note": "7.1 残留；0x43D25E06 在 7.0 二进制中不存在，且 dumper 未使用（customAttr 由 CR 运行时计数驱动）"
+  },
+  "attributeTypesOffset": {
+   "slot": "0x16C",
+   "op": "-",
+   "key": "0x225AFD44",
+   "stride": 4,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "methodSpecs": {
+   "slot": "0xB0",
+   "op": "-",
+   "key": "0x17253935",
+   "stride": 12,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "genericClassRangeOffset": {
+   "slot": "0xE8",
+   "op": "^",
+   "key": "0x1AEDFFE1",
+   "stride": 8,
+   "side": "startup",
+   "role": "offset",
+   "confirmed": true,
+   "note": "RuntimeInit 0x140505BD0 v173：startup + (MHY[232]^0x1AEDFFE1) = startup+0；表断点 13,385 -> count 13,386"
+  },
+  "genericTypeArgOffset": {
+   "slot": "0x1DC",
+   "op": "-",
+   "key": "0x40BDEA93",
+   "stride": 4,
+   "side": "startup",
+   "role": "offset",
+   "confirmed": true,
+   "note": "RuntimeInit 0x140505BD0 v600：startup + MHY[0x1DC] - 0x40BDEA93 = startup+0x1A250 = genericClassRangeOffset + 8*13386；34911 个 typeIndex 全合法"
+  },
+  "genericMethodTable": {
+   "slot": "0xAC",
+   "op": "^",
+   "key": "0x120B7FB3",
+   "stride": 14,
+   "side": "global",
+   "role": "offset",
+   "confirmed": true
+  },
+  "genericMethodTableCount": {
+   "slot": "0x74",
+   "op": "^",
+   "key": "0x3186387A",
+   "stride": 14,
+   "side": "global",
+   "role": "count_div",
+   "confirmed": true
+  },
+  "interfacesOffset_deprecated": {
+   "slot": "0x1F8",
+   "op": "-",
+   "key": "0x7A409361",
+   "stride": 0,
+   "side": "global",
+   "role": "offset",
+   "confirmed": false,
+   "note": "deprecated：仅 #if 0 旧字段路径使用，活动输出不读取"
+  },
+  "fieldTableOffset_deprecated": {
+   "slot": "0x30",
+   "op": "^",
+   "key": "0x72BDC288",
+   "stride": 0,
+   "side": "global",
+   "role": "offset",
+   "confirmed": false,
+   "note": "deprecated：仅 #if 0 旧字段路径使用，活动输出不读取"
+  },
+  "fieldIndexTableOffset_deprecated": {
+   "slot": "0xA4",
+   "op": "-",
+   "key": "0x0F6CD032",
+   "stride": 0,
+   "side": "global",
+   "role": "offset",
+   "confirmed": false,
+   "note": "deprecated：仅 #if 0 旧字段路径使用，活动输出不读取"
+  }
+ },
+ "genericClassRangeCountFormula": {
+  "table0Field": "0x80",
+  "op": "^",
+  "key": "0x1b359e6d"
+ },
+ "genericInstsCountFormula": {
+  "table1Field": "0x28",
+  "op": "-",
+  "key": 1770440218
+ },
+ "typesCountFormula": {
+  "table1Field": "0x54",
+  "op": "+",
+  "key": 677974
+ },
+ "registrationFields": {
+  "t0_methodPointerIndexArray": "0x48",   // 7.0: il2cpp 方法体数组（713k 项）
+  "t0_invokerArray": "0x88",              // 7.0: slot invoker 表（12,827 项）
+  "t0_genericMethodPointers": "0x30",
+  "t1_genericInsts": "0x30",
+  "t1_il2CppTypes": "0x10",
+  "fieldOffsetBaseTable": "0x41783D4",   // MHY[0x14C]-763261186，12B 表（+8 = 偏移基址）
+  "fieldIndexTable": "0x387F8C8",        // MHY[0x184]-1408289675，4B typeHash->index
+  "fieldOffsetMask": "0xFFFFFF",
+  "fieldStaticMask": "0x1000000",
+  "fieldStaticValue": "0x1000000",
+  "fieldStaticZero": 1,
+  "propertyNoGetter": "0xDBAE",
+  "genericClassesOffset": "0xC0830",
+  "genericClassesCount": 398168
+ },
+ "keyFormulas": {
+  "methodKey": {
+   "outerMul": 1631394208,
+   "innerMul": 1147050388,
+   "C": "0x11C179E1B7D6",
+   "D": "0x1EF8D46961E5672",
+   "shift1": 16,
+   "shift2": 9,
+   "xor": "0x45E4FFC6",
+   "sig": "uint32_t keyMethod(uint32_t i)",
+   "cpp": "return (uint32_t)((kMethodKeyOuterMul * ((kMethodKeyInnerMul * ((kMethodKeyC * i + kMethodKeyD) >> kMethodKeyShift1)) >> kMethodKeyShift2)) ^ kMethodKeyXor);"
+  },
+  "paramKey": {
+   "A": "0x2F41C44B80",
+   "add": "0xBF6F453AB0",
+   "shift": 8,
+   "sig": "uint64_t keyParam(uint32_t i)",
+   "cpp": "return ((kParamKeyA * i + kParamKeyAdd) >> kParamKeyShift);"
+  },
+  "genericParamKey": {
+   "A": "0x3F00E01AB70E",
+   "shift": 9,
+   "add": 987260604,
+   "xor": "0x122E3C59",
+   "sig": "uint64_t keyGenericParam(uint32_t p)",
+   "cpp": "return (((kGenericParamKeyA * p) >> kGenericParamKeyShift) + kGenericParamKeyAdd) ^ kGenericParamKeyXor;"
+  },
+  "fieldKey": {
+   "A": 28430,
+   "add1": 216525192,
+   "xor": "0x56DFA1B8",
+   "B": -497750444,
+   "add2": 34757079,
+   "sig": "uint32_t keyField(uint32_t i)",
+   "cpp": "return (uint32_t)((uint32_t)(kFieldKeyB * (uint32_t)(((uint32_t)(kFieldKeyA * (uint32_t)(i + kFieldKeyIndexBias)) + (uint32_t)kFieldKeyAdd1) ^ (uint32_t)kFieldKeyXor)) + (uint32_t)kFieldKeyAdd2);",
+   "indexBias": "0x1E6871E4"
+  },
+  "propertyKey": {
+   "A": 1891780257,
+   "B": "0x29296FCE4E4E",
+   "shift": 16,
+   "xor": "0x5C9383E5",
+   "sig": "uint32_t keyProperty(uint32_t i)",
+   "cpp": "return (uint32_t)(kPropertyKeyA * ((kPropertyKeyB * i) >> kPropertyKeyShift)) ^ kPropertyKeyXor;"
+  },
+  "eventKey": {
+   "A": -951857599,
+   "xor": "0x614E7723",
+   "add": 398639297,
+   "sig": "uint32_t keyEvent(uint32_t i)",
+   "cpp": "return (uint32_t)(((int32_t)kEventKeyA * (int32_t)i) ^ kEventKeyXor) + kEventKeyAdd;"
+  },
+  "imageKey": {
+   "A": 899978779,
+   "B": 18582,
+   "innerXor": "0x1A32087B",
+   "shift": 11,
+   "add": 1714073770,
+   "xor": "0x6688B322",
+   "sig": "uint32_t keyImage(uint32_t i)",
+   "cpp": "return (uint32_t)(((kImageKeyA * ((kImageKeyB * i) ^ kImageKeyInnerXor)) >> kImageKeyShift) + kImageKeyAdd) ^ kImageKeyXor;"
+  },
+  "containerKey": {
+   "mul": 1461114162,
+   "innerMul": "0x257F689DE071",
+   "shift": 16,
+   "xor": "0x5D221965",
+   "sig": "uint32_t keyContainer(uint32_t c)",
+   "cpp": "return (uint32_t)(kContainerKeyMul * (((kContainerKeyInnerMul * (uint64_t)c) >> kContainerKeyShift) ^ kContainerKeyXor));"
+  },
+  "methodParamKey": {
+   "outerMul": 1631394208,
+   "innerMul": 1147050388,
+   "C": "0x11C179E1B7D6",
+   "D": "0x9EF8D46961E5672",
+   "shift1": 16,
+   "shift2": 9,
+   "sig": "uint32_t keyMethodParam(uint32_t i)",
+   "cpp": "return (uint32_t)(kMethodParamKeyOuterMul * ((kMethodParamKeyInnerMul * ((kMethodParamKeyC * i + kMethodParamKeyD) >> kMethodParamKeyShift1)) >> kMethodParamKeyShift2));"
+  },
+  "eventAccessorKey": {
+   "A": -12735,
+   "xor": "0x7723",
+   "sub": 16191,
+   "sig": "uint32_t keyEventAccessor(uint32_t i)",
+   "cpp": "return (uint32_t)((uint32_t)(kEventAccessorKeyA * i) ^ (uint32_t)kEventAccessorKeyXor) - (uint32_t)kEventAccessorKeySub;"
+  }
+ },
+ "decodeExpr": {
+  "decTypeNameIndex": {
+   "sig": "int32_t decTypeNameIndex(uint32_t raw)",
+   "cpp": "return (int32_t)(raw - (uint32_t)kTypeDefNameIndex.key);"
+  },
+  "decTypeNamespaceIndex": {
+   "sig": "int32_t decTypeNamespaceIndex(uint32_t raw)",
+   "cpp": "return (int32_t)(raw ^ (uint32_t)kTypeDefNamespaceIndex.key);"
+  },
+  "decTypeMethodStart": {
+   "sig": "int32_t decTypeMethodStart(uint32_t raw)",
+   "cpp": "return (int32_t)(raw - (uint32_t)kTypeDefMethodStart.key);"
+  },
+  "decTypeFieldStart": {
+   "sig": "int32_t decTypeFieldStart(uint32_t raw)",
+   "cpp": "return (int32_t)(raw - (uint32_t)kTypeDefFieldStart.key);"
+  },
+  "decTypePropertyStart": {
+   "sig": "int32_t decTypePropertyStart(uint32_t raw)",
+   "cpp": "return (int32_t)(raw - (uint32_t)kTypeDefPropertyStart.key);"
+  },
+  "decTypeParentIndex": {
+   "sig": "int32_t decTypeParentIndex(uint32_t raw)",
+   "cpp": "return (int32_t)(raw - (uint32_t)kTypeDefParentIndex.key);"
+  },
+  "decTypeGenericContainerIndex": {
+   "sig": "int16_t decTypeGenericContainerIndex(uint32_t raw)",
+   "cpp": "return (int16_t)(uint16_t)(raw ^ (uint32_t)kTypeDefGenericContainerIndex.key);"
+  },
+  "decTypeMethodCount": {
+   "sig": "uint16_t decTypeMethodCount(uint32_t raw)",
+   "cpp": "return (uint16_t)(raw + (uint32_t)kTypeDefMethodCount.key);"
+  },
+  "decTypeFieldCount": {
+   "sig": "uint16_t decTypeFieldCount(uint32_t raw)",
+   "cpp": "return (uint16_t)(raw - (uint32_t)kTypeDefFieldCount.key);"
+  },
+  "decTypePropertyCount": {
+   "sig": "uint8_t decTypePropertyCount(uint32_t raw)",
+   "cpp": "return (uint8_t)(raw ^ (uint32_t)kTypeDefPropertyCount.key);"
+  },
+  "decTypeEventStart": {
+   "sig": "int16_t decTypeEventStart(uint32_t raw)",
+   "cpp": "return (int16_t)(raw - (uint32_t)kTypeDefEventStart.key);"
+  },
+  "decTypeFlags": {
+   "sig": "uint32_t decTypeFlags(uint32_t raw)",
+   "cpp": "return raw ^ (uint32_t)kTypeDefFlags.key;"
+  },
+  "decTypeInterfacesStart": {
+   "sig": "uint16_t decTypeInterfacesStart(uint32_t raw)",
+   "cpp": "return (uint16_t)(raw ^ (uint32_t)kTypeDefInterfacesStart.key);"
+  },
+  "decTypeInterfacesCount": {
+   "sig": "uint8_t decTypeInterfacesCount(uint8_t raw)",
+   "cpp": "return (uint8_t)(raw ^ (uint32_t)kTypeDefInterfacesCount.key);"
+  },
+  "decTypeNestedStart": {
+   "sig": "int16_t decTypeNestedStart(int16_t raw)",
+   "cpp": "return (int16_t)(raw + (uint32_t)kTypeDefNestedTypesStart.key);"
+  },
+  "decTypeNestedCount": {
+   "sig": "uint32_t decTypeNestedCount(uint8_t raw)",
+   "cpp": "return (uint8_t)(raw + (uint32_t)kTypeDefNestedTypesCount.key);"
+  },
+  "decParamNameIndex": {
+   "sig": "int32_t decParamNameIndex(uint32_t raw, uint32_t i)",
+   "cpp": "return (int32_t)(keyParam(i) ^ raw ^ (uint32_t)kParameterNameIndexXor.key);"
+  },
+  "decParamTypeIndex": {
+   "sig": "int32_t decParamTypeIndex(uint32_t raw, uint32_t i)",
+   "cpp": "return (int32_t)(keyParam(i) ^ raw ^ (uint32_t)kParameterTypeIndex.key);"
+  },
+  "decGenericContainerArgc": {
+   "sig": "uint32_t decGenericContainerArgc(uint32_t raw, uint32_t c)",
+   "cpp": "return raw - (uint32_t)keyContainer(c) - (uint32_t)kGenericContainerArgc.key;"
+  },
+  "decGenericContainerParameterStart": {
+   "sig": "uint32_t decGenericContainerParameterStart(uint32_t raw, uint32_t c)",
+   "cpp": "return raw - (uint32_t)keyContainer(c) - (uint32_t)kGenericContainerParameterStart.key;"
+  },
+  "decStringKey": {
+   "sig": "uint64_t decStringKey(uint32_t offset)",
+   "cpp": "return (kKeyMulB * (uint64_t)offset + kKeySeed) ^ kKeyMulA;"
+  },
+  "decGenericParameterNameIndex": {
+   "sig": "int32_t decGenericParameterNameIndex(uint32_t raw, uint32_t i)",
+   "cpp": "return (int32_t)((raw ^ (uint32_t)kGenericParameterNameIndex.key) ^ (uint32_t)keyGenericParam(i));"
+  },
+  "decPropertyNameIndex": {
+   "sig": "int32_t decPropertyNameIndex(uint32_t raw, uint32_t i)",
+   "cpp": "return (int32_t)((raw ^ (uint32_t)kPropertyNameIndex.key) - keyProperty(i));"
+  },
+  "decFieldNameIndex": {
+   "sig": "int32_t decFieldNameIndex(uint32_t raw, uint32_t i)",
+   "cpp": "return (int32_t)((raw - (uint32_t)kFieldNameIndexBase.key) ^ keyField(i) ^ (uint32_t)kFieldNameIndexXor.key);"
+  },
+  "decEventNameIndex": {
+   "sig": "int32_t decEventNameIndex(uint32_t raw, uint32_t i)",
+   "cpp": "return (int32_t)(keyEvent(i) ^ (raw ^ (uint32_t)kEventNameIndex.key));"
+  },
+  "decMethodFlags": {
+   "sig": "uint16_t decMethodFlags(uint16_t raw, uint32_t i)",
+   "cpp": "return (uint16_t)(keyMethodParam(i) ^ (uint32_t)(uint16_t)(raw - (uint32_t)kMethodFlags.key));"
+  },
+  "decMethodIFlags": {
+   "sig": "uint16_t decMethodIFlags(uint16_t raw, uint32_t i)",
+   "cpp": "return (uint16_t)(keyMethodParam(i) ^ (uint32_t)raw ^ (uint32_t)kMethodIflags.key);"
+  },
+  "decFieldTypeIndex": {
+   "sig": "int32_t decFieldTypeIndex(uint32_t raw, uint32_t i)",
+   "cpp": "return (int32_t)(keyField(i) ^ (raw - (uint32_t)kFieldTypeIndex.key));"
+  },
+  "decMethodParamStart": {
+   "sig": "uint32_t decMethodParamStart(uint32_t raw, uint32_t i)",
+   "cpp": "return keyMethodParam(i) ^ raw ^ (uint32_t)kMethodParameterStart.key;"
+  },
+  "decMethodGenericContainerIndex": {
+   "sig": "int16_t decMethodGenericContainerIndex(uint16_t raw, uint32_t i)",
+   "cpp": "return (int16_t)(uint16_t)(((uint16_t)raw - (uint16_t)kMethodGenericContainerIndex.key) ^ (uint16_t)keyMethodParam(i));"
+  },
+  "decMethodParamCount": {
+   "sig": "uint8_t decMethodParamCount(uint8_t raw, uint32_t i)",
+   "cpp": "return (uint8_t)((uint8_t)raw ^ (uint8_t)kMethodParameterCount.key ^ (uint8_t)keyMethodParam(i));"
+  },
+  "decImageNameIndex": {
+   "sig": "uint32_t decImageNameIndex(uint32_t raw, uint32_t i)",
+   "cpp": "return (uint32_t)((raw ^ (uint32_t)kImageNameIndexXor.key) - keyImage(i));"
+  },
+  "decPropertyGet": {
+   "sig": "uint16_t decPropertyGet(uint32_t raw, uint32_t i)",
+   "cpp": "uint16_t v = (uint16_t)((uint16_t)raw - (uint16_t)keyProperty(i)); return v == (uint16_t)kPropertyNoGetter ? 0xFFFF : (uint16_t)(v + (uint16_t)kPropertyGet.key);"
+  },
+  "decPropertySet": {
+   "sig": "uint16_t decPropertySet(uint32_t raw, uint32_t i)",
+   "cpp": "return (uint16_t)(((uint16_t)raw ^ (uint16_t)kPropertySet.key) - (uint16_t)keyProperty(i));"
+  },
+  "decEventTypeIndex": {
+   "sig": "int32_t decEventTypeIndex(uint32_t raw, uint32_t i)",
+   "cpp": "return (int32_t)(keyEvent(i) ^ ((uint32_t)raw - (uint32_t)kEventTypeIndex.key));"
+  },
+  "decEventAdd": {
+   "sig": "uint16_t decEventAdd(uint32_t raw, uint32_t i)",
+   "cpp": "return (uint16_t)(keyEventAccessor(i) ^ (uint16_t)raw ^ (uint16_t)kEventAdd.key);"
+  },
+  "decEventRemove": {
+   "sig": "uint16_t decEventRemove(uint32_t raw, uint32_t i)",
+   "cpp": "return (uint16_t)(keyEventAccessor(i) ^ (uint16_t)raw ^ (uint16_t)kEventRemove.key);"
+  },
+  "decEventRaise": {
+   "sig": "uint16_t decEventRaise(uint32_t raw, uint32_t i)",
+   "cpp": "return (uint16_t)(keyEventAccessor(i) ^ ((uint16_t)raw - (uint16_t)kEventRaise.key));"
+  },
+  "decTypeEventCount": {
+   "sig": "uint8_t decTypeEventCount(uint32_t raw)",
+   "cpp": "return (uint8_t)(raw + (uint32_t)kTypeDefEventCount.key);"
+  },
+  "decTypeUnknown20": {
+   "sig": "int32_t decTypeUnknown20(uint32_t raw)",
+   "cpp": "return (int32_t)(raw - (uint32_t)kTypeDefUnknown20.key);"
+  },
+  "decTypeBitfield": {
+   "sig": "uint8_t decTypeBitfield(uint8_t raw)",
+   "cpp": "return (uint8_t)(raw ^ 1u);"
+  }
+ },
+ "fieldDecode": {
+  "typeDef": {
+   "namespaceIndex": "xor:0x14BE1B80",
+   "propertyStart": "sub:0x6AE4E32A",
+   "methodStart": "sub:0x42C81546",
+   "parentIndex": "sub:0x6748C2A3",
+   "fieldStart": "sub:0x1E6871E4",
+   "unknown20": "sub:0x431A2141",
+   "nameIndex": "sub:0x5F8AB6E2",
+   "flags": "xor:0x569439D0",
+   "method_count": "add:0x28",
+   "eventStart": "sub:0x53B6",
+   "nestedTypesStart": "add:0x66EC",
+   "field_count": "sub:0x8B",
+   "interfacesStart": "xor:0x1DE4",
+   "genericContainerIndex": "xor:0x3B64",
+   "interfaces_count": "xor:0xFD",
+   "property_count": "xor:0xCA",
+   "event_count": "add:0x09",
+   "nestedTypesCount": "add:0x5A"
+  },
+  "method": {
+   "nameIndex": "xor:0",
+   "parameterStart": "xor:0x3F2059",
+   "returnType": "xor:0x461E91E5",
+   "declaringType": "xor:0",   // 未使用；method 记录无此字段，dumper 用当前 typeDef
+   "genericContainerIndex": "sub:11222",
+   "iflags": "xor:0xEF3B",
+   "flags": "sub:5486",
+   "parameterCount": "xor:0x5B"
+  },
+  "field": {
+   "typeIndex": "sub:815161169",
+   "nameIndexBase": "sub:501770607",
+   "nameIndexXor": "xor:0"
+  },
+  "property": {
+   "nameIndex": "xor:0x2F28B8F7",
+   "get": "add:9297",
+   "set": "xor:0x5C0A"
+  },
+  "event": {
+   "typeIndex": "sub:740753572",
+   "nameIndex": "xor:0x71EEBABF",
+   "add": "xor:0x74A4",
+   "remove": "xor:0xEBDA",
+   "raise": "sub:14096"
+  },
+  "parameter": {
+   "typeIndex": "xor:0x156CA23C",
+   "nameIndexBase": "sub:0",
+   "nameIndexXor": "xor:0x31C2DE49"
+  },
+  "genericContainer": {
+   "parameterStart": "sub:0x60C14133",   // IDA 0x1404E2B30: raw@+12 - key(c) - 0x60C14133
+   "argc": "sub:0x3527E1B3"              // raw@+8  - key(c) - 0x3527E1B3
+  },
+  "genericParameter": {
+   "nameIndex": "xor:0x22857A95"
+  },
+  "image": {
+   "nameIndexXor": "xor:0x1BD33CC0"
+  }
+ },
+ "structSizes": {
+  "Il2CppImageDefinition": "0x28",
+  "Il2CppTypeDefinition": "0x46",
+  "Il2CppType": "0x10",
+  "Il2CppFieldDefinition": "0x08",
+  "Il2CppFieldDefaultValue": "0xC",
+  "Il2CppMethodDefinition": "0x1A",
+  "Il2CppParameterDefinition": "0x08",
+  "Il2CppParameterDefaultValue": "0xC",
+  "Il2CppPropertyDefinition": "0xA",
+  "Il2CppEventDefinition": "0xE",
+  "Il2CppStringLiteral": "0x08",
+  "Il2CppCustomAttributeTypeRange": "0x08",
+  "Il2CppGenericContainer": "0x10",
+  "Il2CppGenericParameter": "0xE",
+  "Il2CppGenericInst": "0x10",
+  "Il2CppMethodSpec": "0xC",
+  "Il2CppGenericMethodIndices": "0x08",
+  "Il2CppGenericMethodFunctionsDefinitions": "0x0E"
+ },
+ "measuredCounts": {
+  "parametersCount": 532361
+ },
+ "_stats": {
+  "confirmed_tables": 30,
+  "likely_tables": 0,
+  "confirmed_fields": 34,
+  "confirmed_formula_constants": 46,
+  "confirmed_strings": 4,
+  "confirmed_addresses": 4,
+  "confirmed_total": 169,
+  "confirmed_pct": 83.7,
+  "with_likely_total": 169,
+  "with_likely_pct": 83.7,
+  "verify": "PASS 26 项 / WEAK 2 项 / FAIL 1 项（genericTypeArgOffset 已降级）",
+  "formula_note": "7.0 实际 45 个常数（param 拆成 name/type）",
+  "verified_formulas": [
+   "eventKey",
+   "paramKey",
+   "methodParamKey(提取)",
+   "containerKey(应用验证)",
+   "genericParamKey(应用验证)",
+   "fieldKey",
+   "propertyKey",
+   "imageKey"
+  ],
+  "note": "method 全部正确：name/paramStart(+8 = keyMethodParam ^ raw ^ 0x3F2059)/paramCount(keyMethodParam)/flags/iflags/returnType(+4 ^0x461E91E5)；declaringType=当前 typeDef；参数类型 raw@+0 ^ keyParam(p) ^ 0x156CA23C 全量 532361/532361 合法；method +12 = method 级 genericContainerIndex（u16，(raw16-11222)^(keyMethodParam&0xFFFF)，-1=非泛型；2563 个泛型方法/2563 个容器，区间与类型容器零交集）；methodSpecs=0x1F54664（MHY[0xB0]-0x17253935，551689 条 100% 合法）/ genericMethodTableCount=548707（(MHY[0x74]^0x3186387A)/14）/ T0 泛型方法指针数组 @+0x30（5000/5000 落在 il2cpp 段）；genericTypeArgOffset=startup+0x1A250（MHY[0x1DC]-0x40BDEA93，= 范围表 13386*8 之后；34911 个 typeIndex 全合法）；attributesInfoCount 未定位且 dumper 未使用；parametersCount=532361（被引用的最大参数索引）；genericContainer(c) 的 argc/parameterStart 已用 containerKey 解码并验证（argc<=64 4315/4315，泛型类型 arity 696/705，其余为嵌套类继承外层参数）",
+  "typeDef_offsets_note": "8 个已确认（propertyStart/methodStart/fieldStart/eventStart/method_count/field_count/property_count/event_count）；其余暂用 7.1 偏移",
+  "unconfirmed": []
+ },
+ "structOffsets": {
+  "Il2CppPropertyDefinition": {
+   "get": 8,
+   "set": 4
+  },
+  "Il2CppImageDefinition": {
+   "nameIndex": 8
+  },
+  "Il2CppFieldDefaultValue": {
+   "dataIndex": 0,
+   "typeIndex": 4,
+   "fieldIndex": 8
+  },
+  "Il2CppGenericContainer": {
+   "argc": 8,
+   "parameterStart": 12
+  },
+  "Il2CppParameterDefaultValue": {
+   "dataIndex": 0,
+   "typeIndex": 4,
+   "parameterIndex": 8
+  },
+  "Il2CppEventDefinition": {
+   "add": 8,
+   "remove": 10,
+   "raise": 12
+  },
+  "Il2CppTypeDefinition": {
+   "namespaceIndex": 8,
+   "propertyStart": 32,
+   "methodStart": 36,
+   "parentIndex": 28,
+   "fieldStart": 44,
+   "unknown20": 16,
+   "nameIndex": 40,
+   "flags": 24,
+   "method_count": 54,
+   "eventStart": 50,
+   "nestedTypesStart": 52,
+   "field_count": 60,
+   "bitfield": 56,
+   "interfacesStart": 62,
+   "genericContainerIndex": 58,
+   "interfaces_count": 68,
+   "property_count": 64,
+   "event_count": 66,
+   "nestedTypesCount": 65
+  },
+  "Il2CppMethodDefinition": {
+   "nameIndex": 0,
+   "returnType": 4,
+   "parameterStart": 8,
+   "genericContainerIndex": 12,
+   "_pad14": 14,
+   "_pad16": 16,
+   "flags": 22,
+   "slot": 20,
+   "iflags": 18,
+   "parameterCount": 24
+  }
+ },
+ "typeDefOffsets": {
+  "propertyStart": 32,
+  "methodStart": 36,
+  "fieldStart": 44,
+  "eventStart": 50,
+  "method_count": 54,
+  "field_count": 60,
+  "property_count": 64,
+  "event_count": 66,
+  "namespaceIndex": 8,
+  "nameIndex": 40,
+  "genericContainerIndex": 58,
+  "interfacesStart": 62,
+  "nestedTypesCount": 65,
+  "interfaces_count": 68,
+  "nestedTypesStart": 52,
+  "parentIndex": 28,
+  "flags": 24,
+  "unknown20": 16,
+  "bitfield": 56
+ }
+}
