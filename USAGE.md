@@ -275,8 +275,8 @@ python3 tools/hook_resolve.py \
   --dst-export out/ida70_group_candidates.json \
   --src-exe version/7.1/gi.exe \
   --dst-exe version/7.0/gi.exe \
-  --out out/hk70_auto_resolved10.json \
-  --report out/hk70_auto_resolved10_report.json \
+  --out out/hk70_auto_resolved11.json \
+  --report out/hk70_auto_resolved11_report.json \
   --max-body 300
 ```
 
@@ -428,8 +428,8 @@ missing / ambiguous 才会用新候选补全
 
 ```text
 67 / 67 有效 hook 正确
-输出: out/hk70_auto_resolved10.json
-报告: out/hk70_auto_resolved10_report.json
+输出: out/hk70_auto_resolved11.json
+报告: out/hk70_auto_resolved11_report.json
 ```
 
 > `hooks_7.0.json` 只能用于最后的独立对照，不能作为自动查找的锚点。
@@ -573,14 +573,14 @@ python3 tools/hook_resolve.py \
   --src-export out/ida71_source_export.json \
   --dst-export out/ida70_group_candidates.json \
   --src-exe version/7.1/gi.exe --dst-exe version/7.0/gi.exe \
-  --out out/hk70_auto_resolved10.json \
-  --report out/hk70_auto_resolved10_report.json \
+  --out out/hk70_auto_resolved11.json \
+  --report out/hk70_auto_resolved11_report.json \
   --max-body 300
 
 # 4) 只做独立验证，不参与查找
 python3 - <<'PY'
 import json
-R = json.load(open('out/hk70_auto_resolved10.json'))
+R = json.load(open('out/hk70_auto_resolved11.json'))
 H = {x['name']: x for x in json.load(open('out/hooks_7.0.json'))['hooks']}
 ok = bad = miss = 0
 for n, h in H.items():

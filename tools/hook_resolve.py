@@ -376,11 +376,20 @@ def enrich_confidence(out, report, base, T):
     """Add per-entry confidence fields without changing the selected address."""
     for name, v in out.items():
         old = base.get(name, {})
-        target = v.get("target_rva")
+        # report rows are keyed by VA, while the result stores both RVA and VA.
+        target = v.get("target_va") or v.get("target_rva")
+        old_target = old.get("target_va") or old.get("target_rva")
         row = None
         if target:
             row = next((r for r in report.get(name, [])
                         if r.get("addr", "").lower() == str(target).lower()), None)
+        if row is None and old_target:
+            row = next((r for r in report.get(name, [])
+                        if r.get("addr", "").lower() == str(old_target).lower()), None)
+        if row is None and v.get("target_rva"):
+            va = "0x%X" % (0x140000000 + int(v["target_rva"], 16))
+            row = next((r for r in report.get(name, [])
+                        if r.get("addr", "").lower() == va.lower()), None)
         lv, score, reasons = confidence_level(row, old)
         # The selected target may differ from the baseline target (especially
         # for rescued entries).  Always compare the source declaration with
