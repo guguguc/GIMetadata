@@ -474,27 +474,18 @@ ida/*.override.json
 ### 1. 6.7 使用的 override 文件
 
 ```text
-version/6.7.0/ida/addresses.override.json
-version/6.7.0/ida/tables.override.json
-version/6.7.0/ida/registrationFields.override.json
 version/6.7.0/ida/fieldDecode.override.json
 version/6.7.0/ida/decodeExpr.override.json
-version/6.7.0/ida/count.override.json
-version/6.7.0/ida/keyformulas.values.json
 ```
+
+6.7 的 `stringDecrypt.override.json`、`tables.override.json`、`addresses.override.json`
+已经移除。表角色（包括 `imagesOffset`）、三处地址、三个 T0/T1 计数公式和
+registrationFields 和关键公式现在由目标 decomp/PE 自动得到；
+无这些 override 时 6.7 仍为 202/202。
 
 ### 2. 每个文件的作用
 
 ```text
-addresses.override.json
-  MHY / T0 / T1 / 无法自动推导的地址
-
-tables.override.json
-  表角色：slot/op/key/stride/side/countBias
-
-registrationFields.override.json
-  T0/T1 字段偏移、field base 表、static mask
-
 fieldDecode.override.json
   typeDef/其它结构的字段 op/key、structOffsets、typeDefOffsets
 
@@ -503,9 +494,6 @@ stringdecrypt.auto.json
 
 decodeExpr.override.json
   不能由通用模板表示的 decodeExpr（名称/type/accessor 顺序）
-
-count.override.json
-  已经由目标数据验证的 T0/T1 计数公式
 
 keyformulas.values.json
   人工从目标反编译抄出的逐索引公式
@@ -4599,4 +4587,1151 @@ python3 tools/learn_ida_map.py version/7.2/version.json version/7.2/ida.json \
 - **不假装自动**：`update.py` 只填有结构证据/映射证据的项；其余明确列 TODO。
 - **不写死版本号**：表名/stride/role 来自旧 JSON，slot/key 来自目标数据；新版本只换数据。
 - **运行时构造的 CR/T0/T1**：文件里没有，任何离线工具都跑不出；仍按 `docs/GLOBALS.md`/IDA 处理。
+
+# 18. 最近一次换版本的实际执行流程（6.7 冷启动）
+
+这一节按**实际操作顺序**记录这次从 7.0/7.1 基线冷启动 6.7 的过程。
+具体地址、公式和 6.7 的字段布局见 `§0.2`；自动生成和 override 的分层见 `§0.3`；
+这里只记录“下一次换版本应该怎么做、哪些步骤已经不用手找、哪些必须停下来验证”。
+
+## 18.0 总体流程（先看这里）
+
+换版本不是先填 202 项，而是按依赖链走：
+
+```text
+准备目录 / 固定旧版基线
+        ↓
+sig 找函数 + MCP/IDA 归一化函数起点
+        ↓
+slot_scan  → version/<ver>/slots.json
+ida_export → version/<ver>/ida.json + ida/decomp/
+        ↓
+offline_extract → ida/tables_extra.json
+        ↓
+update.py → relocate + IDA 读序 + 表角色
+        ↓
+version.draft.json
+        ↓
+fieldDecode / decodeExpr / 其它 override
+        ↓
+make dump VERSION=<ver>
+        ↓
+dump 统计 + RVA + 名字检查
+        ↓
+回归旧版本 dump md5 / verify
+        ↓
+记录 update-report / 学习 ida_table_map
+```
+
+对应的阶段和主要产物：
+
+| 阶段 | 主要输入 | 主要产物 | 是否可自动 |
+|---|---|---|---|
+| 准备 | 新版本 `gi.exe`、metadata | `version/<ver>/` | 人工 |
+| 基线 | 旧版本 dump/verify | md5、验证结果 | 人工记录 |
+| 函数定位 | `sigs.json`、目标 exe | `sig_hits.json` | 自动 + 抽查 |
+| slot 扫描 | 目标 exe + metadata | `slots.json` | 自动 |
+| IDA 导出 | 目标 exe/i64 | `ida.json`、`ida/decomp/` | 自动 |
+| 离线补表 | `ida/decomp/*.c` | `tables_extra.json` | 自动 |
+| 冷启动编排 | 旧 version JSON + slots + ida | `version.draft.json`、报告 | 自动 + 人工 |
+| override | 目标 decomp/证据 | `ida/*.override.json` | 人工 |
+| dump | version JSON | `out/dump<ver>.cs` | 自动 |
+| 验收 | dump/统计 | 通过/失败 | 半自动 |
+| 回归 | 旧版本 | md5/verify 不变 | 自动 + 人工确认 |
+
+完整命令顺序：
+
+```bash
+# 1) 准备基线（在改动前记录）
+#    旧版本 dump md5、verify 结果、当前 version.json
+
+# 2) 新版本目录
+mkdir -p version/7.2
+# 放入 gi.exe、gi/Managed/Metadata/*.dat
+
+# 3) sig 锁定函数
+python3 tools/sig.py scan version/7.2/gi.exe \
+  --sigs tools/sigs.json --fuzzy --slow \
+  --json version/7.2/sig_hits.json
+
+# 4) slot 扫描
+python3 tools/slot_scan.py \
+  version/7.2/gi.exe \
+  version/7.2/gi/Managed/Metadata/global-metadata.dat \
+  --out version/7.2/slots.json
+
+# 5) IDA 导出（需要 Hex-Rays）
+tools/ida_headless.sh \
+  version/7.2/gi.exe \
+  version/7.2/ida.json \
+  version/7.2/sig_hits.json
+
+# 6) 离线补表
+python3 tools/offline_extract.py version/7.2
+
+# 7) 冷启动（目标无 version.json 时）
+#    7.1 是根 version.json；如果 base 是 7.0，则写 version/7.0/version.json
+python3 tools/update.py version/7.2 \
+  --base version.json \
+  --slots version/7.2/slots.json \
+  --ida version/7.2/ida.json
+
+# 8) 看报告，补 override，再重跑 7)
+# 9) dump
+make dump VERSION=7.2
+
+# 10) 验收 + 旧版回归
+# 新版本统计/RVA/名字
+# 7.1 dump md5 / verify.py
+```
+
+> 这只是总览；每一步的判据、失败处理、override 写法见下面各小节。
+> `update.py` 默认不会覆盖已有的目标 `version.json`，而是写 `version.draft.json`；
+> 目标没有 `version.json` 时才直接写目标。
+
+## 18.1 起点与约束
+
+这次的目标不是只把 6.7 跑通，而是验证一条**可重复的换版本流程**：
+
+```text
+起点：7.0/7.1 已有可用的 version JSON、dump 和验证基线
+目标：6.7 从 7.0 数据冷启动
+约束：
+  - 不使用 6.7 的目标 version.json 反填
+  - 不使用 hooks_7.0.json 作为自动查找锚点
+  - 不使用冻结快照/frozen JSON 伪造确定性
+  - 不把版本常量写死进 C++
+  - 6.7 必须能稳定重跑；7.0/7.1 不能回归
+```
+
+判断标准不是“能生成 JSON”，而是同时满足：
+
+```text
+函数/地址可解释
+表内部结构自洽
+dump 统计合理
+RVA 唯一性合理
+7.0/7.1 基线不变
+```
+
+## 18.2 实际操作顺序
+
+实际执行顺序如下。这个顺序比“先填 202 项”更重要，因为后面的步骤依赖前面的结构验证。
+
+### 第 0 步：准备目录和输入
+
+新版本目录至少要有：
+
+```text
+version/<ver>/
+├── gi.exe
+├── gi/Managed/Metadata/global-metadata.dat
+├── gi/Managed/Metadata/startup-metadata.dat
+├── slots.json                  # slot_scan.py
+├── ida.json                    # ida_export.py
+└── ida/decomp/                 # GI_TEXT 落盘的 Hex-Rays 文本
+```
+
+检查：
+
+```text
+gi.exe 能正常打开
+global-metadata.dat 大小非 0
+startup-metadata.dat 大小非 0
+有可用的 IDA 数据库/能生成 .i64
+```
+
+如果 `ida.json` 或 `slots.json` 不存在，后面的 `update.py` 会退化为
+“只有 relocate/旧值”的冷启动，覆盖率和可信度都会下降。
+
+### 第 1 步：先固定基线
+
+在动 6.7 之前先记录 7.0/7.1：
+
+```text
+7.0 version.json
+7.0 dump md5
+7.1 dump md5
+7.1 verify.py 28/28 PASS
+```
+
+本次使用的基线：
+
+```text
+7.0 dump md5: 3517cd7283c2db5f3428da6af59d21d7
+7.1 dump md5: 3b5da679ee236d57ebb359d824055eb7
+```
+
+没有这份基线，后面任何“看起来成功了”的 dump 都不能算通过。
+
+### 第 2 步：用签名找入口函数，再用 IDA 归一化
+
+先用 `sig.py`/`sigdiff.py` 等结构签名找候选，再通过 MCP 的
+`lookup_funcs` / `get_func` 把命中地址还原到函数起始地址。
+
+6.7 实际确认的关键入口包括：
+
+```text
+GIMeta_RuntimeInit
+GIMeta_SetupFieldsLocked
+GIMeta_SetupMethodsLocked
+GIMeta_SetupPropertiesLocked
+GIMeta_RegisterTables
+```
+
+要点：
+
+```text
+sig 命中地址 != 函数起点
+```
+
+必须在目标 IDA 里检查 `start_ea`。6.7 的 `GIMeta_RegisterTables`
+甚至一开始没有被 IDA 识别成函数，但反汇编确认它真实存在；这类情况不能只信
+`.pdata`/函数表。
+
+### 第 2.5 步：生成 `slots.json` 和 `ida.json`
+
+`update.py` 的两个输入都不是手写的，必须先为目标版本单独生成。
+
+#### 1) `slots.json`：slot_scan
+
+先扫 MHY 槽位和 `.text` 里的 `(slot, op, key)` 候选：
+
+```bash
+# 可选：先给 sig 命中函数，后面 IDA/struct 扫描会用到
+python3 tools/sig.py scan version/6.7.0/gi.exe \
+  --sigs tools/sigs.json --fuzzy --slow \
+  --json version/6.7.0/sig_hits.json
+
+# 扫 MHY 槽位 + 指令里的 (slot,op,key)
+python3 tools/slot_scan.py \
+  version/6.7.0/gi.exe \
+  version/6.7.0/gi/Managed/Metadata/global-metadata.dat \
+  --out version/6.7.0/slots.json
+```
+
+产物：
+
+```text
+version/6.7.0/slots.json
+  svals : MHY[slot] 的原始 4 字节
+  uniq  : 全 .text 扫描得到的 (slot, op, key) 候选
+```
+
+注意：
+
+```text
+slot 跨版本不稳定
+slot_scan 结果只能作为候选
+真正的表地址必须由 relocate / 结构自证 / update.py 的目标数据验证
+```
+
+`slot_scan.py` 必须保留 `md.skipdata = True`；否则 capstone 遇到非法字节就停，
+会得到“只扫了几 KB”的假结果。
+
+#### 2) `ida.json`：IDA/Hex-Rays 导出
+
+`ida_export.py` 必须在 **IDA + Hex-Rays** 里运行，不能在普通 Python 里直接跑：
+
+```bash
+# 无头模式（推荐，复用已有 .i64）
+tools/ida_headless.sh \
+  version/6.7.0/gi.exe \
+  version/6.7.0/ida.json \
+  version/6.7.0/sig_hits.json
+
+# 也可以直接用 .i64
+tools/ida_headless.sh \
+  version/6.7.0/gi.exe.i64 \
+  version/6.7.0/ida.json \
+  version/6.7.0/sig_hits.json
+```
+
+GUI 方式：
+
+```text
+IDA → File → Script file...
+选择 tools/ida_export.py
+参数：
+  version/6.7.0/ida.json version/6.7.0/sig_hits.json --fast
+```
+
+产物：
+
+```json
+{
+  "mhy": "0x...",
+  "mhy_global": "g_MHY_Table",
+  "tables": [
+    {"slot": "0x...", "op": "^", "key": "0x...", "funcs": ["..."], "strides": []}
+  ],
+  "fieldDecode": [
+    {"width": "dword", "disp": 8, "op": "sub", "key": "0x...", "funcs": ["..."]}
+  ],
+  "formulas": [
+    {"func": "...", "text": "..."}
+  ]
+}
+```
+
+说明：
+
+```text
+version/<ver>/ida.json          ida_export.py 的正式产物，update.py 读取
+version/<ver>/ida.export.json   MCP/函数级导出，供分析用，不是 update.py 的输入
+version/<ver>/ida/decomp/       GI_TEXT 落盘的反编译文本
+```
+
+`ida_export.py --fast` 只反编译 sig 命中的函数；`GI_TEXT=version/<ver>/ida/decomp`
+会把 Hex-Rays 文本立即落盘，IDA 崩了也不丢。`tools/ida_wanted.txt` 里的关键函数
+会通过 `sig_hits.json` 自动加入反编译列表。
+
+#### 3) `offline_extract.py`：不启动 IDA 补漏
+
+`ida_export.py` 的正则可能漏掉这些形态：
+
+```text
+int / unsigned / __int32 等 32 位类型
+变量中转：v10 = qword_xxx; *(v10 + slot)
+非 _DWORD 写法
+```
+
+所以导出后还要用 `offline_extract.py` 重扫已经落盘的 Hex-Rays 文本：
+
+```bash
+python3 tools/offline_extract.py version/6.7.0
+```
+
+默认输入/输出：
+
+```text
+输入：
+  version/6.7.0/ida.json
+  version/6.7.0/ida/decomp/*.c
+  version/6.7.0/gi.exe
+
+输出：
+  version/6.7.0/ida.json         追加 table 候选
+  version/6.7.0/ida/tables_extra.json
+```
+
+也可以显式指定：
+
+```bash
+python3 tools/offline_extract.py version/6.7.0 \
+  --ida version/6.7.0/ida.json \
+  --decomp version/6.7.0/ida/decomp \
+  --out-extra version/6.7.0/ida/tables_extra.json
+```
+
+它做什么：
+
+```text
+1. 逐行匹配 *(type *)(g_MHY_Table + slot) op key
+2. 只接受 DWORD/int/__int32 等 32 位读取
+3. 用目标 gi.exe 的 MHY[slot] 复算 value
+4. 把新 (slot,op,key) 合并进 ida.json 的 tables
+5. 用上一版的 ida_table_map.json / table_funcs.json
+   按“同一函数里的读取顺序”给表命名
+6. 命名结果写到 ida/tables_extra.json
+```
+
+它**不做什么**：
+
+```text
+不验证表值一定正确
+不替代 relocate 的结构自证
+不直接改 version.json
+不根据目标 version.json 反填
+```
+
+输出里的 `added / total / labeled` 只是数量，不是正确率：
+
+```text
+added   : 本次新补的 (slot,op,key) 条数
+total   : ida.json 里 table 候选总数
+labeled : 其中被赋予表名的数量
+```
+
+`tables_extra.json` 是**候选命名**，最终仍要由 `relocate.py` /
+`update.py` 的值和结构验证决定是否采用。没有 `ida/decomp/*.c` 时，
+先用 `GI_TEXT=version/<ver>/ida/decomp` 跑一次 `ida_export.py`。
+
+#### 4) `tables_extra.json` 怎么被使用
+
+`tables_extra.json` 不是单独传给 `update.py` 的参数；只要它存在于：
+
+```text
+version/<ver>/ida/tables_extra.json
+```
+
+`update.py` 就会自动读取。并且在没有加 `--no-auto` 时，`update.py` 会先自动调用
+一次 `offline_extract.py`，再读这个文件。
+
+它的结构是“表名 -> 候选”：
+
+```json
+{
+  "methodsOffset": {
+    "slot": "0x58",
+    "op": "^",
+    "key": "0x58CCB100",
+    "value": "0x1970538",
+    "funcs": ["GIMeta_GetMethodNameFromIndex"]
+  },
+  "typeDefinitionsOffset": {
+    "slot": "0xA4",
+    "op": "-",
+    "key": "0xF0932FCE",
+    "value": "0x488AC7C",
+    "funcs": ["GIMeta_SetupFieldsLocked"]
+  }
+}
+```
+
+`update.py` 实际只取其中三个字段：
+
+```text
+slot
+op
+key
+```
+
+并且有一个重要限制：
+
+```text
+只有 base version.json 里已经存在的表名才会被填充
+tables_extra 不能新增一个 base 里没有的表名
+```
+
+合并时它会保留原表项的其他字段（例如 `stride`），只覆盖：
+
+```text
+tables[表名].slot = extra.slot
+tables[表名].op   = extra.op
+tables[表名].key  = extra.key
+```
+
+应用顺序：
+
+```text
+relocate 自动定位
+    ↓
+IDA 读取顺序映射
+    ↓
+tables_extra.json 覆盖同名表
+    ↓
+fieldDecode / decodeExpr / 其他 override
+    ↓
+version.draft.json
+```
+
+因此 `tables_extra` 是“离线反编译候选”的**最后一层表覆盖**。
+它可以修正 `ida.json` 里没有匹配上的表，但也可能把表名标错，所以必须检查：
+
+```text
+tables_extra 里的 value 是否落在 metadata 合法范围
+是否和 relocate 的结构自证值冲突
+对应表名是否在 table_funcs.json 的语义范围内
+dump 后计数/边界是否仍然合理
+```
+
+跑完后看两个地方：
+
+```text
+version/<ver>/version.draft.json
+  _update.extra_filled   本次被 tables_extra 填了哪些表
+
+version/<ver>/update-report.md
+  表值/候选 和仍用旧值的清单
+```
+
+如果 `extra_filled` 里出现了不该被覆盖的表，处理方式是：
+
+```text
+1. 不直接手改 tables_extra.json
+2. 回到 offline_extract 的 funcs/seq 看是不是读序标错
+3. 如果确实无法唯一命名，删掉该表项，让 relocate/IDA 继续处理
+4. 不要用目标 version.json 反填
+```
+
+> `slots.json` / `ida.json` / `tables_extra.json` 只参与自动定位，
+> 不参与 C++ 头文件生成；真正写进 C++ 的仍然是
+> `version/<ver>/version.json`。
+
+### 第 3 步：从 RegisterTables 取 T0/T1/MHY
+
+`GIMeta_RegisterTables` 是表注册的权威入口。6.7 实际得到的全局关系：
+
+```text
+MHY = 0x142419A40
+T0  = 0x141F88938
+T1  = 0x1424A9F70
+```
+
+然后从消费者反编译确认字段含义，而不是只假设 7.0/7.1 的布局：
+
+```text
+T1 + 0x70  Il2CppType 数组
+T1 + 0x60  genericInsts
+T0 + 0x60  genericMethodPointers
+T0 + 0x80  按 methodIndex 索引的方法地址表
+T0 + 0x90  invoker 数组
+```
+
+T0/T1 和 MHY 的确切数值只属于 6.7；可复用的是
+“找到 RegisterTables → 读它写入的全局 → 在消费者里验证字段”的过程。
+
+### 第 4 步：先解表和字符串，再解结构体字段
+
+顺序建议：
+
+```text
+表角色 / 表 offset / count
+    ↓
+字符串解密
+    ↓
+typeDefinitions 布局
+    ↓
+method/field/property/event 字段布局
+```
+
+6.7 的 `GIMeta_DecryptString` 已经不是 7.0/7.1 的旧形状，因此不能在
+`stringDecrypt` 里写死旧模板。本次处理方式是：
+
+```text
+从目标 GIMeta_DecryptString 反编译/PE 提取参数
+    ↓
+生成 stringDecrypt.auto.json
+    ↓
+只有当结构和旧代码路径一致时，才走旧稳定路径
+```
+
+验证的是输出，而不是“反编译看起来像”：
+
+```text
+typeDef 名字可打印
+namespace 可打印
+字段名/方法名没有大面积乱码
+```
+
+### 第 5 步：跑 update 链，先看 draft，不碰目标答案
+
+使用 7.0 作为 base，生成 6.7：
+
+```bash
+python3 tools/update.py version/6.7.0 \
+  --base version/7.0/version.json \
+  --slots version/6.7.0/slots.json \
+  --ida version/6.7.0/ida.json \
+  --emit /tmp/draft67.json \
+  --report /tmp/report67.md
+```
+
+实际自动链的分层是：
+
+```text
+offline_extract.py
+stringdecrypt_auto.py
+fielddecode_auto.py
+keyformulas_auto.py
+count_auto.py
+table_roles.py
+regfields_auto.py
+decodeexpr_auto.py
+        ↓
+ida/*.override.json
+        ↓
+最终 draft
+```
+
+这一步的原则：
+
+```text
+自动工具能给出唯一证据的项，自动写
+只能给出候选/歧义的项，留 TODO 或 override
+目标 version.json 不参与生成
+```
+
+### override 层具体怎么接
+
+`update.py` 不需要手动指定 override 路径；它会在目标版本目录下自动读取：
+
+```text
+version/<ver>/ida/fieldDecode.override.json
+version/<ver>/ida/decodeExpr.override.json
+```
+
+以及其它存在的 override：
+
+```text
+stringDecrypt.override.json
+tables.override.json
+addresses.override.json
+count.override.json
+registrationFields.override.json
+keyformulas.values.json
+```
+
+最终顺序固定为：
+
+```text
+自动链
+  ↓
+fieldDecode.override / decodeExpr.override
+  ↓
+tables / addresses / count / registrationFields /
+stringDecrypt / keyformulas.values override
+  ↓
+version.draft.json
+```
+
+因此 override 不是“绕过自动链”，而是**显式标注自动链无法唯一确定的项**。
+每个 override 至少要有：
+
+```text
+目标版本证据
+适用字段/表名
+为什么自动链不能覆盖
+```
+
+6.7 最终只保留两个 override：
+
+```text
+version/6.7.0/ida/fieldDecode.override.json
+version/6.7.0/ida/decodeExpr.override.json
+```
+
+它们分别处理：
+
+```text
+fieldDecode.override.json
+  TypeDef / method / field / property / event / parameter /
+  genericContainer / genericParameter / image 的
+  structOffsets、op/key、typeDefOffsets
+
+decodeExpr.override.json
+  不能由通用模板表示的 name/type/accessor 解码表达式
+  6.7 的 op 顺序与 7.0/7.1 不同，不能直接沿用旧 decodeExpr
+```
+
+什么时候应该新增 override：
+
+```text
+目标 decomp/PE 能证明值，但自动生成器没有对应模板
+目标数据能通过结构/统计验证，但自动链只能给出多个候选
+表/字段布局在目标版本确实变了，且变化不是通用规则
+```
+
+什么时候**不应该**新增 override：
+
+```text
+只是为了让 202 项看起来全绿
+从目标 version.json 反抄答案
+从 frozen JSON 拷贝整块结果
+把旧版本 override 原样复制过来，没有目标证据
+```
+
+新增或删除 override 后必须做：
+
+```bash
+# 1) 重跑 draft
+python3 tools/update.py version/6.7.0 \
+  --base version/7.0/version.json \
+  --slots version/6.7.0/slots.json \
+  --ida version/6.7.0/ida.json \
+  --emit /tmp/draft67.json \
+  --report /tmp/report67.md
+
+# 2) 比较 draft 的变化（新增/缺失/值不同）
+# 3) 重跑 dump、统计、RVA 检查
+# 4) 再跑 7.0/7.1 回归
+```
+
+6.7 这次实际删除了：
+
+```text
+stringDecrypt.override.json
+tables.override.json
+addresses.override.json
+count.override.json
+registrationFields.override.json
+keyformulas.values.json
+```
+
+删除后仍能重跑，说明这些项已经由自动链 + 结构证据覆盖。
+剩下的 `fieldDecode.override.json` / `decodeExpr.override.json` 不是“还没处理”，
+而是当前通用模板还无法表达的部分；它们必须带着目标证据保留。
+
+#### `fieldDecode.override.json` 怎么写
+
+这份文件不是“整份 version.json 的备份”，而是**按结构体和字段覆盖**自动结果。
+顶层只认这几块：
+
+```json
+{
+  "_comment": "为什么需要这份 override",
+  "fieldDecode": {
+    "typeDef": {
+      "nameIndex": "sub:0x6220594E",
+      "methodStart": "xor:0x0DF2043C",
+      "field_count": "xor:0xA791"
+    },
+    "method": {
+      "flags": "sub:5486",
+      "iflags": "xor:0xEF3B"
+    }
+  },
+  "structOffsets": {
+    "Il2CppTypeDefinition": {
+      "nameIndex": 8,
+      "methodStart": 20,
+      "field_count": 58
+    }
+  },
+  "typeDefOffsets": {
+    "namespaceIndex": 32,
+    "methodStart": 20
+  }
+}
+```
+
+字段含义：
+
+```text
+fieldDecode[结构体][字段] = "op:key"
+  op   : xor / add / sub
+  key  : 可以是 0x... 或十进制
+
+structOffsets[结构体][字段] = 字节偏移
+typeDefOffsets[字段]       = TypeDef 字段的字节偏移
+```
+
+`update.py` 的合并方式：
+
+```text
+自动结果 fieldDecode[st][field]
+    ← override.fieldDecode[st][field]
+自动结果 structOffsets[st][field]
+    ← override.structOffsets[st][field]
+自动结果 typeDefOffsets[field]
+    ← override.typeDefOffsets[field]
+```
+
+没有出现在 override 里的字段保持不变，所以 override 可以只写需要修正的项。
+`_comment` 不会写进最终 version JSON，但必须保留，用来说明证据来源。
+
+推荐写法：
+
+```json
+{
+  "_comment": "6.7 TypeDef 布局：反编译 + 原始 metadata 验证；method_count 总和=687467",
+  "fieldDecode": {
+    "typeDef": {
+      "methodStart": "xor:0x0DF2043C",
+      "fieldStart": "sub:0x2318D1B4",
+      "method_count": "sub:0x5B59"
+    }
+  },
+  "structOffsets": {
+    "Il2CppTypeDefinition": {
+      "methodStart": 20,
+      "fieldStart": 40,
+      "method_count": 56
+    }
+  }
+}
+```
+
+怎么得到这些值：
+
+```text
+1. 先跑 tools/ida_export.py，得到目标版本的 fieldDecode 候选
+2. 跑 tools/ida_fielddecode.py，用旧版本的已知 (op,key) 反查目标 (width,disp)
+3. 唯一匹配的项可以直接作为候选
+4. 同位置多个 key / 没有候选的项，回到目标 GIMeta_Setup* 反编译
+5. 确认 raw 字段、op、key、width、disp 后，只把需要修正的字段写进 override
+6. 用 method_count/field_count 总和、typeDef 边界、name 可打印率验证
+```
+
+`tools/ida_fielddecode.py` 的用法：
+
+```bash
+python3 tools/ida_fielddecode.py \
+  --old version/7.0/ida.json \
+  --new version/6.7.0/ida.json \
+  --version-json version/6.7.0/version.draft.json \
+  --out version/6.7.0/ida/fielddecode.auto.json
+```
+
+它输出的是**候选**，不是直接覆盖：
+
+```text
+唯一匹配 → 可参考
+同位置多个 key → 歧义，必须人工
+找不到 → 回到目标 decomp
+```
+
+`fieldDecode` 的最终验收不是“override 里写了多少项”，而是：
+
+```text
+typeDef name/namespace 可打印
+method_count 总和 == methodsCount
+field_count/property_count/event_count 总和合理
+dump type 数 == typeDefinitionsCount
+非法 start/越界数量为 0
+```
+
+#### `decodeExpr.override.json` 怎么写
+
+这份文件覆盖的是**字段解码表达式**，不是字段偏移。
+结构是“函数名 → 签名 + C++ 函数体”：
+
+```json
+{
+  "_comment": "6.7 op 顺序与 7.0/7.1 不同，不能沿用旧 decodeExpr",
+  "decTypeNameIndex": {
+    "sig": "int32_t decTypeNameIndex(uint32_t raw)",
+    "cpp": "return (uint32_t)(raw) - (uint32_t)kTypeDefNameIndex.key;"
+  },
+  "decMethodFlags": {
+    "sig": "uint16_t decMethodFlags(uint16_t raw, uint32_t i)",
+    "cpp": "uint32_t k = ((-9788u * i + 5882u) ^ 0xDEDu) + 15325u; return (uint16_t)(k ^ (uint32_t)(uint16_t)(raw + 13697u));"
+  }
+}
+```
+
+每个函数体必须满足：
+
+```text
+sig 的参数/返回类型与 C++ 调用点一致
+cpp 是一个可直接编译的函数体
+只使用版本 JSON 提供的 key 变量/常量
+不要写 C++ 里不存在的辅助函数
+```
+
+可用的 key 变量由生成的头文件提供，例如：
+
+```text
+kTypeDefNameIndex.key
+kTypeDefMethodStart.key
+kTypeDefFieldStart.key
+keyMethod(i)
+keyProperty(i)
+keyEvent(i)
+keyEventAccessor(i)
+keyParam(i)
+keyContainer(c)
+keyGenericParam(i)
+keyImage(i)
+```
+
+怎么得到表达式：
+
+```text
+1. 在目标 IDA 反编译 GIMeta_SetupTypeInfoLocked /
+   SetupMethodsLocked / SetupFieldsLocked / SetupPropertiesLocked /
+   SetupEventsLocked / SetupParameters
+2. 找到 raw -> decoded 的那一行
+3. 区分：字段偏移（structOffsets）还是解码表达式（decodeExpr）
+4. 把目标表达式抄成 cpp，保留位宽和类型转换
+5. 同一组字段用 dump 统计验证；不能只看单个方法
+```
+
+不能这样做：
+
+```text
+直接复制 7.0 的 decodeExpr.override.json
+只改版本号，不改 op 顺序
+用目标 version.json 反推表达式
+为了消掉编译错误随便加 cast/常量
+```
+
+改完后按顺序验证：
+
+```bash
+# 1) draft 能生成
+python3 tools/update.py version/6.7.0 \
+  --base version/7.0/version.json \
+  --slots version/6.7.0/slots.json \
+  --ida version/6.7.0/ida.json \
+  --emit /tmp/draft67.json \
+  --report /tmp/report67.md
+
+# 2) 编译 + dump
+make dump VERSION=6.7.0
+
+# 3) 统计 / RVA / 名字抽查
+# types / methods / fields / properties / events
+# RVA distinct ratio、garbage、type name printable
+```
+
+`decodeExpr` 写错时典型症状：
+
+```text
+编译能过，但 dump 里名字/索引大面积错
+method flags/iflags 看起来随机
+property getter/setter 变成不对应的方法
+event add/remove/raise 噪音很大
+```
+
+这时不要继续加 override；先回到目标函数，确认 raw 的位宽和 op 顺序。
+
+### 第 6 步：生成 dump，先看统计和 RVA，不要先看名字
+
+6.7 dump 验收结果：
+
+```text
+output: out/dump67.cs
+size:   182246180
+md5:    195b10ea2aea57f520f989d8b52c8354
+types:  83775
+methods:665827
+fields: 413644
+props:  108747
+events: 617
+garbage:0
+```
+
+RVA 唯一性：
+
+```text
+RVA 总数:       665827
+不同 RVA 数:    665353
+去重率:         99.9288%
+单一 RVA 最大:  61
+```
+
+这两个检查能快速识别“方法地址表选错/全指向同一片区域”的假 dump。
+名字乱码、字段缺失也要看，但先看统计和 RVA，能更早发现结构错误。
+
+### 第 7 步：逐项移除 override，确认不是靠快照过关
+
+6.7 最终只保留两个 override：
+
+```text
+version/6.7.0/ida/fieldDecode.override.json
+version/6.7.0/ida/decodeExpr.override.json
+```
+
+已经移除并由自动链覆盖的：
+
+```text
+stringDecrypt.override.json
+tables.override.json
+addresses.override.json
+count.override.json
+registrationFields.override.json
+keyformulas.values.json
+```
+
+移除时不是一次性删掉，而是逐项重跑：
+
+```text
+删一个 override
+    ↓
+重跑 update.py
+    ↓
+比较 draft：新增字段/缺失字段/值不同
+    ↓
+重跑 dump/统计/RVA
+```
+
+判定“自动覆盖”的标准是：**删掉 override 后结果仍与验证基线一致**，
+而不是“自动工具输出了一个看似合理的文件”。
+
+### 第 8 步：回归 7.0/7.1
+
+每次工具改动后都要回到旧版本：
+
+```text
+7.0: 177/202（保持，不强行拉高）
+7.1: 202/202
+7.1 verify.py: 28/28 PASS
+7.0/7.1 dump md5 不变
+```
+
+6.7 的当前状态：
+
+```text
+保留 fieldDecode/decodeExpr override 时：202/202
+无 stringDecrypt/tables/addresses/count/registrationFields override
+```
+
+> 注意：6.7 没有目标 `version.json`，所以“202/202”是项目内验证口径；
+> 它不等同于拿目标真值逐项对照。真正能说明问题的是结构自证、dump 统计、
+> RVA 唯一性，以及删 override 后仍可重跑。
+
+### 第 9 步：看报告、记录来源、学习下一版映射
+
+`update.py` 结束后至少检查：
+
+```text
+version/<ver>/update-report.md
+version/<ver>/version.draft.json
+  _update.relocate_auto
+  _update.ida_filled
+  _update.extra_filled
+  _update.fieldDecode_auto / fieldDecode_override
+  _update.decodeExpr_auto / decodeExpr_override
+  _update.keyFormulas_auto
+  _update.registrationFields_auto
+```
+
+报告要区分：
+
+```text
+1. 结构自证（可信）
+2. IDA/离线候选（需抽查）
+3. 旧 slot 提示（默认不可信）
+4. 仍用旧值 / 必须人工
+```
+
+如果目标版本已经有 held-out `version.json`，只用于最后对照，不参与生成：
+
+```bash
+python3 tools/json_coverage.py \
+  --draft version/<ver>/version.draft.json \
+  --target version/<ver>/version.json \
+  --base version.json
+```
+
+新版本稳定后，把这次学到的函数读取顺序回灌：
+
+```bash
+python3 tools/learn_ida_map.py \
+  version/<ver>/version.json \
+  version/<ver>/ida.json \
+  --exe version/<ver>/gi.exe \
+  -o tools/ida_table_map.json
+```
+
+注意：
+
+```text
+learn_ida_map 只在 version.json 已经经过验证后跑
+不要把 still-draft / 未确认的值学进全局 map
+学完抽查函数名和读取顺序，避免把 ? 错配固化
+```
+
+### 第 10 步：提交前检查
+
+提交前确认：
+
+```text
+[ ] 目标 version.json 不是从目标答案反填的
+[ ] version.draft.json / version.json 的来源字段可解释
+[ ] slots.json / ida.json / tables_extra.json 没有把错误表名硬塞进去
+[ ] fieldDecode/decodeExpr override 都有目标证据和 _comment
+[ ] 新版本 dump 统计/RVA/名字检查通过
+[ ] 7.0/7.1 dump md5 和 verify 基线不变
+[ ] 没有 frozen snapshot / 临时 dump / 个人路径被提交
+[ ] docs/UPDATE.md 记录了本次新增的工具和失败点
+```
+
+如果只是做试验：
+
+```text
+不要 --apply
+不要覆盖 version/<ver>/version.json
+保留 version.draft.json + update-report.md
+```
+
+## 18.3 这次实际补出来的工具
+
+| 工具/文件 | 作用 | 本次使用 |
+|---|---|---|
+| `tools/sig.py` | 结构签名生成/扫描；支持 section 选择 | 找入口函数候选 |
+| `tools/sigdiff.py` | BinDiff-lite 签名/函数特征 | 函数归一化后的交叉验证 |
+| `tools/dump_funcs.py` | 从 dump 生成函数边界表 | 给签名/对比工具提供边界 |
+| `tools/dump_align.py` | 忽略混淆名的类/方法形状对齐 | 7.1→7.0 hook 候选召回（独立流程） |
+| `tools/hook_resolve.py` | 调用点/修饰符/LCS/函数体证据重排 | 7.1→7.0 hook 自动补全与纠错 |
+| `tools/update.py` | 冷启动编排 | 生成 6.7 draft |
+| `tools/table_roles.py` | 表角色识别 | 包括 `imagesOffset` 的自动角色 |
+| `tools/regfields_auto.py` | registrationFields 自动推导 | 去掉对应 override |
+| `tools/count_auto.py` | count 公式自动推导 | 去掉 count override |
+| `tools/stringdecrypt_auto.py` | 字符串公式自动提取 | 去掉 stringDecrypt override |
+
+注意：`dump_align.py` 只负责**候选召回**；`hook_resolve.py` 才做最终证据重排
+（调用点相对位置、caller 形状、方法修饰符、类内 LCS、函数体相似度）。两者都不应把
+hook 映射写进 version JSON；高置信旧结果默认保留，只有 LCS/调用点有明确跨版本证据时才替换。
+
+## 18.4 自动化边界（这次验证过的）
+
+已经可以自动化的部分：
+
+```text
+签名找函数候选
+RegisterTables → T0/T1/MHY
+表角色/部分表 offset/count
+字符串公式（从目标函数提取）
+registrationFields
+部分 keyFormulas
+dump 生成/统计/RVA 检查
+```
+
+仍必须人工或 override 的部分：
+
+```text
+6.7 fieldDecode 的少量结构字段
+6.7 decodeExpr 的非通用表达式
+无法从结构唯一确定、只能靠语义判断的表项
+verify.py 的版本特定检查
+```
+
+原则：
+
+```text
+唯一命中 + 结构自洽 → 自动接受
+多个候选 / 只有名字像 → 拒绝或进 override
+不能用目标 version.json 反填
+不能用 frozen JSON 冻结结果
+```
+
+## 18.5 下一次换版本照着做
+
+```text
+1. 固定当前稳定版的 dump md5、verify 结果
+2. 新版本解包，检查 gi.exe / global-metadata.dat / startup-metadata.dat
+3. sig.py scan，生成 sig_hits.json
+4. slot_scan.py，生成 slots.json
+5. ida_export.py，生成 ida.json + ida/decomp/
+6. offline_extract.py，生成 ida/tables_extra.json
+7. 反编译 RegisterTables，取 T0/T1/MHY 并验证消费者字段
+8. update.py --base <上一版>，生成 version.draft.json + report
+9. 先看报告和 draft 的 TODO，不要先手填 202 项
+10. 自动链覆盖不了的再补 fieldDecode/decodeExpr override
+11. make dump VERSION=<ver>
+12. dump 统计 / RVA / 名字抽查
+13. 逐项删 override，确认自动链真的能复现
+14. 新版本稳定后 learn_ida_map，更新全局映射
+15. 回归旧版本 dump md5 / verify
+```
+
+这次最值得保留的经验：
+
+```text
+先证明“表/字段/地址是同一套结构”，再追求覆盖率
+先看 dump 统计，再看名字
+自动化的价值是“可重跑 + 可解释”，不是“全绿”
+```
+
+## 18.6 常见失败与处理
+
+| 现象 | 先检查 | 处理 |
+|---|---|---|
+| `slot_scan` 找不到 MHY | 传的是不是 `gi.exe`；`.rdata` 是否有 `MHY\0` | 换正确 exe；不要拿 `gi-dump` 或 dll 当输入 |
+| `slot_scan` 候选很少 | `md.skipdata` 是否开启；PE 段映射 | 保持 skipdata；按 PE 段表 VA→文件偏移 |
+| `slots.json` 有候选但值不对 | 旧 slot 跨版本重排 | 只当候选；用 relocate 值/结构自证，不要直接采用 |
+| `ida.json` 为空 | Hex-Rays 授权；i64 是否比 exe 旧；`sig_hits` 是否为空 | 用正确 IDAT/Hex-Rays；重建或更新 i64；先生成 sig_hits |
+| `ida.json` 只有少量表 | `--fast` 只反编译 sig 命中；`GI_TEXT` 是否设置 | 补 `ida_wanted.txt` 函数；跑 offline_extract；必要时全量导出 |
+| `update.py` 大量仍用旧值 | report 第 4 段；`ida_filled`/`extra_filled` 是否为空 | 补 `ida.json`/`tables_extra`；不要先手填 202 项 |
+| `tables_extra` 表名明显错 | offline_extract 的 `funcs/seq`；`table_funcs.json` 语义 | 删掉错项；修正读序；不要用目标 version.json 反填 |
+| dump 名字大面积乱码 | stringDecrypt、fieldDecode、decodeExpr、表 offset | 先验证字符串可打印率，再查字段 op/key |
+| dump 统计不对/越界 | 表 offset/count、typeDef 布局、字段宽度 | 回到目标 decomp 和 metadata 边界验证；不要靠加 cast 硬过 |
+| 7.0/7.1 md5 变了 | 改了生成代码或共享 JSON | 立即回退；旧版本基线不能因新版本工具改动而变 |
+| override 删掉后结果不一致 | 该 override 仍是必要证据 | 保留并写清 `_comment`；不要用冻结快照替代 |
+
+Hook 7.1→7.0 的匹配是另一条独立流程，不属于本次 6.7 版本更新链；
+不要把 hook 映射结果混进 version JSON 或 dump 生成流程。
 

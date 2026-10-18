@@ -172,10 +172,18 @@ def main():
     for fam in ('genericClassRangeCountFormula', 'genericInstsCountFormula', 'typesCountFormula'):
         tf = T.get(fam) or {}
         df = D.get(fam) or {}
+        # op/key 允许十六进制/十进制写法不同；按数值语义比较。
         for k in ('op', 'key'):
-            if k in tf:
-                ncount += 1
+            if k not in tf:
+                continue
+            ncount += 1
+            if k == 'op':
                 cok += (str(df.get(k)).lower() == str(tf.get(k)).lower())
+            else:
+                try:
+                    cok += (int(str(df.get(k)), 0) == int(str(tf.get(k)), 0))
+                except Exception:
+                    cok += (str(df.get(k)).lower() == str(tf.get(k)).lower())
     # 202 口径：addresses 4 + stringDecrypt 5 + tables 102 + keyFormulas 43 + fieldDecode 42 + counts 6
     # keyFormulas 按目标公式的实常数个数加权，不再无条件 +43。
     kf_weight = int(round(43.0 * kf_const_ok / kf_const_tot)) if kf_const_tot else 0

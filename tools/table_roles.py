@@ -24,6 +24,79 @@ sys.path.insert(0, HERE)
 from gen_version import load_json_with_comments  # noqa: E402
 
 H = 0x210
+ALLOWED_STRIDES = {4, 6, 8, 10, 12, 14, 16, 26, 40}
+
+
+def enrich_table_strides(root, tables):
+    """从反编译数据流补全候选表的 stride/divisor 证据。
+
+    旧 ida.json 只有 slot/op/key/value/funcs。这里同时记录：
+      · muls：`lhs + 8 * i` / `26 * i` 这类索引步长；
+      · divs：`... / 0x28` / `... >> 3` 这类计数/字节数证据。
+    两者分开，避免把 count 表的 `/14` 误当成 14 字节 offset 表。
+    """
+    import glob as _glob
+    texts = []
+    for f in _glob.glob(os.path.join(root, 'ida', 'decomp', '*.c')):
+        try:
+            texts.append(open(f, encoding='utf-8', errors='ignore').read().splitlines())
+        except Exception:
+            pass
+    if not texts:
+        return
+    for t in tables:
+        try:
+            slot = int(str(t.get('slot', '0')), 0)
+        except Exception:
+            continue
+        if slot <= 0:
+            continue
+        pat = re.compile(r'g_MHY_Table\s*\+\s*(0x%X|%d)\b' % (slot, slot))
+        muls, divs = set(), set()
+        for lines in texts:
+            for i, line in enumerate(lines):
+                if not pat.search(line):
+                    continue
+                # 先看当前行和紧邻两行（很多表达式跨行）。
+                win = '\n'.join(lines[max(0, i - 1):i + 3])
+                for m in re.finditer(r'(?<![\w.])(\d+)\s*(?:LL|ll|L)?\s*\*\s*', win):
+                    n = int(m.group(1))
+                    if n in ALLOWED_STRIDES:
+                        muls.add(n)
+                for m in re.finditer(r'/\s*(0x[0-9A-Fa-f]+|\d+)', win):
+                    n = int(m.group(1), 0)
+                    if n in ALLOWED_STRIDES:
+                        divs.add(n)
+                for m in re.finditer(r'>>\s*(\d+)', win):
+                    n = 1 << int(m.group(1))
+                    if n in ALLOWED_STRIDES:
+                        divs.add(n)
+                # 再做局部变量数据流：`vX = MHY[slot] ...` 后 12 行内的 vX 用法。
+                lm = re.match(r'\s*(\w+)\s*=', line)
+                if not lm:
+                    continue
+                lhs = lm.group(1)
+                for j in range(i + 1, min(i + 13, len(lines))):
+                    ln = lines[j]
+                    if lhs not in ln:
+                        continue
+                    for m in re.finditer(re.escape(lhs) + r'\s*\+\s*(\d+)\s*(?:LL|ll|L)?\s*\*', ln):
+                        n = int(m.group(1))
+                        if n in ALLOWED_STRIDES:
+                            muls.add(n)
+                    for m in re.finditer(r'(\d+)\s*(?:LL|ll|L)?\s*\*\s*' + re.escape(lhs) + r'\b', ln):
+                        n = int(m.group(1))
+                        if n in ALLOWED_STRIDES:
+                            muls.add(n)
+                    for m in re.finditer(r'/\s*(0x[0-9A-Fa-f]+|\d+)', ln):
+                        n = int(m.group(1), 0)
+                        if n in ALLOWED_STRIDES:
+                            divs.add(n)
+        if muls:
+            t['muls'] = sorted(set(t.get('muls') or []) | muls)
+            t['strides'] = sorted(set(t.get('strides') or []) | muls)
+        if divs:
+            t['divs'] = sorted(set(t.get('divs') or []) | divs)
 
 
 def main():
@@ -49,6 +122,42 @@ def main():
             continue
         if 0 < v < len(dat) - H:
             cand.append((t, v))
+
+    # 0) 先判断旧读序是否已经明显违反 typeDefs -> methodSlot 的硬约束。
+    # 只有违反时才启用新的语义规则和 stride 证据；7.0/7.1 保持原有算法。
+    def _table_val(name):
+        try:
+            tb = D['tables'][name]
+            import sig as _S
+            pe_ = _S.PE(os.path.join(root, 'gi.exe'))
+            mhy_ = int(str(D.get('addresses', {}).get('mhyTableVA', '0')), 0)
+            raw = struct.unpack_from('<I', pe_.D, pe_.va2off(mhy_ + int(str(tb['slot']), 0)))[0]
+            k = int(str(tb['key']), 0)
+            return {'^': raw ^ k, '-': (raw - k) & 0xFFFFFFFF,
+                    '+': (raw + k) & 0xFFFFFFFF}[tb['op']]
+        except Exception:
+            return None
+
+    semantic_needed = False
+    try:
+        td0 = _table_val('typeDefinitionsOffset')
+        tdc0 = _table_val('typeDefinitionsCount')
+        msot0 = _table_val('methodSlotTableOffset')
+        if td0 is not None and tdc0 is not None and msot0 is not None:
+            end0 = td0 + (tdc0 // 70) * 70
+            # 7.0 的 methodSlot 在 typeDefs 之前，这是已验证布局，不要触发语义重算。
+            # 6.7 冷启动时旧读序会落到 typeDefs 之后很远的位置，才是真正异常。
+            if msot0 < end0:
+                semantic_needed = False
+            else:
+                semantic_needed = not (end0 <= msot0 <= end0 + 0x1000)
+        else:
+            semantic_needed = True
+    except Exception:
+        semantic_needed = True
+
+    if semantic_needed:
+        enrich_table_strides(root, ida.get('tables', []))
 
     def apply(name, t):
         if name not in D.get('tables', {}):
@@ -424,9 +533,205 @@ def main():
         except Exception:
             pass
 
-    # 9) attributesInfoCount：目标版明确是 7.1 残留时，保留基线
-    if 'attributesInfoCount' in D.get('tables', {}) and 'attributesInfoCount' in base.get('tables', {}):
+    # 8.5) 内容/结构语义优先：只用目标 decomp + metadata + 已恢复的布局做判定。
+    #     这些规则在旧读序规则之后执行，语义证据充分时覆盖旧结果。
+    def table_val(name):
+        try:
+            tb = D['tables'][name]
+            import sig as _S
+            pe_ = _S.PE(os.path.join(root, 'gi.exe'))
+            mhy_ = int(str(D.get('addresses', {}).get('mhyTableVA', '0')), 0)
+            raw = struct.unpack_from('<I', pe_.D, pe_.va2off(mhy_ + int(str(tb['slot']), 0)))[0]
+            k = int(str(tb['key']), 0)
+            return {'^': raw ^ k, '-': (raw - k) & 0xFFFFFFFF,
+                    '+': (raw + k) & 0xFFFFFFFF}[tb['op']]
+        except Exception:
+            return None
+
+    def one(cands_):
+        seen = []
+        for t in cands_:
+            if t not in seen:
+                seen.append(t)
+        return seen
+
+    # 语义开关在进入旧规则前已经算好（semantic_needed）。
+    old_tables = json.loads(json.dumps(D.get('tables', {})))
+    assigned_sem = set()
+
+    # typeDefs 末尾之后的第一个 SetupTypeInfo 表就是 methodSlotTableOffset。
+    try:
+        td = table_val('typeDefinitionsOffset')
+        tdc = table_val('typeDefinitionsCount')
+        if td is not None and tdc is not None:
+            end = td + (tdc // 70) * 70
+            xs = [t for t in tabs if hasf(t, 'GIMeta_SetupTypeInfoLocked')
+                  and (tf(t) or 0) >= end and (tf(t) or 0) <= end + 0x1000]
+            if len(xs) == 1:
+                apply('methodSlotTableOffset', xs[0]); assigned_sem.add('methodSlotTableOffset')
+            # 6 字节的“小计数”与紧邻 typeDefs 末尾的 offset 配对。
+            xs = [t for t in tabs if hasf(t, 'GIMeta_SetupTypeInfoLocked')
+                  and 6 in (t.get('divs') or []) and 0 < (tf(t) or 0) < 0x100000]
+            xs = [t for t in xs if t.get('slot') != D.get('tables', {}).get('methodSlotTableOffset', {}).get('slot')]
+            if xs:
+                apply('methodSlotCount', min(xs, key=lambda t: tf(t) or 0))
+                assigned_sem.add('methodSlotCount')
+    except Exception:
+        pass
+
+    # fieldOffset：4 字节、值为普通字段偏移（0x10/0x18/...），而不是旧版的静态标志表。
+    xs = [t for t in tabs if hasf(t, 'GIMeta_SetupFieldsLocked')
+          and 4 in (t.get('muls') or []) and 0 < (tf(t) or 0) < 0x1000000]
+    if xs:
+        def small_int_score(t):
+            v = tf(t) or 0
+            try:
+                import sig as _S
+                pe_ = _S.PE(os.path.join(root, 'gi.exe'))
+                vals = [struct.unpack_from('<I', pe_.D, pe_.va2off(int(str(D.get('addresses', {}).get('mhyTableVA', '0')), 0) + int(str(t['slot']), 0)))[0] for _ in range(1)]
+                # 取表本身前 64 项；这里必须用解码后的 value，而不是 slot 原值。
+                off = v
+                vals = [struct.unpack_from('<I', dat, H + off + 4 * i)[0] for i in range(min(64, max(1, (len(dat) - H - off) // 4)))]
+                return sum(1 for x in vals if 0 < x < 0x10000) / max(1, len(vals))
+            except Exception:
+                return 0.0
+        t = max(xs, key=small_int_score)
+        if small_int_score(t) >= 0.5:
+            apply('fieldOffset', t); assigned_sem.add('fieldOffset')
+
+    # methodSpecs：12 字节，且读取函数是 SetupTypeInfo/RuntimeInit。
+    xs = [t for t in tabs if 12 in (t.get('muls') or [])
+          and (hasf(t, 'GIMeta_SetupTypeInfoLocked') or hasf(t, 'GIMeta_RuntimeInit'))]
+    xs = one(xs)
+    if len(xs) == 1:
+        apply('methodSpecs', xs[0]); assigned_sem.add('methodSpecs')
+
+    # genericContainers/genericParameters：16/14 字节步长。
+    xs = one([t for t in tabs if 16 in (t.get('muls') or [])
+              and (hasf(t, 'GIMeta_GetGenericParameterInfo')
+                   or hasf(t, 'GIMeta_GetGenericMethodParamInfo')
+                   or hasf(t, 'GIMeta_SetupNestedLocked'))])
+    pure = [x for x in xs if (x.get('muls') or []) == [16]]
+    chosen = pure if len(pure) == 1 else (xs if len(xs) == 1 else [])
+    if len(chosen) == 1:
+        apply('genericContainers', chosen[0]); assigned_sem.add('genericContainers')
+    xs = one([t for t in tabs if 14 in (t.get('muls') or [])
+              and (hasf(t, 'GIMeta_GetGenericParameterInfo')
+                   or hasf(t, 'GIMeta_TypeInfoDispatcher')
+                   or hasf(t, 'GIMeta_SetupNestedLocked'))])
+    if len(xs) == 1:
+        apply('genericParameters', xs[0]); assigned_sem.add('genericParameters')
+
+    # genericMethodTable / Count：RuntimeInit 中两张相邻表，和等于 methodSpecs
+    # 或 methodPointerIndexOffset（不同版本落点不同）。
+    rc = one([t for t in tabs if hasf(t, 'GIMeta_RuntimeInit') and (tf(t) or 0) > 0])
+    anchors = set()
+    for nm in ('methodSpecs', 'methodPointerIndexOffset'):
+        v = table_val(nm)
+        if v:
+            anchors.add(v)
+    pair = None
+    for i in range(len(rc)):
+        for j in range(i + 1, len(rc)):
+            if (tf(rc[i]) or 0) + (tf(rc[j]) or 0) in anchors:
+                pair = (rc[i], rc[j]); break
+        if pair:
+            break
+    if pair:
+        a1, a2 = sorted(pair, key=lambda t: t.get('seq', 0))
+        apply('genericMethodTable', a1)
+        apply('genericMethodTableCount', a2)
+        assigned_sem.update(('genericMethodTable', 'genericMethodTableCount'))
+
+    # genericTypeArgOffset / genericClassRangeOffset：startup 表，4/8 字节步长。
+    # typeArg 是较小的 4 字节表；classRange 是剩下的 8 字节表。
+    xs = [t for t in tabs if hasf(t, 'GIMeta_RuntimeInit') and 4 in (t.get('muls') or [])
+          and (tf(t) or 0) > 0x10000]
+    if xs:
+        t = min(xs, key=lambda x: tf(x) or 0)
+        apply('genericTypeArgOffset', t); assigned_sem.add('genericTypeArgOffset')
+    try:
+        typearg_v = table_val('genericTypeArgOffset')
+    except Exception:
+        typearg_v = None
+    xs = [t for t in tabs if hasf(t, 'GIMeta_RuntimeInit') and 8 in (t.get('muls') or [])
+          and (tf(t) or 0) > 0x100000 and (tf(t) or 0) != (typearg_v or 0)]
+    if xs:
+        # 优先只带 8 的表，避免 8/12/14 混合的表把 methodSpecs 抢走。
+        pure = [t for t in xs if (t.get('muls') or []) == [8]]
+        t = min(pure or xs, key=lambda x: tf(x) or 0)
+        apply('genericClassRangeOffset', t); assigned_sem.add('genericClassRangeOffset')
+
+    # interfacesTable：SetupTypeInfo 里 6 字节、只做乘法索引的表。
+    xs = [t for t in tabs if hasf(t, 'GIMeta_SetupTypeInfoLocked')
+          and 6 in (t.get('muls') or []) and 6 not in (t.get('divs') or [])
+          and 0 < (tf(t) or 0) < 0x100000]
+    if len(xs) == 1:
+        apply('interfacesTable', xs[0]); assigned_sem.add('interfacesTable')
+
+    # parameterDefaultValuesOffset：默认参数表，排除字段/参数共用的 blob。
+    blob_slot = D.get('tables', {}).get('fieldAndParameterDefaultValueDataOffset', {}).get('slot')
+    xs = [t for t in tabs if (t.get('funcs') or [None])[0] == 'GIMeta_GetDefaultParameterValueObject'
+          and (tf(t) or 0) > 0x100000 and t.get('slot') != blob_slot]
+    if xs:
+        apply('parameterDefaultValuesOffset', max(xs, key=lambda t: tf(t) or 0))
+        assigned_sem.add('parameterDefaultValuesOffset')
+
+    # 默认值 blob：同时被字段/参数默认值读取函数使用。
+    xs = one([t for t in tabs if hasf(t, 'GIMeta_GetFieldDefaultValue')
+              and hasf(t, 'GIMeta_GetDefaultParameterValueObject')])
+    if len(xs) == 1:
+        apply('fieldAndParameterDefaultValueDataOffset', xs[0])
+        assigned_sem.add('fieldAndParameterDefaultValueDataOffset')
+
+    # attributesInfoCount：8 字节表的小计数候选（排除 methodSlotCount）。
+    xs = [t for t in tabs if hasf(t, 'GIMeta_SetupTypeInfoLocked')
+          and 8 in (t.get('divs') or []) and 0 < (tf(t) or 0) < 0x100000
+          and D.get('tables', {}).get('methodSlotCount', {}).get('slot') != t.get('slot')]
+    if xs:
+        x = min(xs, key=lambda t: tf(t) or 0)
+        apply('attributesInfoCount', x); assigned_sem.add('attributesInfoCount')
+
+    # attributeTypesOffset：4 字节、较大的类型索引表。
+    xs = [t for t in tabs if hasf(t, 'GIMeta_SetupTypeInfoLocked')
+          and 4 in (t.get('muls') or []) and (tf(t) or 0) > 0x100000
+          and D.get('tables', {}).get('methodSlotTableOffset', {}).get('slot') != t.get('slot')
+          and D.get('tables', {}).get('fieldOffset', {}).get('slot') != t.get('slot')]
+    if xs:
+        ai = table_val('attributesInfoOffset')
+        below = [t for t in xs if ai is None or (tf(t) or 0) < ai]
+        x = min(below or xs, key=lambda t: tf(t) or 0)
+        apply('attributeTypesOffset', x); assigned_sem.add('attributeTypesOffset')
+
+    if not semantic_needed:
+        D['tables'] = old_tables
+
+    # imagesOffset 的独立结构证据：startup 表值为 0，且 RuntimeInit 用 40 字节步长索引。
+    # 7.0/7.1 的零值候选没有 40 字节步长，不会被这条规则碰到。
+    zero40 = [t for t in tabs if hasf(t, 'GIMeta_RuntimeInit')
+              and tf(t) == 0 and 40 in (t.get('muls') or [])]
+    if len(zero40) == 1:
+        apply('imagesOffset', zero40[0])
+
+    # 同 slot 的旧角色只有在语义规则明确重算时才换 op/key。
+    # 这能保住 7.0/7.1 已验证的同 slot key，同时不阻断 6.7 的跨 slot 布局变化。
+    if semantic_needed:
+        for _name, _ent in list(D.get('tables', {}).items()):
+            _b = base.get('tables', {}).get(_name)
+            if not _b or _name in assigned_sem:
+                continue
+            if str(_ent.get('slot', '')).lower() == str(_b.get('slot', '')).lower() and \
+               (_ent.get('op') != _b.get('op') or str(_ent.get('key', '')).lower() != str(_b.get('key', '')).lower()):
+                _ent = dict(_ent)
+                _ent['op'] = _b.get('op')
+                _ent['key'] = _b.get('key')
+                D['tables'][_name] = _ent
+
+    # 只有语义规则没有判定 attributesInfoCount 时，才保留旧基线的兼容值。
+    if (not semantic_needed or 'attributesInfoCount' not in assigned_sem) \
+            and 'attributesInfoCount' in D.get('tables', {}) and 'attributesInfoCount' in base.get('tables', {}):
         D['tables']['attributesInfoCount'] = dict(base['tables']['attributesInfoCount'])
+
 
     if a.apply:
         json.dump(D, open(a.draft, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)

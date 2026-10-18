@@ -43,6 +43,17 @@ def main():
         o=pe.va2off(va)
         return pe.D[o:o+n] if o is not None else b''
 
+    def table_value(name):
+        try:
+            tb = D['tables'][name]
+            va = int(str(D.get('addresses', {}).get('mhyTableVA', '0')), 0) + int(str(tb['slot']), 0)
+            raw = int.from_bytes(rdbytes(va, 4), 'little')
+            k = int(str(tb['key']), 0)
+            return {'^': raw ^ k, '-': (raw - k) & 0xFFFFFFFF,
+                    '+': (raw + k) & 0xFFFFFFFF}[tb['op']]
+        except Exception:
+            return None
+
     def offsets(ptr,text):
         return set(int(x) for x in re.findall(r'\*\(\s*_QWORD\s*\*\)\s*\(\s*'+re.escape(ptr)+r'\s*\+\s*(\d+)',text))
 
@@ -127,6 +138,31 @@ def main():
             R['genericClassesCount']=Rb.get('genericClassesCount')
         elif startup:
             R['genericClassesCount']=(len(startup)-off)//8
+
+    # 6.7 的 field base/index 表仍在 tables_extra 的两个 deprecated 角色里。
+    if not R.get('fieldOffsetBaseTable') or R.get('fieldOffsetBaseTable') in ('0', 0):
+        v = table_value('fieldTableOffset_deprecated')
+        if v:
+            R['fieldOffsetBaseTable'] = hx(v)
+    if not R.get('fieldIndexTable') or R.get('fieldIndexTable') in ('0', 0):
+        v = table_value('fieldIndexTableOffset_deprecated')
+        if v:
+            R['fieldIndexTable'] = hx(v)
+
+    # 低 24 位偏移 + 0x1000000 静态位：字段表里直接出现这两个掩码。
+    setup_txt = '\n'.join(v for k, v in texts.items() if k.startswith('GIMeta_SetupFieldsLocked'))
+    if re.search(r'&\s*0xFFFFFF\b', setup_txt) and re.search(r'&\s*0x1000000\b', setup_txt):
+        R['fieldOffsetMask'] = '0xFFFFFF'
+        R['fieldStaticMask'] = '0x1000000'
+        R['fieldStaticValue'] = '0x1000000'
+        R['fieldStaticZero'] = 1
+
+    # T0+0x60 在 RuntimeInit 里作为 8 字节方法指针数组的基址。
+    gmp = None
+    for m in re.finditer(r'\*\(\s*_QWORD\s*\*\)\s*\(\s*'+re.escape(t0name)+r'\s*\+\s*(\d+)\s*\)\s*\+\s*8', run):
+        gmp = int(m.group(1))
+    if gmp is not None:
+        R['t0_genericMethodPointers'] = hx(gmp)
 
     out={k:R[k] for k in sorted(R)}
     outp=a.out or os.path.join(root,'ida','regfields.auto.json')

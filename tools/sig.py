@@ -55,6 +55,12 @@ class PE:
                 return roff + (va - sva)
         return None
 
+    def section_bytes(self, name):
+        for nm, sva, vsz, roff, sz in self.sec:
+            if nm == name:
+                return sva, self.D[roff:roff + sz]
+        return None
+
 
 # ---------------------------------------------------------------- token
 def toks_of(insn, strict):
@@ -1386,8 +1392,12 @@ def cmd_scan(a):
     sigs = json.load(open(a.sigs))
     mark('load sigs')
     pe = PE(a.exe)
-    tva, tbytes = pe.text
-    print("扫描 .text（%.1f MB，字节模式优先）…" % (len(tbytes) / 1e6))
+    secname = getattr(a, 'sections', None) or '.text'
+    sec = pe.section_bytes(secname)
+    if sec is None:
+        sys.exit('section not found: %s' % secname)
+    tva, tbytes = sec
+    print("扫描 %s（%.1f MB，字节模式优先）…" % (secname, len(tbytes) / 1e6))
     md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
     mark('load PE')
     hit = miss = amb = 0
@@ -1398,7 +1408,7 @@ def cmd_scan(a):
     if os.path.exists(cache_path):
         try:
             _c = json.load(open(cache_path))
-            cache = {k: int(v) for k, v in (_c.get('hits') or {}).items()}
+            cache = {k: int(str(v), 0) for k, v in (_c.get('hits') or {}).items()}
             print("读取缓存 %s（%d 条）" % (cache_path, len(cache)))
         except Exception as e:
             print("⚠ 缓存读取失败（忽略）: %s" % e)
@@ -1426,7 +1436,8 @@ def cmd_scan(a):
         needle = pb[fo:fo + fl]
         cands = []; pos = 0; truncated = False
         if same_build:
-            cands.append(origin)      # 同版本：记录的原地址就是标准答案，放最前优先核验
+            # 记录的是函数起点；签名窗口在函数起点 + skip_bytes。
+            cands.append(origin + sg.get('skip_bytes', 0))
         while True:
             k = tbytes.find(needle, pos)
             if k < 0: break
@@ -1448,15 +1459,6 @@ def cmd_scan(a):
         for c in list(cands):
             near.extend(_nearby_func_starts(pe, tva, tbytes, c, 0x90))
         cands = list(dict.fromkeys(cands + near))
-        if getattr(a, 'funcs', None):
-            funcs = load_funcs(a.funcs)
-            snapped = []
-            for c in cands:
-                fs = snap_func(funcs, c)
-                if fs is not None:
-                    snapped.append(fs + sg.get('skip_bytes', 0))
-                # 不在任何函数里的候选（.text 外/垃圾）直接丢掉
-            cands = list(dict.fromkeys(snapped))
         scored = []
         for va in cands:
             if _is_stub(pe, md, va): continue
@@ -1548,7 +1550,14 @@ def cmd_scan(a):
         scored = keep + [t for t in scored if t not in keep]
         top = (scored[0][1], scored[0][2], scored[0][3])
         tied = [t for t in scored if (t[1], t[2], t[3]) == top]
+        # 先得到匹配窗口；如果提供了函数表，窗口 -> 函数起点。
+        # 不再用 window - skip_bytes 猜函数头。
+        funcs_scan = load_funcs(a.funcs) if getattr(a, 'funcs', None) else None
         fstart = scored[0][0] - sg.get('skip_bytes', 0)
+        if funcs_scan:
+            snapped_start = snap_func(funcs_scan, scored[0][0])
+            if snapped_start is not None:
+                fstart = snapped_start
         if len(tied) > 1:
             pick = [t for t in tied if t[0] - sg.get('skip_bytes', 0) == origin]
             if same_build and len(pick) == 1:
@@ -2443,6 +2452,8 @@ def main():
     s.add_argument('--slow', action='store_true',
                    help='启用「立即数种子 + callee 指纹」两轮重救援（+20s；7.0 实测 48→50/54）')
     s.add_argument('--loose-only', action='store_true')
+    s.add_argument('--sections', default='.text',
+                   help='扫描的 PE 段（默认 .text；7.1 hook 方法在 il2cpp）')
     s.add_argument('--funcs', default=None, help='IDA 导出的 funcs_wanted.json（精确函数起点）')
     s.add_argument('--callee-recall', dest='callee_recall', action='store_true', default=False,
                    help='用 reference callees 做 recall 救援（默认关，开启后要遍历所有函数）')

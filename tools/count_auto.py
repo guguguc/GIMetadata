@@ -84,7 +84,7 @@ def read_formulas(root):
         if k in seen:
             continue
         seen.add(k)
-        out.append({'ptr': ptr, 'off': off, 'op': op, 'key': key})
+        out.append({'ptr': ptr, 'off': off, 'op': op, 'key': key, 'idx': len(out)})
     return out
 
 
@@ -153,6 +153,35 @@ def main():
         if pool:
             inf = pool[0]
 
+    # 6.7 一类冷启动：types/genericInsts 的字段互换，base 的 types 字段
+    # 现在对应 genericInsts；此时按 RuntimeInit 中出现顺序取前两个 T1 计数读取：
+    # 第一个是 typesCount，第二个是 genericInstsCount。
+    if t1 and bt is not None and bi is not None and find(t1, bi) is None:
+        cs = sorted([f for f in forms if f['ptr'] == t1], key=lambda f: f.get('idx', 0))
+        if len(cs) >= 2:
+            tf, inf = cs[0], cs[1]
+
+    # genericClassRange 字段也可能移动。只在 base types 字段仍存在、但
+    # genericClassRange 字段消失时启用：选非 T1/T0 计数读取中 offset 最大的
+    # 减法形式（6.7：T0+0x98）。
+    if bg is not None and find(t0, bg) is None and t1 and tf:
+        pools = {}
+        for f in forms:
+            if f['ptr'] == t1:
+                continue
+            pools.setdefault(f['ptr'], []).append(f)
+        cands = []
+        for ptr, fs in pools.items():
+            for f in fs:
+                if f['op'] == '-':
+                    cands.append(f)
+        if cands:
+            gf = max(cands, key=lambda f: f['off'])
+            t0 = gf['ptr']
+
+    # types 字段若也移动，说明是 6.7 那种角色互换；此时保留 decomp 原始 op/key。
+    layout_shift = bool(bt is not None and (not tf or tf['off'] != bt))
+
     def emit(name, f, field_key):
         if not f:
             return
@@ -162,9 +191,9 @@ def main():
         if (old.get(field_key) is not None and lit_int(old[field_key]) == off
                 and semantics(old.get('op'), old.get('key')) == semantics(op, key)):
             return
-        # 字段移动时，反编译有时把 add imm32 写成 sub (2^32-imm)。
-        # 优先用目标 exe 里真实出现的立即数形式。
-        if f['off'] != lit_int(old.get(field_key, '0')) if old.get(field_key) is not None else False:
+        # 字段没有移动时，保留旧版本/目标 exe 立即数规范化的写法；
+        # 字段发生移动（6.7 types/genericInsts 互换）时，直接用反编译里的 op/key。
+        if not layout_shift:
             if op == '-':
                 alt = (-key) & M32
                 if immediate_count(exe, alt) and not immediate_count(exe, key):
@@ -173,6 +202,7 @@ def main():
                 alt = (-key) & M32
                 if immediate_count(exe, alt) and not immediate_count(exe, key):
                     op, key = '-', alt
+
         out[name] = {field_key: '0x%X' % off, 'op': op, 'key': '0x%X' % key}
 
     emit('genericClassRangeCountFormula', gf, 'table0Field')

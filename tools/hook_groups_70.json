@@ -1,0 +1,16 @@
+{
+  "_comment": "7.0 target classes and method shapes used to reproduce the 70-address IDA candidate cache. This is a candidate pool, not a mapping answer.",
+  "groups": {
+    "MJKBAEJOAPP": [
+      ["bool", []],
+      ["float", []]
+    ],
+    "OADLDGCFKGG": [
+      ["bool", ["C"]],
+      ["void", ["C"]]
+    ],
+    "BHFHBMOPLMP": [
+      ["bool", ["C", "string"]]
+    ]
+  }
+}
