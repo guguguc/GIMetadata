@@ -477,10 +477,12 @@ def main():
             H = _j.load(open(hits_path))
             hv = H['hits'] if isinstance(H, dict) and 'hits' in H else H
             names = sorted(hv)
-            funcs = [hv[n] for n in names]
+            # sig_hits.json 里的手工补录项是十六进制字符串（例如 "0x1404D35B0"），
+            # 自动扫描项则是整数；这里统一转成 int，避免 --struct 扫描因格式混用失败。
+            funcs = [int(hv[n], 0) if isinstance(hv[n], str) else hv[n] for n in names]
             print('从 %s 取到 %d 个函数地址（sig.py scan 产物，跨版本自动）'
                   % (os.path.basename(hits_path), len(funcs)))
-            print('  ' + ', '.join('%s@0x%X' % (n, hv[n]) for n in names[:6])
+            print('  ' + ', '.join('%s@0x%X' % (n, a) for n, a in zip(names[:6], funcs[:6]))
                   + (' ...' if len(names) > 6 else ''))
         if not funcs:
             print('\u2717 需要 --hits <sig scan 的 json> 或 --func <VA>')

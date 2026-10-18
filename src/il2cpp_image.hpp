@@ -707,8 +707,16 @@ void decryptHeader()
         inline int32_t methodReturnTypeIndex(uint32_t methodIndex)
         {
             const uint8_t* md = s_GlobalMetadataHeader + header.methodsOffset + 26 * (size_t)methodIndex;
-            uint32_t key = ver::keyMethod(methodIndex);
-            return (int32_t)((*(const uint32_t*)(md + ver::kIl2CppMethodDefinitionReturnTypeOffset)) ^ key ^ kReturnTypeXor);
+            uint32_t raw = *(const uint32_t*)(md + ver::kIl2CppMethodDefinitionReturnTypeOffset);
+            const uint32_t opKey = (uint32_t)ver::kMethodReturnType.key;
+            // 通用：returnType 的 op 由 fieldDecode.method.returnType 决定。
+            // 7.0/7.1 是 xor，6.7 是 sub，最后再与方法级 keyMethod 异或。
+            switch (ver::kMethodReturnType.op) {
+            case '-': raw -= opKey; break;
+            case '+': raw += opKey; break;
+            default:  raw ^= opKey; break;
+            }
+            return (int32_t)(raw ^ ver::keyMethod(methodIndex));
         }
 
         // [V] 方法指针索引表 = MHY[0x94] ^ 0x4A4C0A71（4 字节/方法，-1 = 无实现）。
@@ -907,6 +915,7 @@ void decryptHeader()
             {
                 int32_t st = typeNestedStart(tdI16(&tds[t], ver::kIl2CppTypeDefinitionNestedTypesStartOffset));
                 uint32_t cnt = typeNestedCount(tdU8(&tds[t], ver::kIl2CppTypeDefinitionNestedTypesCountOffset));
+                if (st < 0 || cnt == 0) continue;
                 for (uint32_t i = 0; i < cnt; ++i)
                 {
                     uint32_t child = tbl[st + i];

@@ -688,10 +688,13 @@ std::string eventDef(const Il2CppTypeDefinition* typeDefinition)
     {
         const Il2CppEventDefinition* eventDefinition = img_.GetEventDefinitionFromIndex(eventIndex);
 
+        const uint8_t* eventBytes = (const uint8_t*)eventDefinition;
+        uint32_t rawName = *(const uint32_t*)(eventBytes + ver::kIl2CppEventDefinitionNameIndexOffset);
+        uint32_t rawType = *(const uint32_t*)(eventBytes + ver::kIl2CppEventDefinitionTypeIndexOffset);
         std::string name {img_.GetStringFromIndex(
-            img_.eventNameIndex((uint32_t)eventDefinition->nameIndex, (uint32_t)eventIndex))};
-        // typeIndex 解码由 version.json 的 decEventTypeIndex 决定（7.1: -452544412；7.0: -740753572）
-        int32_t typeIndex = img_.eventTypeIndex((uint32_t)eventDefinition->typeIndex, (uint32_t)eventIndex);
+            img_.eventNameIndex(rawName, (uint32_t)eventIndex))};
+        // typeIndex 解码由 version.json 的 decEventTypeIndex 决定。
+        int32_t typeIndex = img_.eventTypeIndex(rawType, (uint32_t)eventIndex);
         if (typeIndex == -1) continue;
         const Il2CppType* type = img_.GetIl2CppTypeFromIndex(typeIndex);
         if (!type) continue;
@@ -752,6 +755,7 @@ std::unordered_map<int32_t, int32_t> buildNestingMap()
     {
         int32_t st = img_.typeNestedStart(img_.tdI16(&tds[t], ver::kIl2CppTypeDefinitionNestedTypesStartOffset));
         uint32_t cnt = img_.typeNestedCount(img_.tdU8(&tds[t], ver::kIl2CppTypeDefinitionNestedTypesCountOffset));
+        if (st < 0 || cnt == 0) continue;
         for (uint32_t i = 0; i < cnt; i++)
         {
             uint32_t child = tbl[st + i];

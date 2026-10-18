@@ -227,7 +227,7 @@
     "Il2CppGenericContainer": { "argc": 8, "parameterStart": 4 },
     "Il2CppFieldDefaultValue": { "fieldIndex": 0, "dataIndex": 4, "typeIndex": 8 },
     "Il2CppParameterDefaultValue": { "parameterIndex": 0, "dataIndex": 4, "typeIndex": 8 },
-    "Il2CppEventDefinition": { "add": 12, "remove": 8, "raise": 10 },
+    "Il2CppEventDefinition": { "typeIndex": 0, "nameIndex": 4, "add": 12, "remove": 8, "raise": 10 },
     "Il2CppTypeDefinition": {
       "namespaceIndex": 0, "propertyStart": 8, "methodStart": 12,
       "parentIndex": 24, "fieldStart": 28, "unknown20": 32,

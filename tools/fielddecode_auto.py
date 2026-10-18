@@ -147,6 +147,22 @@ class Ctx:
         self.root = root
         self.base = base
         self.draft = draft
+        # 表角色人工覆盖优先于 7.0 继承值 / table_roles 的旧读序。
+        _to = os.path.join(root, 'ida', 'tables.override.json')
+        if os.path.exists(_to):
+            try:
+                ov = json.load(open(_to, encoding='utf-8'))
+                for name, t in ov.items():
+                    if name.startswith('_') or not isinstance(t, dict):
+                        continue
+                    e = dict(self.draft.setdefault('tables', {}).get(name, {}))
+                    for k in ('slot', 'op', 'key', 'stride', 'side', 'role',
+                              'countBias', 'confirmed', 'note'):
+                        if k in t:
+                            e[k] = t[k]
+                    self.draft['tables'][name] = e
+            except Exception:
+                pass
         self.dat = open(os.path.join(root, 'gi', 'Managed', 'Metadata', 'global-metadata.dat'), 'rb').read()
         self.ida = json.load(open(os.path.join(root, 'ida.json'), encoding='utf-8'))
         self.cands = []
@@ -205,10 +221,23 @@ class Ctx:
                 sd = {}
         if not sd:
             sd = draft.get('stringDecrypt', {})
+        # 自动提取结果优先于 base；人工 override 最后覆盖。
+        for _name in ('stringdecrypt.auto.json', 'stringDecrypt.override.json'):
+            _ov = os.path.join(root, 'ida', _name)
+            if os.path.exists(_ov):
+                try:
+                    ov = json.load(open(_ov, encoding='utf-8'))
+                    sd = dict(sd)
+                    sd.update({k: v for k, v in ov.items() if not k.startswith('_')})
+                except Exception:
+                    pass
         self.sd = sd
         self.KA = int(str(sd.get('keyMulA', '0')), 0)
         self.KB = int(str(sd.get('keyMulB', '0')), 0)
         self.KS = int(str(sd.get('keySeed', '0')), 0)
+        self.KOX = int(str(sd.get('keyOffsetXor', '0')), 0)
+        self.KADD = int(str(sd.get('keyAdd', '0')), 0)
+        self.KFX = int(str(sd.get('keyFinalXor', '0')), 0)
         self.KP = int(str(sd.get('keyStep', '0')), 0)
         self.STR = self.table_value('stringLiteralDataOffset') if draft else 0
 
@@ -235,10 +264,17 @@ class Ctx:
         if H + self.STR + off + ((ln + 7) // 8) * 8 > len(self.dat):
             return b''
         first = None
-        # 7.0: A ^ (B*off + seed) / 7.1: A * (B*off ^ seed)
-        for mode in (0, 1):
-            key = ((self.KA ^ ((self.KB * off + self.KS) & M64)) if mode == 0
-                   else (self.KA * ((self.KB * off) ^ self.KS)) & M64)
+        # 6.7: ((A * ((B*off) ^ offsetXor) + add) ^ finalXor)
+        # 7.0: A ^ (B*off + seed)
+        # 7.1: A * (B*off ^ seed)
+        modes = [2] if (self.KOX or self.KADD or self.KFX) else [0, 1]
+        for mode in modes:
+            if mode == 2:
+                key = ((self.KA * (((self.KB * off) & M64) ^ self.KOX) + self.KADD) & M64) ^ self.KFX
+            elif mode == 0:
+                key = (self.KA ^ ((self.KB * off + self.KS) & M64))
+            else:
+                key = (self.KA * ((self.KB * off) ^ self.KS)) & M64
             out = bytearray()
             for k in range((ln + 7) // 8):
                 p = H + self.STR + off + 8 * k

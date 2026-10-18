@@ -212,7 +212,11 @@ def main():
              'return (uint32_t)((raw ^ (uint32_t)%s.key) - keyImage(i));'%key('image','nameIndexXor'))
 
     # string key：按目标字符串解密模式
-    if entry:
+    # 6.7: ((A * ((B*off) ^ offsetXor) + add) ^ finalXor)
+    if all(k in sd for k in ('keyOffsetXor', 'keyAdd', 'keyFinalXor')):
+        emit('decStringKey','uint64_t decStringKey(uint32_t offset)',
+             'return ((kKeyMulA * (((kKeyMulB * (uint64_t)offset) ^ (uint64_t)kKeyOffsetXor)) + (uint64_t)kKeyAdd) ^ (uint64_t)kKeyFinalXor);')
+    elif entry:
         emit('decStringKey','uint64_t decStringKey(uint32_t offset)',
              'return kKeyMulA * ((kKeyMulB * (uint64_t)offset) ^ kKeySeed);')
     else:

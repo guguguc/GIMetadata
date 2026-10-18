@@ -232,6 +232,13 @@ def apply_ida_map(draft, params, ida_path, map_path, report):
 
 def write_report(path, root, base_path, auto, weak, tdoff, layout, ida_filled, draft, ida_path, slots_path, relocate_log, mhy=None):
     base = load_json(base_path)
+    # 人工 table override 可能修正了 relocate 的误判，优先显示最终 draft 的值。
+    try:
+        _v = draft.get('tables', {}).get('typeDefinitionsOffset', {}).get('value')
+        if _v is not None:
+            tdoff = int(str(_v), 0)
+    except Exception:
+        pass
     total_tables = sorted(base.get('tables', {}).keys())
     auto_names = set(auto.keys())
     ida_names = {n for n, _, _ in ida_filled if not n.startswith('registrationFields.')}
@@ -524,6 +531,23 @@ def main():
     seed = os.path.join(tempfile.gettempdir(), 'draft_seed_%s.json' % os.path.basename(root))
     if not args.no_auto:
         try:
+            # 字符串公式必须在 fielddecode_auto 之前恢复，否则名字验证没有密钥。
+            sd_cmd = [sys.executable, os.path.join(TOOLS, 'stringdecrypt_auto.py'), root,
+                      '--base', base_path,
+                      '--out', os.path.join(root, 'ida', 'stringdecrypt.auto.json')]
+            if os.path.isdir(os.path.join(root, 'ida', 'decomp')):
+                pr = subprocess.run(sd_cmd, capture_output=True, text=True)
+                if pr.returncode == 0:
+                    auto_ran.append('stringdecrypt_auto')
+                    try:
+                        _sd_auto = json.load(open(os.path.join(root, 'ida', 'stringdecrypt.auto.json'), encoding='utf-8'))
+                        for _k, _v in _sd_auto.items():
+                            if not _k.startswith('_'):
+                                draft.setdefault('stringDecrypt', {})[_k] = _v
+                    except Exception:
+                        pass
+                else:
+                    print('stringdecrypt_auto failed:', (pr.stdout + pr.stderr)[-500:])
             json.dump(draft, open(seed, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
             fd_cmd = [sys.executable, os.path.join(TOOLS, 'fielddecode_auto.py'), root,
                       '--draft', seed,
@@ -570,6 +594,26 @@ def main():
         except Exception:
             fd_auto = {}
     prov.mark(draft, 'auto:fielddecode')
+    # 5.05) 可选的人工 fieldDecode / structOffsets 覆盖（TypeDef 布局等）
+    fd_override = {}
+    _fo_path = os.path.join(root, 'ida', 'fieldDecode.override.json')
+    if os.path.exists(_fo_path):
+        try:
+            fd_override = json.load(open(_fo_path, encoding='utf-8'))
+            for st, fs in (fd_override.get('fieldDecode') or {}).items():
+                draft.setdefault('fieldDecode', {}).setdefault(st, {}).update(fs)
+            for st, fs in (fd_override.get('structOffsets') or {}).items():
+                draft.setdefault('structOffsets', {}).setdefault(st, {}).update(fs)
+            # typeDefOffsets 是扁平的 {field: offset}，不是按结构体嵌套。
+            for _k, _v in (fd_override.get('typeDefOffsets') or {}).items():
+                if _k.startswith('_'):
+                    continue
+                draft.setdefault('typeDefOffsets', {})[_k] = _v
+            auto_ran.append('fieldDecode_override')
+        except Exception as e:
+            print('fieldDecode.override failed:', e)
+            fd_override = {}
+    prov.mark(draft, 'manual:fieldDecode.override')
     # 5.1) 字符串密钥（stringkeys.json 的已验证部分）
     sd_auto = {}
     _sd_path = os.path.join(root, 'ida', 'stringkeys.json')
@@ -583,6 +627,19 @@ def main():
         except Exception:
             sd_auto = {}
     prov.mark(draft, 'auto:stringkeys')
+    # 5.2) 可选的人工 stringDecrypt 覆盖（新形状：offsetXor/add/finalXor）
+    sd_override = {}
+    _so_path = os.path.join(root, 'ida', 'stringDecrypt.override.json')
+    if os.path.exists(_so_path):
+        try:
+            sd_override = json.load(open(_so_path, encoding='utf-8'))
+            # 覆盖文件是完整公式；整体替换，避免继承旧 keySeed 等失效字段。
+            draft['stringDecrypt'] = {k: v for k, v in sd_override.items() if not k.startswith('_')}
+            auto_ran.append('stringDecrypt_override')
+        except Exception as e:
+            print('stringDecrypt.override failed:', e)
+            sd_override = {}
+    prov.mark(draft, 'manual:stringDecrypt.override')
     # 6) keyFormulas 反编译恢复结果
     kf_auto = {}
     _kf_path = os.path.join(root, 'ida', 'keyformulas.auto.json')
@@ -608,6 +665,21 @@ def main():
             cnt_auto = {}
 
     prov.mark(draft, 'auto:countformulas')
+    # 6.2) 可选的人工 count formula 覆盖（目标版本实测）
+    count_override = {}
+    _co_path = os.path.join(root, 'ida', 'count.override.json')
+    if os.path.exists(_co_path):
+        try:
+            count_override = json.load(open(_co_path, encoding='utf-8'))
+            for _k, _v in count_override.items():
+                if _k.startswith('_'):
+                    continue
+                draft[_k] = _v
+            auto_ran.append('count_override')
+        except Exception as e:
+            print('count.override failed:', e)
+            count_override = {}
+    prov.mark(draft, 'manual:count.override')
     # 7) 表角色修正（fieldsOffset/fieldOffset/methodSpecs/...）
     if not args.no_auto:
         try:
@@ -625,6 +697,26 @@ def main():
             print('table_roles failed:', e)
 
     prov.mark(draft, 'auto:table_roles')
+    # 7.06) 可选的人工表角色覆盖（最后应用，避免 table_roles 的读序误判）
+    table_override = {}
+    _to_path = os.path.join(root, 'ida', 'tables.override.json')
+    if os.path.exists(_to_path):
+        try:
+            table_override = json.load(open(_to_path, encoding='utf-8'))
+            for _name, _t in table_override.items():
+                if not isinstance(_t, dict):
+                    continue
+                _ent = copy.deepcopy(draft.get('tables', {}).get(_name, {}))
+                for _k in ('slot', 'op', 'key', 'stride', 'side', 'role',
+                           'countBias', 'confirmed', 'note', 'value'):
+                    if _k in _t:
+                        _ent[_k] = _t[_k]
+                draft.setdefault('tables', {})[_name] = _ent
+            auto_ran.append('tables_override')
+        except Exception as e:
+            print('tables.override failed:', e)
+            table_override = {}
+    prov.mark(draft, 'manual:tables.override')
     # 7.05) 可选的人工 addresses 覆盖（只用于目标版本确实无法自动推导的地址）
     addr_override = {}
     _ao_path = os.path.join(root, 'ida', 'addresses.override.json')
@@ -632,6 +724,8 @@ def main():
         try:
             addr_override = json.load(open(_ao_path, encoding='utf-8'))
             for k, v in addr_override.items():
+                if k.startswith('_'):
+                    continue
                 draft.setdefault('addresses', {})[k] = v
             auto_ran.append('addresses_override')
         except Exception:
@@ -655,6 +749,21 @@ def main():
         except Exception as e:
             print('regfields_auto failed:', e)
     prov.mark(draft, 'auto:regfields')
+    # 7.15) 可选的人工 registrationFields 覆盖（字段基础表/静态位等）
+    reg_override = {}
+    _ro_path = os.path.join(root, 'ida', 'registrationFields.override.json')
+    if os.path.exists(_ro_path):
+        try:
+            reg_override = json.load(open(_ro_path, encoding='utf-8'))
+            for _k, _v in reg_override.items():
+                if _k.startswith('_'):
+                    continue
+                draft.setdefault('registrationFields', {})[_k] = _v
+            auto_ran.append('registrationFields_override')
+        except Exception as e:
+            print('registrationFields.override failed:', e)
+            reg_override = {}
+    prov.mark(draft, 'manual:registrationFields.override')
     # 8) decodeExpr：根据最终 fieldDecode/keyFormulas 重生成，避免继承上一版公式形状
     de_auto = {}
     if not args.no_auto:
@@ -674,6 +783,21 @@ def main():
             print('decodeexpr_auto failed:', e)
 
     prov.mark(draft, 'auto:decodeexpr')
+    # 8.1) 可选的人工 decodeExpr 覆盖（6.7 的表达式顺序与 7.0/7.1 不同）
+    de_override = {}
+    _do_path = os.path.join(root, 'ida', 'decodeExpr.override.json')
+    if os.path.exists(_do_path):
+        try:
+            de_override = json.load(open(_do_path, encoding='utf-8'))
+            for _k, _v in de_override.items():
+                if _k.startswith('_'):
+                    continue
+                draft.setdefault('decodeExpr', {})[_k] = _v
+            auto_ran.append('decodeExpr_override')
+        except Exception as e:
+            print('decodeExpr.override failed:', e)
+            de_override = {}
+    prov.mark(draft, 'manual:decodeExpr.override')
     if not args.no_origin:
         draft['_origin'] = prov.result()
 
@@ -688,8 +812,14 @@ def main():
         'structOffsets_auto': sorted(fd_auto.get('structOffsets', {}).keys()) if fd_auto else [],
         'keyFormulas_auto': sorted(kf_auto.keys()) if kf_auto else [],
         'countFormulas_auto': sorted(cnt_auto.keys()) if cnt_auto else [],
+        'countFormulas_override': sorted(k for k in count_override if not k.startswith('_')) if count_override else [],
         'registrationFields_auto': sorted(reg_auto.keys()) if reg_auto else [],
-        'addresses_override': sorted(addr_override.keys()) if addr_override else [],
+        'addresses_override': sorted(k for k in addr_override if not k.startswith('_')) if addr_override else [],
+        'tables_override': sorted(table_override.keys()) if table_override else [],
+        'registrationFields_override': sorted(k for k in reg_override if not k.startswith('_')) if reg_override else [],
+        'fieldDecode_override': sorted(k for k in fd_override if not k.startswith('_')) if fd_override else [],
+        'stringDecrypt_override': sorted(k for k in sd_override if not k.startswith('_')) if sd_override else [],
+        'decodeExpr_override': sorted(k for k in de_override if not k.startswith('_')) if de_override else [],
         'decodeExpr_auto': sorted(de_auto.keys()) if de_auto else [],
         'stringDecrypt_auto': sorted(sd_auto.keys()) if sd_auto else [],
         'typeDefinitionsOffset': ('0x%X' % tdoff) if tdoff else None,

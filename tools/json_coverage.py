@@ -132,12 +132,16 @@ def main():
 
     # keyFormulas
     kf_ok = kf_tot = 0
+    kf_const_ok = kf_const_tot = 0
     kf_miss = []
     for name, tf in T.get('keyFormulas', {}).items():
         kf_tot += 1
+        tf_consts = sum(1 for k in tf if k not in ('sig', 'cpp'))
+        kf_const_tot += tf_consts
         af = D.get('keyFormulas', {}).get(name)
         if af and all(eval_formula(af, i) == eval_formula(tf, i) for i in range(a.samples)):
             kf_ok += 1
+            kf_const_ok += tf_consts
         else:
             kf_miss.append(name)
 
@@ -173,13 +177,16 @@ def main():
                 ncount += 1
                 cok += (str(df.get(k)).lower() == str(tf.get(k)).lower())
     # 202 口径：addresses 4 + stringDecrypt 5 + tables 102 + keyFormulas 43 + fieldDecode 42 + counts 6
-    total = min(ad_ok, 4) + min(sd_ok, 5) + (t_val * 3) + 43 + min(fd_ok, 42) + cok
+    # keyFormulas 按目标公式的实常数个数加权，不再无条件 +43。
+    kf_weight = int(round(43.0 * kf_const_ok / kf_const_tot)) if kf_const_tot else 0
+    total = min(ad_ok, 4) + min(sd_ok, 5) + (t_val * 3) + kf_weight + min(fd_ok, 42) + cok
     print('== JSON coverage (draft vs target) ==')
     print('tables exact slot/op/key : %d / %d' % (t_exact, len(T.get('tables', {}))))
     print('tables decoded value     : %d / %d   (%d / 102 常量)' % (t_val, len(T.get('tables', {})), t_val * 3))
     print('fieldDecode              : %d / %d' % (fd_ok, fd_tot))
     print('structOffsets            : %d / %d' % (so_ok, so_tot))
-    print('keyFormulas              : %d / %d' % (kf_ok, kf_tot))
+    print('keyFormulas              : %d / %d  (%d / %d 常数, 计 %d/43)' %
+          (kf_ok, kf_tot, kf_const_ok, kf_const_tot, kf_weight))
     print('stringDecrypt            : %d / %d' % (sd_ok, sd_tot))
     print('addresses                : %d / %d' % (ad_ok, ad_tot))
     print('count formulas (op/key)  : %d / %d' % (cok, ncount))

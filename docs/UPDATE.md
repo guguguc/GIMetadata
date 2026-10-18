@@ -24,7 +24,649 @@ src/main.cpp               入口：MetadataFiles -> Il2CppImage -> Dumper
 **所以「换版本」= 改 `version.json` → `make` → `./gi-dump` → `python3 verify.py`。**
 只有 §8 那种「字段本身要重新定位」的情况才需要动 C++（把新找到的 offset/key 填回 JSON 对应字段）。
 
+## §0.1 当前推荐流程（自动化版本，优先按这里做）
+
+> 这一节记录当前工具链的实际做法。旧的手工流程仍保留在后面的章节，但新版本优先使用这里。
+
+### 1. 准备目录
+
+```text
+version/<ver>/
+├── gi.exe
+├── gi/Managed/Metadata/global-metadata.dat
+├── gi/Managed/Metadata/startup-metadata.dat
+├── slots.json                 # slot_scan 生成
+├── sig_hits.json              # sig.py scan 生成，可人工补已确认函数
+├── ida.json                   # 可选：IDA 导出
+├── ida/decomp/                # 可选：已知函数的反编译文本
+├── ida/addresses.override.json# 可选：无法自动推导的地址
+└── version.json               # 只用于最后的 --check
+```
+
+### 2. 生成 slots（离线，不占 IDA）
+
+```bash
+python3 tools/slot_scan.py version/<ver>/gi.exe \
+  version/<ver>/gi/Managed/Metadata/global-metadata.dat \
+  --out version/<ver>/slots.json
+```
+
+这一步会扫 `.text`/`.pdata`。**不要用 IDA 做全量扫描**；IDA 只做局部函数确认。
+
+### 3. 用上一版 sig 找函数
+
+```bash
+python3 tools/sig.py scan version/<ver>/gi.exe \
+  --sigs version/<prev>/sigs.json --fuzzy \
+  --json version/<ver>/sig_hits.json
+```
+
+如果某些函数未命中，但已经通过局部 xref/callee 确认，可以手工补进：
+
+```json
+{
+  "hits": {
+    "GIMeta_SetupTypeInfoLocked": "0x1404BE950"
+  },
+  "_manual_added": {
+    "GIMeta_SetupTypeInfoLocked": "0x1404BE950"
+  }
+}
+```
+
+`_manual_added` 只是来源标记，工具只读 `hits`。
+
+### 4. IDA/decomp（可选，但影响 fieldDecode）
+
+需要自动恢复字段时，导出已知函数即可：
+
+```bash
+IDAT=/path/to/idat64 tools/ida_headless.sh \
+  version/<ver>/gi.exe version/<ver>/ida.json \
+  version/<ver>/sig_hits.json
+```
+
+原则：
+
+- 只导出 `sig_hits` / `funcs_wanted` 命中的函数；
+- 不做全函数枚举；
+- 不在 IDA Python 里遍历 `idautils.Functions()` 全库；
+- 需要看某个函数时，用 MCP 单函数 `decompile`、`callees`、`xrefs_to`。
+
+### 5. 一条命令跑自动链
+
+以前一版为唯一基线，例如 7.0 → 7.1：
+
+```bash
+python3 tools/update.py version/7.1 \
+  --base version/7.0/version.json \
+  --slots version/7.1/slots.json \
+  --ida version/7.1/ida.json
+```
+
+`update.py` 会自动执行：
+
+```text
+offline_extract.py
+stringdecrypt_auto.py
+fielddecode_auto.py
+keyformulas_auto.py
+count_auto.py
+table_roles.py
+regfields_auto.py
+decodeexpr_auto.py
+```
+
+产物：
+
+```text
+version/<ver>/version.draft.json
+version/<ver>/update-report.md
+version/<ver>/ida/*.auto.json
+```
+
+> ⚠️ **`keyformulas_auto.py` 不是从任意反编译文本自动发现全部公式的。**
+> 它需要一个已经人工确认的公式表达式文件：
+>
+> ```text
+> version/<ver>/ida/keyformulas.values.json
+> ```
+>
+> 公式本身仍然要人工从 IDA/decomp 或参考文章里提取。7.0/7.1 的 `keyformulas.values.json`
+> 都是这样得到的；`keyformulas_auto.py` 只负责把表达式转成 `c0/c1/...` 常量和 `cpp`。
+>
+> `decodeexpr_auto.py` 也只消费 `keyFormulas`，不能补缺失公式。
+
+#### keyFormulas 的人工输入格式
+
+```json
+{
+  "formulas": {
+    "methodKey": {
+      "func": "GIMeta_SetupMethodsLocked",
+      "expr": "((860405619 * i) ^ 0x73758947) + 1547935323"
+    }
+  }
+}
+```
+
+至少要覆盖目标版本实际存在的 key。7.1 是 8 个：
+
+```text
+methodKey / paramKey / genericParamKey / fieldKey /
+propertyKey / eventKey / imageKey / containerKey
+```
+
+7.0 还有 `methodParamKey` / `eventAccessorKey`，共 10 个。
+
+生成：
+
+```bash
+python3 tools/keyformulas_auto.py version/<ver> \
+  --base version/<prev>/version.json \
+  --values version/<ver>/ida/keyformulas.values.json
+```
+
+验收：
+
+- 用解出的方法/字段/属性名可打印率检查；
+- 或与上一版公式语义 A/B 对比；
+- 不能只看“生成的 cpp 能编译”。
+
+### 6. 手工可覆盖项
+
+如果某个地址/值确实无法从目标数据推导，可以写到：
+
+```text
+version/<ver>/ida/addresses.override.json
+```
+
+例如：
+
+```json
+{
+  "codeRegistrationVA": "0x141F88938"
+}
+```
+
+`update.py` 会覆盖并标记为：
+
+```json
+"addresses.codeRegistrationVA": "manual:addresses.override"
+```
+
+不要改 `tools/` 里的常数来适配单个版本。
+
+### 7. 校验
+
+目标已有 `version.json` 时，只能用于最后的 check：
+
+```bash
+python3 tools/json_coverage.py \
+  --draft version/<ver>/version.draft.json \
+  --target version/<ver>/version.json \
+  --base version/<prev>/version.json
+```
+
+生成链不允许读取目标 `version.json`。覆盖率只说明被检查的字段，不等于 dump 能跑。
+
+### 8. 来源标记
+
+draft 默认包含：
+
+```json
+"_origin": {
+  "fieldDecode.typeDef.parentIndex": "auto:fielddecode",
+  "registrationFields.t1_il2CppTypes": "auto:regfields",
+  "addresses.codeRegistrationVA": "manual:addresses.override"
+}
+```
+
+`base:<path>` 表示仍是旧值；`auto:*` 表示自动生成；`manual:*` 表示人工覆盖。
+
+不想要来源块时加 `--no-origin`。
+
+### 9. 6.7 案例（文章公式，不写死到代码）
+
+参考文章已保存：
+
+```text
+docs/reference/exploring-custom-struct-genshin-impact.md
+```
+
+6.7 的 `typeDefinitions` 公式：
+
+```text
+typeDefinitionsOffset = MHY[0x138] - 0x3D9122A9 = 0x57720
+typeDefinitionsCount  = (MHY[0x12C] - 0xBBB76A5) / 70 ≈ 83775
+```
+
+验证：
+
+```text
+0x57720 + 83775 * 70 = 0x5EF25A
+methodSlotTableOffset = 0x5EF25C
+```
+
+这类公式只写在版本文档/案例里，不要作为所有版本的硬编码常量。
+
+## §0.2 6.7 冷启动实测记录（2026-10-18）
+
+这一节记录 6.7 从 7.0 基线冷启动时实际确认过的地址、公式和验收结果。数字只属于 6.7，不能复制到别的版本；可复制的是查找方法和验证方法。
+
+### 1. 函数重新定位
+
+sig 扫描命中的地址不一定等于函数起点，必须用 MCP 的 `lookup_funcs` / `get_func` 归一化；落在函数内部的命中要回到 `start_ea`。6.7 修正结果：
+
+```text
+GIMeta_RuntimeInit                 0x1404E07C0
+GIMeta_SetupFieldsLocked           0x1404BE3E0
+GIMeta_SetupMethodsLocked          0x1404C0200
+GIMeta_SetupPropertiesLocked       0x1404C0DF0
+GIMeta_RegisterTables              0x1402B4920
+```
+
+`RegisterTables` 一开始被 IDA 当成“不是函数”，但直接反汇编发现它是真实函数：
+
+```asm
+lea rax, unk_141F88938
+mov cs:qword_145370478, rax
+lea rax, unk_1424A9F70
+mov cs:qword_145370480, rax
+lea rax, off_1424AA008
+mov cs:qword_145370488, rax
+lea rax, unk_141F889E0
+mov cs:qword_145370490, rax
+lea rax, unk_142419A40
+mov cs:qword_145370498, rax
+retn
+```
+
+结论：`.pdata` 或 IDA 函数表可以把地点当候选，但不能当唯一真理；真实注册函数可能不在其中。
+
+### 2. T0 / T1 / MHY
+
+6.7 实际注册值：
+
+```text
+MHY = 0x142419A40
+T0  = 0x141F88938
+T1  = 0x1424A9F70
+```
+
+从 `RegisterTables` 可以直接得到：
+
+```text
+qword_145370488 = T1 + 0x98
+qword_145370490 = T0 + 0xA8
+```
+
+反编译消费者确认的关键字段：
+
+```text
+T1 + 0x70  Il2CppType 数组
+T1 + 0x60  genericInsts
+T0 + 0x60  genericMethodPointers
+T0 + 0x80  按 methodIndex 直接索引的方法地址表
+T0 + 0x90  invoker 数组
+```
+
+`T0+0x80` 的 RVA 验证见 §0.4。
+
+### 3. typeDefinitions
+
+```text
+typeDefinitionsOffset = MHY[0x138] - 0x3D9122A9 = 0x57720
+typeDefinitionsCount  = (MHY[0x12C] - 0xBBB76A5) / 70 = 83775
+```
+
+表尾校验：
+
+```text
+0x57720 + 83775 * 70 = 0x5EF25A
+methodSlotTableOffset = 0x5EF25C
+```
+
+6.7 TypeDef 布局（都经过原始数据验证）：
+
+```text
++0x04  propertyStart             sub:0x71AF8B48
++0x08  nameIndex                 sub:0x6220594E
++0x0C  flags                     xor:0x3C41A2FB
++0x14  methodStart               xor:0xDF2043C
++0x18  parentIndex               sub:0xC52CB9D
++0x20  namespaceIndex            xor:0x7309A337
++0x28  fieldStart                sub:0x2318D1B4
++0x2C  unknown20                 sub:0x3727654B
++0x30  nestedTypesStart          add:0x7E42
++0x34  genericContainerIndex     xor:0x1BD3
++0x38  method_count              sub:0x5B59
++0x3A  field_count               xor:0xA791
++0x3C  eventStart                xor:0xBAE7
++0x3E  interfacesStart           xor:0xFB6C
++0x40  property_count            xor:0xE9
++0x41  interfaces_count          xor:0x48
++0x42  bitfield                  xor:0xE7
++0x44  event_count               add:0x4D
++0x45  nestedTypesCount          add:0x19
+```
+
+交叉验证：
+
+```text
+method_count 总和 = 687467 = methodsCount
+field_count 总和  = 413644
+property_count 总和 = 108747
+event_count 总和 = 617
+nestedTypesCount 总和 = 65645
+```
+
+### 4. 字符串解密
+
+6.7 的 `GIMeta_DecryptString` 不再是 7.0/7.1 的两种旧形状：
+
+```text
+key = (A * ((B * offset) ^ C) + D) ^ E
+
+A = 0x1A6057A96FEEC594
+B = 0x7B42168B7FE02E56
+C = 0x1393BD882CBEC20C
+D = 0x195DC3DB6600CFFF
+E = 0x19DCC66D6BBCCE72
+step = 0x15C324F339F8A7B1
+```
+
+`offsetMask = 0xFFFFFF`，`lengthShift = 24`，`entryXor = 0`。
+
+验证：
+
+```text
+typeDef 名字可打印：83729 / 83775
+namespace 可打印：83775 / 83775
+```
+
+### 5. count formulas
+
+```text
+typesCount             = T1+0x50 - 1683598852 = 639893
+genericInstsCount      = T1+0x54 - 1010087847 = 64723
+genericClassRangeCount = T0+0x98 - 1613647105 = 12633
+```
+
+### 6. method 字段
+
+6.7 的 method 表是 26 字节，但布局不是 7.0/7.1：
+
+```text
++0x00  returnType               (raw - 978518114) ^ keyMethod(i)
++0x04  nameIndex                (raw - 871574903) ^ keyMethod(i)
++0x08  parameterStart            keyMethod(i) ^ raw ^ 0x5A970208
++0x0C  genericContainerIndex     keyMethod(i) ^ raw ^ 0x76714F67
++0x14  flags                    keyFlags(i) ^ (raw16 + 13697)
++0x16  iflags                   keyFlags(i) ^ raw16 ^ 0xDECB
++0x18  parameterCount            methodParamKey(i) ^ raw8 ^ 0xE1
+```
+
+其中：
+
+```text
+keyFlags(i) = ((-9788*i + 5882) ^ 0xDED) + 15325
+methodParamKey(i) = ((-60*i - 6) ^ 0xED) - 35
+```
+
+`returnType` 不是独立并行表；它就是 method `+0x00`。这一点通过反编译和数据同时确认：
+
+```text
+.ctor  -> void
+GetText -> string
+```
+
+### 7. 当前 dump 结果
+
+6.7：
+
+```text
+output: out/dump67.cs
+size:   182246180
+md5:    195b10ea2aea57f520f989d8b52c8354
+types:  83775
+methods:665827
+fields: 413644
+props:  108747
+events: 617
+garbage:0
+```
+
+7.0/7.1 回归：
+
+```text
+7.0 dump md5: 3517cd7283c2db5f3428da6af59d21d7
+7.1 dump md5: 3b5da679ee236d57ebb359d824055eb7
+7.1 verify.py: 28 项全 PASS
+```
+
+## §0.3 可重跑的 override 层
+
+新版本冷启动时，很多值来自自动工具，很多值来自人工确认。两者必须分开：
+
+```text
+auto:update 链生成
+manual:override 文件覆盖
+```
+
+`update.py` 的最终覆盖顺序：
+
+```text
+offline_extract.py
+stringdecrypt_auto.py
+fielddecode_auto.py
+keyformulas_auto.py
+count_auto.py
+table_roles.py
+regfields_auto.py
+decodeexpr_auto.py
+        ↓
+ida/*.override.json
+        ↓
+最终 version.draft.json
+```
+
+### 1. 6.7 使用的 override 文件
+
+```text
+version/6.7.0/ida/addresses.override.json
+version/6.7.0/ida/tables.override.json
+version/6.7.0/ida/registrationFields.override.json
+version/6.7.0/ida/fieldDecode.override.json
+version/6.7.0/ida/decodeExpr.override.json
+version/6.7.0/ida/count.override.json
+version/6.7.0/ida/keyformulas.values.json
+```
+
+### 2. 每个文件的作用
+
+```text
+addresses.override.json
+  MHY / T0 / T1 / 无法自动推导的地址
+
+tables.override.json
+  表角色：slot/op/key/stride/side/countBias
+
+registrationFields.override.json
+  T0/T1 字段偏移、field base 表、static mask
+
+fieldDecode.override.json
+  typeDef/其它结构的字段 op/key、structOffsets、typeDefOffsets
+
+stringdecrypt.auto.json
+  从 GIMeta_DecryptString 自动提取的字符串公式
+
+decodeExpr.override.json
+  不能由通用模板表示的 decodeExpr（名称/type/accessor 顺序）
+
+count.override.json
+  已经由目标数据验证的 T0/T1 计数公式
+
+keyformulas.values.json
+  人工从目标反编译抄出的逐索引公式
+```
+
+### 3. 确定性重跑
+
+现在重跑：
+
+```bash
+python3 tools/update.py version/6.7.0 \
+  --base version/7.0/version.json \
+  --slots version/6.7.0/slots.json \
+  --ida version/6.7.0/ida.json \
+  --emit /tmp/draft67.json \
+  --report /tmp/report67.md
+```
+
+数据部分和当前 draft 一致：
+
+```text
+新增字段: 0
+缺失字段: 0
+值不同:   0
+```
+
+例外只有：
+
+```text
+_origin
+_update
+```
+
+它们包含来源/时间，每次都会变。
+
+不要用“冻结整个 JSON”来伪造确定性。确定性应该来自显式 override；“frozen.json” 这种快照补丁不要用。
+
+### 4. 修改 C++ 的边界
+
+版本常量不应写进 C++。只有“通用机制”可以改，例如：
+
+```text
+按 fieldDecode.op 分派
+按 structOffsets 读取
+对非法 start 做防御
+```
+
+任何 C++ 改动都必须重新跑：
+
+```text
+7.0 dump md5
+7.1 dump md5
+7.1 verify.py
+```
+
+三者和基线一致才算通过。
+
+## §0.4 verify / RVA 与通用化状态
+
+### 1. 当前 verify.py
+
+`verify.py` 仍然主要是 7.1 专用：
+
+```text
+MHY/T0/T1 写死
+typeDefinitionsCount 写死
+events 628 写死
+images 75 写死
+```
+
+6.7 暂时不能直接用它。6.7 目前做的是：
+
+```text
+dump 成功
+dump 统计检查
+RVA 检查
+```
+
+### 2. RVA 检查是版本无关的
+
+RVA 检查只依赖 dump：
+
+```text
+// RVA: ... Offset: ... VA: ...
+```
+
+6.7：
+
+```text
+RVA 总数:       665827
+不同 RVA 数:    665353
+去重率:         99.9288%
+单一 RVA 最大:  61
+```
+
+判据：
+
+```text
+去重率 >= 90%     PASS
+单一 RVA < 1000   PASS
+```
+
+7.0/7.1：
+
+```text
+7.0: 691941 total, 691430 distinct, 99.9261%, top 73
+7.1: 711021 total, 710507 distinct, 99.9277%, top 74
+```
+
+如果方法地址表用错，通常会出现“不同 RVA 只有一两万、单个地址几十万次”的诱饵表特征。这个检查可以直接保留到通用 verify。
+
+### 3. json_coverage 的 keyFormulas 权重
+
+`tools/json_coverage.py` 已修正：不再无条件给 keyFormulas 计 43 分，而是按目标公式的实常数个数和语义匹配结果加权。
+
+示例：
+
+```text
+7.1 全部公式命中: 8/8 公式, 43/43 常数, 202/202
+7.1 无 keyFormulas: 0/8 公式, 0/43 常数, 156/202
+```
+
+这比之前的“0/8 但仍报 199/202”准确。
+
+### 4. 通用 verify 的方向
+
+通用 verify 应从版本 JSON 读取：
+
+```text
+addresses
+tables
+structOffsets
+fieldDecode
+keyFormulas
+stringDecrypt
+```
+
+然后做：
+
+```text
+表地址/计数合法
+typeDef name/parent/nested/genericContainer
+字符串可打印
+dump 类型数 == typeDefinitionsCount
+RVA 去重
+garbage/问号比例
+```
+
+暂时不支持的项应输出：
+
+```text
+SKIP
+```
+
+不能把“没检查”写成 PASS。
+
+6.7 没有 target `version.json`，所以不能计算真正的 202 正确覆盖；只能做结构/数据不变量验证。
+
 ## §1 30 秒总览（照这个顺序做）
+
+> ⚠️ 新版本优先看 §0.1。下面这段是早期总览，示例里的 `--base version.json` 只适用于根目录恰好是上一版的情况；7.0→7.1 应显式使用 `--base version/7.0/version.json`。
 
 ```bash
 # 0) 先看现状（用旧常量跑，会 FAIL 一堆 —— 这就是待办清单）

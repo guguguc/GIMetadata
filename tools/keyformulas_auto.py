@@ -218,7 +218,10 @@ def main():
         exprs = expressions([fn], lines)
         chosen = None
         v = val.get(name)
-        if not (v and v.get('expr')) and name in ('methodKey', 'genericParamKey', 'propertyKey', 'eventKey', 'imageKey', 'containerKey') and values.get(name):
+        # 人工 values.json 优先于自动形状搜索；这是跨版本人工确认公式的入口。
+        if values.get(name) and values[name].get('expr'):
+            v = {'expr': values[name]['expr']}
+        elif not (v and v.get('expr')) and values.get(name):
             v = {'expr': values[name].get('expr')}
         if v and v.get('expr'):
             # formula_auto 已经用可打印名字验证过，或来自反编译缓存
@@ -266,7 +269,8 @@ def main():
         report.append((name, 'OK', '', expr[:100]))
 
     # fieldKey 需要 indexBias（来自 typeDef.fieldStart 的 sub key）
-    if values.get('fieldKey'):
+    # 如果 values.json 已经给了目标版本的完整 expr，就不再套 7.0 的 28430 形状。
+    if values.get('fieldKey') and not values['fieldKey'].get('expr'):
         bias = None
         fp = os.path.join(root, 'ida', 'fielddecode.auto.json')
         if os.path.exists(fp):
@@ -289,14 +293,15 @@ def main():
             e = e.replace('28430*i', '28430*(i + %d)' % bias)
             set_formula('fieldKey', e, 'uint32_t keyField(uint32_t i)', 'uint32_t')
 
-    # paramKey：SetupParameters 里“单层乘法 + 加法 + 单次移位”的表达式
-    pexprs = expressions(['GIMeta_SetupParameters'], lines)
-    p = None
-    for raw, expr in sorted(pexprs, key=lambda x: len(x[1])):
-        if raw.count('>>') == 1 and '*' in raw and '+' in raw and '^' not in raw:
-            p = (raw, expr); break
-    if p:
-        set_formula('paramKey', p[0], 'uint64_t keyParam(uint32_t i)', 'uint64_t')
+    # paramKey：人工 values.json 优先；否则才从 SetupParameters 形状里找。
+    if not (values.get('paramKey') and values['paramKey'].get('expr')):
+        pexprs = expressions(['GIMeta_SetupParameters'], lines)
+        p = None
+        for raw, expr in sorted(pexprs, key=lambda x: len(x[1])):
+            if raw.count('>>') == 1 and '*' in raw and '+' in raw and '^' not in raw:
+                p = (raw, expr); break
+        if p:
+            set_formula('paramKey', p[0], 'uint64_t keyParam(uint32_t i)', 'uint64_t')
 
     # methodParamKey：只有 values 明确给出时才生成
     if values.get('methodParamKey'):
@@ -325,15 +330,16 @@ def main():
     if img:
         set_formula('imageKey', img, 'uint32_t keyImage(uint32_t i)', 'uint32_t')
 
-    # eventAccessorKey：直接从 SetupEventsLocked 文本抓 `((-A * i) ^ X) - S`
-    for name, tx in lines:
-        if not name.startswith('GIMeta_SetupEventsLocked'):
-            continue
-        m = re.search(r'\(\((-?\d+) \* (\w+)\) \^ (0x[0-9A-Fa-f]+)\) - (\d+)', tx)
-        if m:
-            expr = '((%s * %s) ^ %s) - %s' % (m.group(1), 'i', m.group(3), m.group(4))
-            set_formula('eventAccessorKey', expr, 'uint32_t keyEventAccessor(uint32_t i)', 'uint32_t')
-            break
+    # eventAccessorKey：人工 values.json 优先；否则从 SetupEventsLocked 文本抓 `((-A * i) ^ X) - S`
+    if not (values.get('eventAccessorKey') and values['eventAccessorKey'].get('expr')):
+        for name, tx in lines:
+            if not name.startswith('GIMeta_SetupEventsLocked'):
+                continue
+            m = re.search(r'\(\((-?\d+) \* (\w+)\) \^ (0x[0-9A-Fa-f]+)\) - (\d+)', tx)
+            if m:
+                expr = '((%s * %s) ^ %s) - %s' % (m.group(1), 'i', m.group(3), m.group(4))
+                set_formula('eventAccessorKey', expr, 'uint32_t keyEventAccessor(uint32_t i)', 'uint32_t')
+                break
 
     os.makedirs(os.path.dirname(out), exist_ok=True)
     json.dump(result, open(out, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
