@@ -120,6 +120,30 @@ KNOWN_TYPES = {
 }
 
 
+def is_accessor_hook(name):
+    return "_set_" in name or "_get_" in name
+
+
+def accessor_modifier_issue(name, sdecl, tdecl):
+    """Hard accessor check: a property setter/getter must not turn into a
+    different access level/static kind, or into a virtual lifecycle method.
+
+    This is deliberately narrow: it only runs for hooks whose semantic name
+    contains _set_/_get_, so it does not alter ordinary method scoring.
+    """
+    if not is_accessor_hook(name):
+        return None
+    s = method_mods(sdecl)
+    t = method_mods(tdecl)
+    if s[0] != t[0]:
+        return "accessor access %s != %s" % (s[0], t[0])
+    if s[1] != t[1]:
+        return "accessor static %s != %s" % (s[1], t[1])
+    if (not s[2]) and t[2]:
+        return "accessor non-virtual source became virtual target"
+    return None
+
+
 def signature_issues(sdecl, tdecl):
     """Return hard type-name contradictions that shape matching would miss."""
     sr, sp = _raw_decl(sdecl)
@@ -607,6 +631,11 @@ def _score_job(item, src_xrefs, dst_xrefs, smap, tmap,
             tk = c.get("kind")
             if sk and tk and sk != tk:
                 sig_issues.append("class kind %s != %s" % (sk, tk))
+            accessor_issue = accessor_modifier_issue(name, sm["decl"], m["decl"])
+            if accessor_issue:
+                # A setter/getter must not collapse into a virtual lifecycle
+                # method with the same argument shape (LateTick vs setter).
+                continue
             name_hit = 1.0 if m["name"] == sm["name"] else 0.0
             al, why = DA.align_method(scls, c, sm)
             align = 1.0 if al is not None and al["rva"] == m["rva"] else 0.0
@@ -887,9 +916,13 @@ def main():
         if not (call_ok or meta_ok or body_ok):
             out[name] = old
             continue
+        old_accessor_bad = bool(accessor_modifier_issue(
+            name, jobs[name]["sm"]["decl"], old.get("target_decl", "")))
         # don't overwrite an already high-confidence correct mapping unless
         # the evidence is clearly better; this keeps the 56 stable entries.
-        if old.get("status") == "matched" and old.get("confidence") in ("high", "medium"):
+        if (old.get("status") == "matched"
+                and old.get("confidence") in ("high", "medium")
+                and not old_accessor_bad):
             # only replace if the old mapping is structurally impossible,
             # or the new candidate wins on class-sequence alignment plus a
             # real score margin over the old candidate.  This keeps the

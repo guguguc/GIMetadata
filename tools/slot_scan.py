@@ -19,7 +19,7 @@ MHY 槽位扫描器 —— 自动找出「MHY[slot] OP key => 元数据偏移」
     2) 所有解出「像元数据偏移」的组合
     3) 若给了 .dat，则把每个候选当 12 字节数组做结构合法性测试
 """
-import struct, sys, json, os
+import struct, sys, json, os, time
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
 from capstone.x86 import X86_OP_MEM, X86_OP_IMM, X86_OP_REG, X86_REG_RIP
 
@@ -178,7 +178,7 @@ def find_mhy_globals(D, secs, MHY_VA):
     return out
 
 
-def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None):
+def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None, stats=None):
     """返回 [(slot, op, key, 出现次数, 首个VA)]
 
     匹配**四种**形态：
@@ -208,6 +208,12 @@ def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None):
     last_load, last_imm, records, idx = {}, {}, [], 0
     mhy_regs = set()          # 锚定模式：当前哪些寄存器里装的是 MHY 基址
     OPS = ('xor', 'sub', 'add', 'imul', 'or', 'and')
+    t_scan0 = time.perf_counter()
+    if stats is not None:
+        stats.update({'ranges': 0, 'functions': 0, 'bytes': 0,
+                      'instructions': 0, 'pdata_sec': 0.0,
+                      'disasm_sec': 0.0, 'records': 0,
+                      'total_sec': 0.0})
 
     def stream():
         """按 PE 异常表逐函数反汇编（每个函数都从自己的入口开始对齐）。
@@ -215,9 +221,22 @@ def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None):
         实测 7.1 上与原来的线性扫描结果**逐条一致**（4730 组三元组，地址一字不差），
         好处是每条记录的 VA 都能落在真实指令边界上，不用担心跨函数的流错位。
         """
+        t0 = time.perf_counter()
         rng = None if va0 is not None else pdata_ranges(D, secs)
+        if stats is not None:
+            stats['pdata_sec'] += time.perf_counter() - t0
+            stats['ranges'] = len(rng) if rng else 1
         if not rng:
-            yield from md.disasm(text, tva)
+            if stats is not None:
+                stats['functions'] = 1
+                stats['bytes'] = len(text)
+            t0 = time.perf_counter()
+            for insn in md.disasm(text, tva):
+                if stats is not None:
+                    stats['instructions'] += 1
+                yield insn
+            if stats is not None:
+                stats['disasm_sec'] += time.perf_counter() - t0
             return
         for (fs, fe) in rng:
             try:
@@ -227,7 +246,16 @@ def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None):
                 continue          # .pdata 里混有 chained unwind 的垃圾条目，跳过
             if n <= 0 or n > 0x40000:
                 continue
-            yield from md.disasm(D[o:o + n], fs)
+            if stats is not None:
+                stats['functions'] += 1
+                stats['bytes'] += n
+            t0 = time.perf_counter()
+            for insn in md.disasm(D[o:o + n], fs):
+                if stats is not None:
+                    stats['instructions'] += 1
+                yield insn
+            if stats is not None:
+                stats['disasm_sec'] += time.perf_counter() - t0
             # 函数边界也是数据流边界（与 call/ret 处清空保持一致）
             last_load.clear(); last_imm.clear(); mhy_regs.clear()
 
@@ -340,6 +368,9 @@ def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None):
     uniq = {}
     for d, op, imm, va in records:
         uniq.setdefault((d, op, imm), []).append(va)
+    if stats is not None:
+        stats['records'] = len(records)
+        stats['total_sec'] = time.perf_counter() - t_scan0
     return [(d, op, imm, len(v), v[0]) for (d, op, imm), v in uniq.items()]
 
 
@@ -453,8 +484,19 @@ def cmd_struct(D, secs, name, funcs, jpath=None):
 
 
 def main():
+    t_start = time.perf_counter()
+    timings = []
+
+    def mark(label):
+        dt = time.perf_counter() - t_start
+        timings.append({'phase': label, 'seconds': round(dt, 4)})
+        print('[timing] %-18s %.3fs' % (label, dt), file=sys.stderr)
+
     argv = sys.argv[1:]
     out_path = None
+    timing_path = None
+    if '--timing-json' in argv:
+        i = argv.index('--timing-json'); timing_path = argv[i + 1]; del argv[i:i + 2]
     if '--out' in argv:
         i = argv.index('--out'); out_path = argv[i + 1]; del argv[i:i + 2]
     funcs = []
@@ -469,7 +511,9 @@ def main():
     exe = argv[0]
     dat = argv[1] if len(argv) > 1 and not argv[1].startswith('-') else None
     D = open(exe, 'rb').read()
+    mark('read-exe')
     secs = load_sections(D)
+    mark('load-sections')
     if struct_name:
         if hits_path:
             # 函数地址来自 sig.py scan 的产物 -> **跨版本自动**，不用手抄地址
@@ -495,9 +539,11 @@ def main():
     if MHY_VA is None:
         print("✗ 未找到 b'MHY\\0' 魔数 —— 这不像 Genshin 的 gi.exe？")
         return 1
+    mark('find-mhy')
     print("MHY 表 VA = 0x%X%s" % (MHY_VA, "" if MHY_VA != MHY_VA_71 else "  (与 7.1 相同)"))
     svals = {o: struct.unpack_from('<I', D, va2off(secs, MHY_VA + o))[0]
              for o in range(0, NSLOT, 4)}
+    mark('mhy-slots')
 
     print("\n=== 自检（7.1 的常数；换版本必然不符，属正常）===")
     for slot, op, key, tgt, name in (
@@ -509,6 +555,7 @@ def main():
         print("  MHY[0x%03X] %s 0x%08X = 0x%X  期望 0x%X  %s"
               % (slot, op, key, got, tgt, 'OK' if got == tgt else '**不符**'))
 
+    mark('self-check')
     anchors = None
     if '--anchor' in argv:
         gl = find_mhy_globals(D, secs, MHY_VA)
@@ -521,8 +568,18 @@ def main():
             anchors = set(gl)
             print("  → 启用**锚定模式**：只认基址寄存器确实装着 MHY 的那些 [reg+slot]")
 
+    mark('anchor-discovery')
     print("\n扫描 .text ...")
-    rows = scan_text(D, secs, anchors=anchors)
+    scan_stats = {}
+    rows = scan_text(D, secs, anchors=anchors, stats=scan_stats)
+    mark('scan-text')
+    print('[timing] scan pdata=%.3fs disasm=%.3fs total=%.3fs' % (
+        scan_stats.get('pdata_sec', 0), scan_stats.get('disasm_sec', 0),
+        scan_stats.get('total_sec', 0)), file=sys.stderr)
+    print('[timing] scan ranges=%d functions=%d bytes=%d insns=%d records=%d' % (
+        scan_stats.get('ranges', 0), scan_stats.get('functions', 0),
+        scan_stats.get('bytes', 0), scan_stats.get('instructions', 0),
+        scan_stats.get('records', 0)), file=sys.stderr)
     print("唯一 (slot,op,key) 组合: %d" % len(rows))
     # 写缓存，供 tools/relocate.py 复用（省几分钟重扫）
     try:
@@ -533,6 +590,7 @@ def main():
         print("缓存已写 %s" % cache_path)
     except Exception as e:
         print("写缓存失败:", e)
+    mark('write-cache')
 
     cand = []
     for d, op, imm, n, va in rows:
@@ -546,6 +604,7 @@ def main():
 
     if dat:
         raw = open(dat, 'rb').read()
+        mark('read-metadata')
         HDR = 0x210
         LIM = len(raw) - HDR
         print("\n=== 落在元数据范围内的候选 ===")
@@ -575,6 +634,12 @@ def main():
         for val, d, op, imm, n, va in sorted(cand, key=lambda x: -x[0])[:60]:
             print("  0x%-9X slot 0x%03X %s 0x%08X (%d次) VA 0x%X"
                   % (val, d, op, imm, n, va))
+    mark('done')
+    if timing_path:
+        json.dump({'total_seconds': round(time.perf_counter() - t_start, 4),
+                   'phases': timings, 'scan': scan_stats},
+                  open(timing_path, 'w'), ensure_ascii=False, indent=1)
+        print('[timing] json -> %s' % timing_path, file=sys.stderr)
 
 
 if __name__ == '__main__':
