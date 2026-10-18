@@ -17,6 +17,7 @@ import difflib
 import json
 import re
 import sys
+import time
 
 import sig  # noqa: E402
 from capstone import Cs, CS_ARCH_X86, CS_MODE_64
@@ -285,56 +286,31 @@ def disasm_compare(src_pe, dst_pe, src_va, dst_va, src_end, dst_end, md):
             'dst_insns': tf.get('insns')}
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--from', dest='src', required=True)
-    ap.add_argument('--to', dest='dst', required=True)
-    ap.add_argument('--hooks', required=True, help='hk_71_map.json rows with hook_method/fullname/dump_name/dump_decl')
-    ap.add_argument('--out', required=True)
-    ap.add_argument('--class-score', type=float, default=0.58)
-    ap.add_argument('--class-margin', type=float, default=0.03)
-    ap.add_argument('--verify-disasm', action='store_true',
-                    help='add capstone/BinDiff-lite disassembly verification')
-    ap.add_argument('--reselect-low', action='store_true',
-                    help='when disasm score is low, search other methods in the same target class')
-    ap.add_argument('--reselect-medium', action='store_true',
-                    help='also reselect medium-confidence disasm candidates inside the target class')
-    ap.add_argument('--method-aware-class', action='store_true',
-                    help='choose among class candidates using the source method disassembly, not class shape alone')
-    ap.add_argument('--src-exe', default=None)
-    ap.add_argument('--dst-exe', default=None)
-    ap.add_argument('--src-funcs', default=None)
-    ap.add_argument('--dst-funcs', default=None)
-    ap.add_argument('--anchors', default=None,
-                    help='optional IDA-confirmed hook map with rva_7_0/name fields')
-    ap.add_argument('--precision', action='store_true',
-                    help='emit only high-confidence matches; never emit ambiguous/low candidates')
-    a = ap.parse_args()
+# ------------------------------------------------------- parallel hooks
+_D_CTX = None
 
-    S = parse_dump(a.src)
-    T = parse_dump(a.dst)
-    verify = None
-    if a.verify_disasm:
-        if not (a.src_exe and a.dst_exe and a.src_funcs and a.dst_funcs):
-            sys.exit('--verify-disasm requires --src-exe --dst-exe --src-funcs --dst-funcs')
-        src_pe = sig.PE(a.src_exe); dst_pe = sig.PE(a.dst_exe)
-        src_ends = load_func_ends(a.src_funcs); dst_ends = load_func_ends(a.dst_funcs)
-        md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
-        verify = (src_pe, dst_pe, src_ends, dst_ends, md)
-    rows = json.load(open(a.hooks, encoding='utf-8'))['rows']
-    # index target by method count for fast candidate generation
-    by_count = collections.defaultdict(list)
-    for full, cls in T.items():
-        by_count[len(cls['methods'])].append((full, cls))
+
+def _process_hook(h, S, T, by_count, tseq_by_full, sseq_by_full,
+                  class_score_cache, verify, cfg):
     result = {}
-    for h in rows:
+    name = h["hook_method"]
+    # Capstone objects are not safe to reuse across forked workers; give
+    # each hook its own decoder so parallel output is deterministic.
+    if verify:
+        _sp, _dp, _sends, _dends, _md = verify
+        _md = Cs(CS_ARCH_X86, CS_MODE_64); _md.detail = True
+        verify = (_sp, _dp, _sends, _dends, _md)
+    for h in [h]:
         name = h['hook_method']
         sfull = h.get('fullname', '')
         scls = S.get(sfull)
         if not scls:
             result[name] = {'status': 'missing_source_class', 'source_class': sfull}
             continue
-        sseq = class_seq(scls)
+        sseq = sseq_by_full.get(sfull)
+        if sseq is None:
+            sseq = class_seq(scls)
+            sseq_by_full[sfull] = sseq
         n = len(sseq)
         # exact class first
         candidates = []
@@ -346,8 +322,12 @@ def main():
             for full, cls in by_count.get(cnt, []):
                 if full == sfull:
                     continue
-                sc = class_score(sseq, class_seq(cls))
-                if sc >= a.class_score:
+                ckey = (sfull, full)
+                sc = class_score_cache.get(ckey)
+                if sc is None:
+                    sc = class_score(sseq, tseq_by_full[full])
+                    class_score_cache[ckey] = sc
+                if sc >= cfg["class_score"]:
                     candidates.append((sc, full, cls, 'shape'))
         candidates.sort(key=lambda x: -x[0])
         if not candidates:
@@ -356,7 +336,7 @@ def main():
             continue
         # Optional: resolve class ambiguity with the actual source method's
         # disassembly. Only top class candidates are examined (never the whole dump).
-        if a.method_aware_class and verify:
+        if cfg["method_aware_class"] and verify:
             sm0 = find_source_method(scls, h)
             if sm0 is not None:
                 sp, dp, sends, dends, md0 = verify
@@ -391,7 +371,7 @@ def main():
         # Prefer exact class, otherwise require a margin unless unique.
         if candidates[0][3] == 'exact_class':
             chosen = [candidates[0]]
-        elif len(candidates) == 1 or candidates[0][0] - candidates[1][0] >= a.class_margin:
+        elif len(candidates) == 1 or candidates[0][0] - candidates[1][0] >= cfg["class_margin"]:
             chosen = [candidates[0]]
         else:
             # 类形状并列时，用“类内方法形状”二次消歧。
@@ -460,8 +440,8 @@ def main():
                         'medium' if vr['score'] >= 0.60 else 'low')
             # 低分候选自动在同一目标类内重新选：按方法形状先筛选，再比反汇编特征。
             _rs = result[name].get('disasm_status')
-            if ((a.reselect_low and _rs == 'low') or
-                    (a.reselect_medium and _rs == 'medium')):
+            if ((cfg["reselect_low"] and _rs == 'low') or
+                    (cfg["reselect_medium"] and _rs == 'medium')):
                 pool = []
                 for cm in tcls['methods']:
                     ms0 = method_sim(sm['shape'], cm['shape'])
@@ -522,6 +502,95 @@ def main():
                             'disasm': best0[2],
                             'disasm_status': 'high' if best0[2]['score'] >= 0.78 else 'medium',
                         })
+    return name, result.get(name)
+
+
+def _process_worker(h):
+    return _process_hook(h, *_D_CTX)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--from', dest='src', required=True)
+    ap.add_argument('--to', dest='dst', required=True)
+    ap.add_argument('--hooks', required=True, help='hk_71_map.json rows with hook_method/fullname/dump_name/dump_decl')
+    ap.add_argument('--out', required=True)
+    ap.add_argument('--class-score', type=float, default=0.58)
+    ap.add_argument('--class-margin', type=float, default=0.03)
+    ap.add_argument('--verify-disasm', action='store_true',
+                    help='add capstone/BinDiff-lite disassembly verification')
+    ap.add_argument('--reselect-low', action='store_true',
+                    help='when disasm score is low, search other methods in the same target class')
+    ap.add_argument('--reselect-medium', action='store_true',
+                    help='also reselect medium-confidence disasm candidates inside the target class')
+    ap.add_argument('--method-aware-class', action='store_true',
+                    help='choose among class candidates using the source method disassembly, not class shape alone')
+    ap.add_argument('--src-exe', default=None)
+    ap.add_argument('--dst-exe', default=None)
+    ap.add_argument('--src-funcs', default=None)
+    ap.add_argument('--dst-funcs', default=None)
+    ap.add_argument('--anchors', default=None,
+                    help='optional IDA-confirmed hook map with rva_7_0/name fields')
+    ap.add_argument('--precision', action='store_true',
+                    help='emit only high-confidence matches; never emit ambiguous/low candidates')
+    ap.add_argument('--timing-json', default=None,
+                    help='write per-phase timing JSON')
+    ap.add_argument('--jobs', type=int, default=1,
+                    help='parallel hook worker count (default 1)')
+    a = ap.parse_args()
+
+    t0 = time.perf_counter()
+    timings = []
+
+    def tick(label):
+        dt = time.perf_counter() - t0
+        timings.append({'phase': label, 'seconds': round(dt, 4)})
+        print('[timing] %-22s %.3fs' % (label, dt), file=sys.stderr)
+
+    S = parse_dump(a.src)
+    T = parse_dump(a.dst)
+    tick('load-dumps')
+    verify = None
+    if a.verify_disasm:
+        if not (a.src_exe and a.dst_exe and a.src_funcs and a.dst_funcs):
+            sys.exit('--verify-disasm requires --src-exe --dst-exe --src-funcs --dst-funcs')
+        src_pe = sig.PE(a.src_exe); dst_pe = sig.PE(a.dst_exe)
+        src_ends = load_func_ends(a.src_funcs); dst_ends = load_func_ends(a.dst_funcs)
+        md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
+        verify = (src_pe, dst_pe, src_ends, dst_ends, md)
+    tick('verify-setup')
+    rows = json.load(open(a.hooks, encoding='utf-8'))['rows']
+    # index target by method count for fast candidate generation
+    by_count = collections.defaultdict(list)
+    for full, cls in T.items():
+        by_count[len(cls['methods'])].append((full, cls))
+    # Deterministic class fingerprint caches: only avoid recomputing the same
+    # class_seq/class_score pair.  No candidate or threshold behavior changes.
+    tseq_by_full = {full: class_seq(cls) for full, cls in T.items()}
+    sseq_by_full = {}
+    class_score_cache = {}
+    result = {}
+    global _D_CTX
+    _D_CTX = (S, T, by_count, tseq_by_full, sseq_by_full,
+              class_score_cache, verify,
+              {"class_score": a.class_score,
+               "method_aware_class": a.method_aware_class,
+               "class_margin": a.class_margin,
+               "reselect_low": a.reselect_low,
+               "reselect_medium": a.reselect_medium})
+    if a.jobs > 1:
+        import multiprocessing as mp
+        try:
+            ctx = mp.get_context("fork")
+        except ValueError:
+            ctx = mp.get_context()
+        with ctx.Pool(processes=a.jobs) as pool:
+            pairs = pool.map(_process_worker, rows, chunksize=1)
+    else:
+        pairs = [_process_hook(h, *_D_CTX) for h in rows]
+    for name, entry in pairs:
+        result[name] = entry
+    tick('candidate-generation')
     # Optional IDA-confirmed anchors. This is deliberately explicit: names/shape
     # alone cannot disambiguate overloads or identical getters.
     if a.anchors:
@@ -578,6 +647,11 @@ def main():
                   ensure_ascii=False, indent=1)
         print('precision: accepted %d, rejected %d' % (len(accepted), len(rejected)))
     json.dump(result, open(a.out, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    tick('write-result')
+    if a.timing_json:
+        json.dump({'total_seconds': round(time.perf_counter() - t0, 4),
+                   'phases': timings}, open(a.timing_json, 'w', encoding='utf-8'),
+                  ensure_ascii=False, indent=1)
     stats = collections.Counter(v['status'] for v in result.values())
     print(stats)
     for st in ('matched', 'ambiguous_class', 'no_class', 'no_method', 'missing_source_class', 'missing_source_method'):

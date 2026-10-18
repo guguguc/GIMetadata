@@ -17,11 +17,14 @@ import argparse
 import bisect
 import collections
 import difflib
+import hashlib
 import json
 import math
 import os
+import pickle
 import re
 import sys
+import time
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -425,6 +428,224 @@ def enrich_confidence(out, report, base, T):
         v["review_required"] = bool(v.get("review_required") or lv != "high" or not exact_meta)
 
 
+# --------------------------------------------------------------- dump cache
+def load_dump_cached(path, cache_dir):
+    """Load DA.parse_dump output through a pickle cache keyed by file identity."""
+    st = os.stat(path)
+    key = hashlib.sha1(("%s:%s:%s" % (os.path.abspath(path), st.st_size, st.st_mtime_ns)).encode()).hexdigest()[:16]
+    os.makedirs(cache_dir, exist_ok=True)
+    cp = os.path.join(cache_dir, "dump_%s_%s.pkl" % (os.path.basename(path).replace(".", "_"), key))
+    if os.path.exists(cp):
+        try:
+            return pickle.load(open(cp, "rb"))
+        except Exception:
+            pass
+    d = DA.parse_dump(path)
+    try:
+        tmp = cp + ".tmp"
+        pickle.dump(d, open(tmp, "wb"), protocol=5)
+        os.replace(tmp, cp)
+    except Exception:
+        pass
+    return d
+
+
+# ------------------------------------------------------- parallel candidates
+_JOB_CTX = None
+
+
+def _build_job(h, S, T, base, by_count, max_classes,
+               sseq_by_full, tseq_by_full, name_index, score_cache):
+    name = h["hook_method"]
+    b = base.get(name, {})
+    if b.get("status") not in ("matched", "ambiguous_class", "no_class", "no_method"):
+        return name, None
+    scls, sm, si = src_method(S, h)
+    if not scls or not sm:
+        return name, None
+    sfull = h.get("fullname", "")
+    sseq = sseq_by_full.get(sfull)
+    if sseq is None:
+        sseq = DA.class_seq(scls)
+        sseq_by_full[sfull] = sseq
+    n = len(sseq)
+    cnames = []
+    if b.get("target_class"):
+        cnames.append(b["target_class"])
+    for x in b.get("class_candidates", []):
+        if x.get("class"):
+            cnames.append(x["class"])
+    for cnt in range(max(1, int(n * 0.45)), int(n * 2.2) + 2):
+        for full in by_count.get(cnt, []):
+            cnames.append(full)
+    # name/shape index is built once; retain T iteration order.
+    for full in name_index.get((sm["name"], sm["shape"]), []):
+        c = T.get(full)
+        if not c:
+            continue
+        if len(c["methods"]) < max(1, int(n * 0.4)) or len(c["methods"]) > int(n * 2.2) + 2:
+            continue
+        cnames.append(full)
+    cnames = list(dict.fromkeys(cnames))
+    scored_cls = []
+    for full in cnames:
+        c = T.get(full)
+        if not c:
+            continue
+        ckey = (sfull, full)
+        sc = score_cache.get(ckey)
+        if sc is None:
+            sc = DA.class_score(sseq, tseq_by_full[full])
+            score_cache[ckey] = sc
+        outer_bonus = 0.0
+        if "." in h.get("fullname", ""):
+            parts = h["fullname"].split(".")
+            for k in range(len(parts) - 1, 0, -1):
+                so = ".".join(parts[:k])
+                if so not in S:
+                    continue
+                tparts = full.split(".")
+                for j in range(len(tparts) - 1, 0, -1):
+                    to = ".".join(tparts[:j])
+                    if to in T and len(tparts) - j == 1:
+                        okey = (so, to)
+                        osc = score_cache.get(okey)
+                        if osc is None:
+                            osc = DA.class_score(sseq_by_full.setdefault(so, DA.class_seq(S[so])), tseq_by_full[to])
+                            score_cache[okey] = osc
+                        outer_bonus = max(outer_bonus, 0.35 * osc)
+                        break
+                if outer_bonus:
+                    break
+        scored_cls.append((sc + outer_bonus, sc, outer_bonus, full, c))
+    scored_cls.sort(key=lambda x: -x[0])
+    best_raw = scored_cls[0][1] if scored_cls else 0.0
+    scored_cls = [x for x in scored_cls
+                  if x[1] >= best_raw - 0.10 or
+                  (b.get("target_class") and x[3] == b["target_class"])]
+    scored_cls.sort(key=lambda x: -x[0])
+    csel = scored_cls[:max_classes]
+    if b.get("target_class") and not any(x[3] == b["target_class"] for x in csel):
+        c = T.get(b["target_class"])
+        if c:
+            sc = score_cache.get((sfull, b["target_class"]))
+            if sc is None:
+                sc = DA.class_score(sseq, tseq_by_full[b["target_class"]])
+                score_cache[(sfull, b["target_class"])] = sc
+            csel.append((sc, sc, 0.0, b["target_class"], c))
+    amap = []
+    for sc, rawsc, ob, full, c in csel:
+        for m in c["methods"]:
+            if m["shape"] != sm["shape"]:
+                continue
+            addr = "0x%X" % (0x140000000 + m["rva"])
+            if addr not in amap:
+                amap.append(addr)
+    if not amap:
+        return name, None
+    return name, {"h": h, "b": b, "scls": scls, "sm": sm, "si": si,
+                  "csel": csel, "addrs": amap}
+
+
+def _job_worker(h):
+    return _build_job(h, *_JOB_CTX)
+
+
+# ---------------------------------------------------------- parallel scoring
+_SCORE_CTX = None
+
+
+def _score_job(item, src_xrefs, dst_xrefs, smap, tmap,
+               src_pe, dst_pe, md, sends, tends, max_body):
+    name, j = item
+    sm, scls, si = j["sm"], j["scls"], j["si"]
+    sx = [x for x in src_xrefs.get(name, []) if x.get("norm") is not None]
+    rows = []
+    for sc, rawsc, ob, full, c in j["csel"]:
+        for m in c["methods"]:
+            if m["shape"] != sm["shape"]:
+                continue
+            addr = "0x%X" % (0x140000000 + m["rva"])
+            tx = [x for x in dst_xrefs.get(addr.lower(), []) if x.get("norm") is not None]
+            call = 0.0
+            call_delta = None
+            call_caller = None
+            for x in sx:
+                for y in tx:
+                    dlt = abs(x["norm"] - y["norm"])
+                    v = math.exp(-dlt / 0.030)
+                    if v > call:
+                        call = v
+                        call_delta = dlt
+                        call_caller = (x, y)
+            caller_ev = 0.0
+            caller_detail = None
+            if call_caller:
+                x, y = call_caller
+                sh = nearest_method(smap, x["from"])
+                th = nearest_method(tmap, y["from"])
+                if sh and th:
+                    scl, smm, _, _ = sh
+                    tcl, tmm, _, _ = th
+                    cs = 1.0 if smm["shape"] == tmm["shape"] else 0.0
+                    cm = mod_score(method_mods(smm["decl"]), method_mods(tmm["decl"]))
+                    sn = nested_under(scl, j["h"].get("fullname", ""))
+                    tn = nested_under(tcl, full)
+                    cn = 1.0 if sn == tn else (0.5 if not sn and not tn else 0.0)
+                    caller_ev = 0.45 * cs + 0.30 * cm + 0.25 * cn
+                    caller_detail = {"src": scl + "::" + smm["name"],
+                                     "dst": tcl + "::" + tmm["name"],
+                                     "shape": cs, "mods": round(cm, 3), "nested": cn}
+            ms = 1.0 if m["shape"] == sm["shape"] else 0.0
+            mod = mod_score(method_mods(sm["decl"]), method_mods(m["decl"]))
+            sig_issues = signature_issues(sm["decl"], m["decl"])
+            name_hit = 1.0 if m["name"] == sm["name"] else 0.0
+            al, why = DA.align_method(scls, c, sm)
+            align = 1.0 if al is not None and al["rva"] == m["rva"] else 0.0
+            lcs_align = 0.0
+            try:
+                smat = difflib.SequenceMatcher(
+                    None, [x["shape"] for x in scls["methods"]],
+                    [x["shape"] for x in c["methods"]], autojunk=False)
+                for bl in smat.get_matching_blocks():
+                    if bl.a <= si < bl.a + bl.size:
+                        if (bl.b + (si - bl.a)) == c["methods"].index(m):
+                            lcs_align = 1.0
+                        break
+            except Exception:
+                pass
+            try:
+                ordinal = 1.0 - abs(si - c["methods"].index(m)) / max(1, len(scls["methods"]), len(c["methods"]))
+            except Exception:
+                ordinal = 0.0
+            body = 0.0
+            bd = {}
+            if src_pe and dst_pe and len(rows) < max_body:
+                bd = {}
+                sv = 0x140000000 + sm["rva"]
+                tv = 0x140000000 + m["rva"]
+                body, bd = body_score(src_pe, dst_pe, md, sv, tv, sends, tends)
+            score = (0.32 * call + 0.10 * caller_ev + 0.11 * align +
+                     0.08 * lcs_align + 0.07 * mod + 0.05 * name_hit +
+                     0.04 * ms + 0.04 * rawsc + 0.01 * ordinal +
+                     0.18 * body)
+            rows.append({
+                "score": score, "call": call, "call_delta": call_delta,
+                "caller": caller_ev, "caller_detail": caller_detail,
+                "align": align, "lcs_align": lcs_align, "mod": mod,
+                "name": name_hit, "sig_issues": sig_issues,
+                "class_score": rawsc, "outer_bonus": ob, "ordinal": ordinal,
+                "body": body, "body_detail": bd, "addr": addr, "full": full,
+                "method": m, "class": c,
+            })
+    rows.sort(key=lambda x: -x["score"])
+    return name, rows
+
+
+def _score_worker(item):
+    return _score_job(item, *_SCORE_CTX)
+
+
 # --------------------------------------------------------------- resolver
 def main():
     ap = argparse.ArgumentParser()
@@ -440,15 +661,31 @@ def main():
     ap.add_argument("--save-dst-export", default=None,
                     help="after candidate generation, ask target IDA MCP for an export_funcs cache")
     ap.add_argument("--ida-url", default="http://127.0.0.1:13337/mcp")
+    ap.add_argument("--no-ida", action="store_true",
+                    help="never query IDA MCP; use only dumps/exports/body evidence")
     ap.add_argument("--src-exe", default=None)
     ap.add_argument("--dst-exe", default=None)
     ap.add_argument("--max-classes", type=int, default=18)
     ap.add_argument("--max-body", type=int, default=300)
     ap.add_argument("--report", default=None)
+    ap.add_argument("--timing-json", default=None,
+                    help="write per-phase timing JSON")
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="parallel worker count for candidate generation/scoring (default 1)")
+    ap.add_argument("--dump-cache-dir", default="out/cache",
+                    help="pickle cache for parsed dumps (default out/cache)")
     a = ap.parse_args()
 
-    S = DA.parse_dump(a.src_dump)
-    T = DA.parse_dump(a.dst_dump)
+    t0 = time.perf_counter()
+    timings = []
+
+    def tick(label):
+        dt = time.perf_counter() - t0
+        timings.append({"phase": label, "seconds": round(dt, 4)})
+        print("[timing] %-22s %.3fs" % (label, dt), file=sys.stderr)
+
+    S = load_dump_cached(a.src_dump, a.dump_cache_dir)
+    T = load_dump_cached(a.dst_dump, a.dump_cache_dir)
     hooks = load_hooks(a.hooks)
     base = json.load(open(a.base, encoding="utf-8"))
     smap = method_starts(S)
@@ -460,97 +697,44 @@ def main():
     md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
     sends = build_ends(S)
     tends = build_ends(T)
+    tick("load-dumps")
 
     # target class candidates
     by_count = collections.defaultdict(list)
     for full, c in T.items():
         by_count[len(c["methods"])].append(full)
 
+    # Candidate-generation caches.  These are deterministic indexes of the
+    # same immutable dump data; they only remove repeated scans/computations.
+    tseq_by_full = {full: DA.class_seq(c) for full, c in T.items()}
+    sseq_by_full = {}
+    name_index = collections.defaultdict(list)
+    for full, c in T.items():
+        for m in c["methods"]:
+            name_index[(m["name"], m["shape"])].append(full)
+    score_cache = {}
     # candidate cache
     jobs = {}
     all_addrs = set()
-    for h in hooks:
-        name = h["hook_method"]
-        b = base.get(name, {})
-        if b.get("status") not in ("matched", "ambiguous_class", "no_class", "no_method"):
+    global _JOB_CTX
+    _JOB_CTX = (S, T, base, by_count, a.max_classes,
+                sseq_by_full, tseq_by_full, name_index, score_cache)
+    if a.jobs > 1:
+        import multiprocessing as mp
+        try:
+            ctx = mp.get_context("fork")
+        except ValueError:
+            ctx = mp.get_context()
+        with ctx.Pool(processes=a.jobs) as pool:
+            pairs = pool.map(_job_worker, hooks, chunksize=1)
+    else:
+        pairs = [_build_job(h, *_JOB_CTX) for h in hooks]
+    for name, job in pairs:
+        if not job:
             continue
-        scls, sm, si = src_method(S, h)
-        if not scls or not sm:
-            continue
-        sseq = DA.class_seq(scls)
-        n = len(sseq)
-        cnames = []
-        if b.get("target_class"):
-            cnames.append(b["target_class"])
-        for x in b.get("class_candidates", []):
-            if x.get("class"):
-                cnames.append(x["class"])
-        # broad metadata search, but bounded by method-count similarity
-        for cnt in range(max(1, int(n * 0.45)), int(n * 2.2) + 2):
-            for full in by_count.get(cnt, []):
-                cnames.append(full)
-        # same-name method is a legitimate generic signal (mostly Unity / non-obfuscated names)
-        for full, c in T.items():
-            if len(c["methods"]) < max(1, int(n * 0.4)) or len(c["methods"]) > int(n * 2.2) + 2:
-                continue
-            if any(m["name"] == sm["name"] and m["shape"] == sm["shape"] for m in c["methods"]):
-                cnames.append(full)
-        cnames = list(dict.fromkeys(cnames))
-        scored_cls = []
-        for full in cnames:
-            c = T.get(full)
-            if not c:
-                continue
-            sc = DA.class_score(sseq, DA.class_seq(c))
-            # Nested type: the outer class is part of the fingerprint.  The
-            # dumper uses dots for both namespaces and nested types; test all
-            # possible prefixes and take the best existing type.
-            outer_bonus = 0.0
-            if "." in h.get("fullname", ""):
-                parts = h["fullname"].split(".")
-                for k in range(len(parts) - 1, 0, -1):
-                    so = ".".join(parts[:k])
-                    if so not in S:
-                        continue
-                    tparts = full.split(".")
-                    for j in range(len(tparts) - 1, 0, -1):
-                        to = ".".join(tparts[:j])
-                        if to in T and len(tparts) - j == 1:
-                            osc = DA.class_score(DA.class_seq(S[so]), DA.class_seq(T[to]))
-                            outer_bonus = max(outer_bonus, 0.35 * osc)
-                            break
-                    if outer_bonus:
-                        break
-            scored_cls.append((sc + outer_bonus, sc, outer_bonus, full, c))
-        scored_cls.sort(key=lambda x: -x[0])
-        # A candidate class that is structurally much weaker than the best
-        # class is not a valid hook target even if one method in it happens
-        # to have a high same-shape score.  Keep the current class for
-        # comparison when it is structurally plausible.
-        best_raw = scored_cls[0][1] if scored_cls else 0.0
-        scored_cls = [x for x in scored_cls
-                      if x[1] >= best_raw - 0.10 or
-                      (b.get("target_class") and x[3] == b["target_class"])]
-        scored_cls.sort(key=lambda x: -x[0])
-        csel = scored_cls[:a.max_classes]
-        # keep current target class even if it fell out of the top list
-        if b.get("target_class") and not any(x[3] == b["target_class"] for x in csel):
-            c = T.get(b["target_class"])
-            if c:
-                sc = DA.class_score(sseq, DA.class_seq(c))
-                csel.append((sc, sc, 0.0, b["target_class"], c))
-        amap = []
-        for sc, rawsc, ob, full, c in csel:
-            for m in c["methods"]:
-                if m["shape"] != sm["shape"]:
-                    continue
-                addr = "0x%X" % (0x140000000 + m["rva"])
-                if addr not in amap:
-                    amap.append(addr)
-                    all_addrs.add(addr.lower())
-        if amap:
-            jobs[name] = {"h": h, "b": b, "scls": scls, "sm": sm, "si": si,
-                          "csel": csel, "addrs": amap}
+        jobs[name] = job
+        all_addrs.update(job["addrs"])
+    tick("candidate-generation")
 
     # Optional: create a reusable --dst-export cache from the live target IDA.
     if a.save_dst_export:
@@ -570,7 +754,7 @@ def main():
             if isinstance(k, str):
                 dst_xrefs.setdefault(k.lower(), v)
     missing = sorted(set(x.lower() for x in all_addrs) - set(dst_xrefs))
-    if missing:
+    if missing and not a.no_ida:
         try:
             got = target_xrefs_ida(missing, a.ida_url)
             for k, v in got.items():
@@ -609,103 +793,26 @@ def main():
             xs.append({"from": addr, "start": st, "end": en,
                        "norm": (addr - st) / max(1, en - st) if st and en else None})
         src_xrefs[name] = xs
+    tick("xrefs")
 
     # score every candidate
+    global _SCORE_CTX
+    _SCORE_CTX = (src_xrefs, dst_xrefs, smap, tmap,
+                  src_pe, dst_pe, md, sends, tends, a.max_body)
+    if a.jobs > 1 and len(jobs) > 1:
+        import multiprocessing as mp
+        try:
+            ctx = mp.get_context("fork")
+        except ValueError:
+            ctx = mp.get_context()
+        with ctx.Pool(processes=a.jobs) as pool:
+            pairs = pool.map(_score_worker, list(jobs.items()), chunksize=1)
+    else:
+        pairs = [_score_job((name, j), *_SCORE_CTX) for name, j in jobs.items()]
     report = {}
-    for name, j in jobs.items():
-        sm, scls, si = j["sm"], j["scls"], j["si"]
-        sx = [x for x in src_xrefs.get(name, []) if x.get("norm") is not None]
-        rows = []
-        for sc, rawsc, ob, full, c in j["csel"]:
-            for m in c["methods"]:
-                if m["shape"] != sm["shape"]:
-                    continue
-                addr = "0x%X" % (0x140000000 + m["rva"])
-                tx = [x for x in dst_xrefs.get(addr.lower(), []) if x.get("norm") is not None]
-                # call-site relative-position evidence
-                call = 0.0
-                call_delta = None
-                call_caller = None
-                for x in sx:
-                    for y in tx:
-                        dlt = abs(x["norm"] - y["norm"])
-                        v = math.exp(-dlt / 0.030)
-                        if v > call:
-                            call = v
-                            call_delta = dlt
-                            call_caller = (x, y)
-                # caller shape evidence
-                caller_ev = 0.0
-                caller_detail = None
-                if call_caller:
-                    x, y = call_caller
-                    sh = nearest_method(smap, x["from"])
-                    th = nearest_method(tmap, y["from"])
-                    if sh and th:
-                        scl, smm, _, _ = sh
-                        tcl, tmm, _, _ = th
-                        cs = 1.0 if smm["shape"] == tmm["shape"] else 0.0
-                        cm = mod_score(method_mods(smm["decl"]), method_mods(tmm["decl"]))
-                        # nested relation relative to the hook's owner class
-                        sn = nested_under(scl, j["h"].get("fullname", ""))
-                        tn = nested_under(tcl, full)
-                        cn = 1.0 if sn == tn else (0.5 if not sn and not tn else 0.0)
-                        caller_ev = 0.45 * cs + 0.30 * cm + 0.25 * cn
-                        caller_detail = {"src": scl + "::" + smm["name"],
-                                         "dst": tcl + "::" + tmm["name"],
-                                         "shape": cs, "mods": round(cm, 3), "nested": cn}
-                # method metadata evidence
-                ms = 1.0 if m["shape"] == sm["shape"] else 0.0
-                mod = mod_score(method_mods(sm["decl"]), method_mods(m["decl"]))
-                sig_issues = signature_issues(sm["decl"], m["decl"])
-                name_hit = 1.0 if m["name"] == sm["name"] else 0.0
-                al, why = DA.align_method(scls, c, sm)
-                align = 1.0 if al is not None and al["rva"] == m["rva"] else 0.0
-                # Class-sequence LCS alignment.  This is different from
-                # align_method(): align_method may use an exact preserved
-                # method name, while LCS follows the whole class signature
-                # order and is what distinguishes e.g. LBK from ABEL.
-                lcs_align = 0.0
-                try:
-                    smat = difflib.SequenceMatcher(
-                        None, [x["shape"] for x in scls["methods"]],
-                        [x["shape"] for x in c["methods"]], autojunk=False)
-                    for bl in smat.get_matching_blocks():
-                        if bl.a <= si < bl.a + bl.size:
-                            if (bl.b + (si - bl.a)) == c["methods"].index(m):
-                                lcs_align = 1.0
-                            break
-                except Exception:
-                    pass
-                # source/target ordered class position, only a weak signal
-                try:
-                    ordinal = 1.0 - abs(si - c["methods"].index(m)) / max(1, len(scls["methods"]), len(c["methods"]))
-                except Exception:
-                    ordinal = 0.0
-                body = 0.0
-                bd = {}
-                if src_pe and dst_pe and len(rows) < a.max_body:
-                    bd = {}
-                    sv = 0x140000000 + sm["rva"]; tv = 0x140000000 + m["rva"]
-                    body, bd = body_score(src_pe, dst_pe, md, sv, tv, sends, tends)
-                # weighted evidence.  Call-site agreement is the strongest
-                # cross-version signal, but it only exists when both sides
-                # have a direct call.
-                score = (0.32 * call + 0.10 * caller_ev + 0.11 * align +
-                         0.08 * lcs_align + 0.07 * mod + 0.05 * name_hit +
-                         0.04 * ms + 0.04 * rawsc + 0.01 * ordinal +
-                         0.18 * body)
-                rows.append({
-                    "score": score, "call": call, "call_delta": call_delta,
-                    "caller": caller_ev, "caller_detail": caller_detail,
-                    "align": align, "lcs_align": lcs_align, "mod": mod,
-                    "name": name_hit, "sig_issues": sig_issues,
-                    "class_score": rawsc, "outer_bonus": ob, "ordinal": ordinal,
-                    "body": body, "body_detail": bd, "addr": addr, "full": full,
-                    "method": m, "class": c,
-                })
-        rows.sort(key=lambda x: -x["score"])
+    for name, rows in pairs:
         report[name] = rows
+    tick("scoring")
 
     # same-shape group assignment: preserve source order and avoid assigning
     # two hooks to one target method.
@@ -750,6 +857,7 @@ def main():
         if best:
             for nm, r in zip(names, best[1]):
                 chosen[nm] = r
+    tick("group-assignment")
 
     # write result; keep old result when the new candidate is not strong
     out = {}
@@ -836,6 +944,7 @@ def main():
         }
 
     enrich_confidence(out, report, base, T)
+    tick("write-result")
 
     json.dump(out, open(a.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     if a.report:
@@ -845,6 +954,10 @@ def main():
                           for k, v in r.items() if k not in ("method", "class")}
                          for r in rows[:12]]
         json.dump(rep, open(a.report, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    if a.timing_json:
+        json.dump({"total_seconds": round(time.perf_counter() - t0, 4),
+                   "phases": timings}, open(a.timing_json, "w", encoding="utf-8"),
+                  ensure_ascii=False, indent=1)
     print("wrote", a.out, "resolved", sum(1 for v in out.values() if v.get("confidence") == "auto-evidence"))
     for name, v in out.items():
         if v.get("confidence") == "auto-evidence":
