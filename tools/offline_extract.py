@@ -127,7 +127,13 @@ def main():
         if len(ents) == len(names):
             for (seq, t), nm in zip(ents, names):
                 labeled[nm] = t
-    json.dump(labeled, open(extra_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    # 保留已有的人工/派生表项（例如从 IDA 反编译里手工确认的 nested/default blob）
+    try:
+        old_extra = json.load(open(extra_path, encoding='utf-8')) if os.path.exists(extra_path) else {}
+    except Exception:
+        old_extra = {}
+    old_extra.update(labeled)
+    json.dump(old_extra, open(extra_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 
     print('added %d tables; total %d; labeled %d' % (len(added), len(tables), len(labeled)))
     for e in added:

@@ -1,0 +1,16 @@
+# 7.0/7.1 自动恢复必须强制反编译的函数
+# 这些名字已经存在于 tools/sigs.json / tools/sig_names.txt；
+# 这里只是“导出时优先保证覆盖”的清单。
+GIMeta_TypeAttrGetter
+GIMeta_GetTypeInfoFromIndex
+GIMeta_GetTypeInfoFromIndex2
+GIMeta_GetTypeInfoByIndex
+GIMeta_GetFieldDefaultValue
+GIMeta_GetDefaultValue
+GIMeta_DecodeDefaultValue
+GIMeta_GetDefaultParameterValueObject
+GIMeta_SetupNestedLocked
+GIMeta_IterNestedTypes
+GIMeta_GetMethodInfo2
+GIMeta_GetMethodInfoFromIndex
+GIMeta_RuntimeInit

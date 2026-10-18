@@ -246,6 +246,109 @@ def gen_sig(md, pe, va, name, ninstr=8, skip=0, next_=0):
             'size': sum(x.size for x in insns)}
 
 
+def gen_sig_at(md, pe, va, name, insns_all, i, ninstr=8, next_=0):
+    """从已反汇编的函数指令序列的第 i 条开始，生成签名。"""
+    if i < 0 or i + ninstr > len(insns_all):
+        return None
+    insns = insns_all[i:i + ninstr]
+    if len(insns) < 4:
+        return None
+    loose = [toks_of(x, False) for x in insns]
+    strict = [toks_of(x, True) for x in insns]
+    bl = [mask_bytes(x) for x in insns]
+    bdl = [mask_bytes_disp(x) for x in insns]
+    brl = [mask_bytes_regs(x) for x in insns]
+    bml = [mask_bytes_rm(x) for x in insns]
+    ext_loose = ext_strict = ext_bytes = ext_mask = []
+    ext_bytes_disp = ext_mask_disp = []
+    ext_bytes_regs = ext_mask_regs = []
+    ext_bytes_rm = ext_mask_rm = []
+    if next_:
+        tail = insns_all[i:i + ninstr + next_]
+        if len(tail) > ninstr:
+            more = tail[ninstr:]
+            ext_loose = [toks_of(x, False) for x in more]
+            ext_strict = [toks_of(x, True) for x in more]
+            bm = [mask_bytes(x) for x in more]
+            ext_bytes = [b[0] for b in bm]; ext_mask = [b[1] for b in bm]
+            bdm = [mask_bytes_disp(x) for x in more]
+            ext_bytes_disp = [b[0] for b in bdm]; ext_mask_disp = [b[1] for b in bdm]
+            brm = [mask_bytes_regs(x) for x in more]
+            ext_bytes_regs = [b[0] for b in brm]; ext_mask_regs = [b[1] for b in brm]
+            bmm = [mask_bytes_rm(x) for x in more]
+            ext_bytes_rm = [b[0] for b in bmm]; ext_mask_rm = [b[1] for b in bmm]
+    return {'name': name, 'va': '0x%X' % va, 'skip': i,
+            'skip_bytes': sum(x.size for x in insns_all[:i]), 'n': len(insns),
+            'loose': loose, 'strict': strict,
+            'ext_loose': ext_loose, 'ext_strict': ext_strict,
+            'ext_bytes': ext_bytes, 'ext_mask': ext_mask,
+            'bytes_disp': [b[0] for b in bdl], 'mask_disp': [b[1] for b in bdl],
+            'ext_bytes_disp': ext_bytes_disp, 'ext_mask_disp': ext_mask_disp,
+            'bytes_regs': [b[0] for b in brl], 'mask_regs': [b[1] for b in brl],
+            'ext_bytes_regs': ext_bytes_regs, 'ext_mask_regs': ext_mask_regs,
+            'bytes_rm': [b[0] for b in bml], 'mask_rm': [b[1] for b in bml],
+            'ext_bytes_rm': ext_bytes_rm, 'ext_mask_rm': ext_mask_rm,
+            'bytes': [b[0] for b in bl], 'mask': [b[1] for b in bl],
+            'pat': ''.join(b[0] for b in bl), 'pmask': ''.join(b[1] for b in bl),
+            'distinct': len(set(loose)), 'size': sum(x.size for x in insns)}
+
+
+def _window_quality(sg, insns):
+    fixed = sum(str(m).count('f') for m in sg['mask'])
+    imm = mem = calls = generic = 0
+    for ins in insns:
+        if ins.mnemonic in ('push', 'pop', 'nop', 'nopw', 'nopl', 'int3', 'ret'):
+            generic += 1
+        if ins.mnemonic in ('call', 'jmp'):
+            calls += 1
+        for op in ins.operands:
+            if op.type == X86_OP_IMM:
+                imm += 1
+            elif op.type == X86_OP_MEM and (op.mem.disp or op.mem.base or op.mem.index):
+                mem += 1
+    distinct = len(set(sg['loose']))
+    return fixed + 3 * imm + 2 * mem + 6 * calls + 2 * distinct - 8 * generic
+
+
+def gen_windows_func(md, pe, fs, en, name, ninstr=8, want=1, next_=0):
+    """用 IDA 导出的真实 start/end，在函数体内挑质量最高的窗口。"""
+    o = pe.va2off(fs)
+    if o is None:
+        return []
+    insns = []
+    for ins in md.disasm(pe.D[o:o + min(32768, en - fs + 32)], fs):
+        insns.append(ins)
+        if ins.address >= en:
+            break
+    while insns and insns[-1].mnemonic in ('int3', 'nop', 'nopw', 'nopl'):
+        insns.pop()
+    cand = []
+    for i in range(0, max(0, len(insns) - ninstr + 1)):
+        win = insns[i:i + ninstr]
+        if any(x.mnemonic in ('ret', 'jmp', 'int3') for x in win):
+            continue
+        sg = gen_sig_at(md, pe, fs, name, insns, i, ninstr, next_)
+        if not sg:
+            continue
+        cand.append((_window_quality(sg, win), i, sg))
+    cand.sort(key=lambda x: (-x[0], x[1]))
+    picked = []
+    for score, i, sg in cand:
+        if any(abs(i - j) < ninstr for _, j, _ in picked):
+            continue
+        picked.append((score, i, sg))
+        if len(picked) >= want:
+            break
+    out = []
+    for rank, (score, i, sg) in enumerate(picked):
+        if want > 1:
+            sg['name'] = name + '__w%d' % rank
+            sg['group'] = name
+        sg['weight'] = score
+        out.append(sg)
+    return out
+
+
 def load_names(path):
     out = []
     for line in open(path, encoding='utf-8'):
@@ -257,11 +360,67 @@ def load_names(path):
     return out
 
 
+def load_funcs(path):
+    if not path or not os.path.exists(path):
+        return []
+    J = json.load(open(path, encoding='utf-8'))
+    funcs = J.get('funcs', J) if isinstance(J, dict) else J
+    out = []
+    for f in funcs:
+        try:
+            out.append((int(f['start']), int(f['end']), f))
+        except Exception:
+            pass
+    out.sort()
+    return out
+
+
+def snap_func(funcs, va):
+    """把 va 归一到它所在的函数起点；不在任何函数里返回 None。"""
+    if not funcs:
+        return None
+    lo, hi = 0, len(funcs)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if funcs[mid][0] <= va:
+            lo = mid + 1
+        else:
+            hi = mid
+    if lo == 0:
+        return None
+    st, en, f = funcs[lo - 1]
+    return st if st <= va < en else None
+
+
 def cmd_gen(a):
     pe = PE(a.exe)
     md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
     sigs = []
+    funcs_path = getattr(a, 'funcs', None)
+    if not funcs_path:
+        cand = os.path.join(os.path.dirname(os.path.abspath(a.exe)), 'funcs_wanted.json')
+        if os.path.exists(cand):
+            funcs_path = cand
+    funcs = load_funcs(funcs_path)
+    if funcs:
+        print('using function table:', funcs_path)
+    fmap = {st: en for st, en, f in funcs}
     for va, name in load_names(a.names):
+        fs = fs0 = va
+        if funcs:
+            fs = snap_func(funcs, va)
+            if fs is not None:
+                va = fs
+        if funcs and fs in fmap and getattr(a, 'windows', 1) >= 1:
+            ws = gen_windows_func(md, pe, fs, fmap[fs], name,
+                                  a.ninstr, max(1, a.windows), max(a.next, 4))
+            if ws:
+                feat = _func_features(pe, md, fs, fmap[fs])
+                if feat:
+                    for w in ws:
+                        w['features'] = feat
+                sigs.extend(ws)
+                continue
         # 跳板/对齐填充不能生成签名 —— 它不含函数体信息，只会匹配到别的跳板上
         # （实测 GIMeta_GetTypeInfoByIndex 就是 `jmp`+int3 跳到混淆区）
         if _is_stub(pe, md, va):
@@ -313,11 +472,330 @@ def _is_stub(pe, md, va):
     return False
 
 
+def _skip_pad(pe, md, va):
+    """跳过函数头前的 NOP/int3 填充（7.0 的 GetFieldDefaultValue 前面有 5 字节 NOP）。"""
+    off = pe.va2off(va)
+    if off is None:
+        return va
+    b = pe.D
+    while off < len(b):
+        if b[off] in (0x90, 0xCC):
+            off += 1; va += 1; continue
+        if b[off] == 0x0F and off + 1 < len(b) and b[off + 1] in (0x1F, 0x1E):
+            ins = list(md.disasm(b[off:off + 16], va))[:1]
+            if ins and ins[0].mnemonic.startswith('nop'):
+                off += ins[0].size; va += ins[0].size; continue
+        break
+    return va
+
+
 def _plausible_start(pe, va):
     """真函数起点的**前一个字节**通常是填充(int3/nop)或上一条函数的 ret"""
     off = pe.va2off(va)
     if off is None or off <= 0: return False
     return pe.D[off - 1] in (0xCC, 0x90, 0xC3)
+
+
+def _call_targets_cap(pe, md, va, budget=0x800, max_calls=40):
+    """轻量 call 目标收集（用于 callee recall，限制反汇编预算）。"""
+    off = pe.va2off(va)
+    if off is None:
+        return set()
+    out = set()
+    try:
+        for ins in md.disasm(pe.D[off:off + budget], va):
+            if ins.mnemonic == 'call':
+                try:
+                    out.add(int(ins.op_str, 16))
+                except ValueError:
+                    pass
+                if len(out) >= max_calls:
+                    break
+            elif ins.mnemonic == 'ret':
+                break
+    except Exception:
+        pass
+    return out
+
+
+def _callers_of(pe, target, tva, tbytes):
+    """只扫 call rel32 字节，找调用 target 的指令地址；不反汇编整个 .text。"""
+    import struct
+    out = []
+    pos = 0
+    while True:
+        k = tbytes.find(b'\xE8', pos)
+        if k < 0 or k + 5 > len(tbytes):
+            break
+        rel = struct.unpack_from('<i', tbytes, k + 1)[0]
+        src = tva + k
+        if (src + 5 + rel) & 0xFFFFFFFFFFFFFFFF == target:
+            out.append(src)
+        pos = k + 1
+    return out
+
+
+def _build_call_sites(tva, tbytes):
+    """扫一遍 .text 的 E8 rel32，建立 target -> [call site] 索引。"""
+    import struct
+    from collections import defaultdict
+    out = defaultdict(list)
+    pos = 0
+    n = len(tbytes)
+    while True:
+        k = tbytes.find(b'\xE8', pos)
+        if k < 0 or k + 5 > n:
+            break
+        rel = struct.unpack_from('<i', tbytes, k + 1)[0]
+        src = tva + k
+        out[(src + 5 + rel) & 0xFFFFFFFFFFFFFFFF].append(src)
+        pos = k + 1
+    return out
+
+
+def _targeted_rescue(pe, md, tva, tbytes, sigs, addr_of, verbose=True):
+    """只处理缺失/撞址/非真实起点的签名；候选来自 callers + 同尺寸函数。"""
+    funcs = _pdata_funcs(pe)
+    if not funcs:
+        return addr_of
+    starts = [st for st, en in funcs]
+    ends = {st: en for st, en in funcs}
+    pset = set(starts)
+    import bisect
+    def snap(x):
+        i = bisect.bisect_right(starts, x) - 1
+        if i >= 0:
+            st = starts[i]
+            if 0 <= x - st <= 0x4000:
+                return st
+        return None
+    counts = {}
+    for v in addr_of.values():
+        counts[v] = counts.get(v, 0) + 1
+    changed = 0
+    cache = {}
+    sites = None
+    for sg in sigs:
+        name = sg['name']
+        cur = addr_of.get(name)
+        # 只处理：缺失 / 撞址 / 当前不是真实函数起点
+        if cur is not None and counts.get(cur, 0) == 1 and cur in pset:
+            continue
+        rf = sg.get('features') or {}
+        refs = [addr_of[c] for c in (sg.get('callees') or [])
+                if c != name and addr_of.get(c) is not None]
+        refs = list(dict.fromkeys(refs))
+        if sites is None:
+            sites = _build_call_sites(tva, tbytes)
+        cand = set()
+        for tgt in refs:
+            for c in sites.get(tgt, []):
+                st = snap(c)
+                if st is not None:
+                    cand.add(st)
+        if cur is not None:
+            for st in _nearby_func_starts(pe, tva, tbytes, cur, 0x120):
+                if st in ends:
+                    cand.add(st)
+        # 同尺寸函数（缺失/撞址/非真实起点时）
+        ref_size = rf.get('size')
+        if ref_size:
+            size_c = []
+            for st, en in funcs:
+                ratio = (en - st) / float(ref_size)
+                if 0.4 <= ratio <= 2.5:
+                    size_c.append((abs(ratio - 1.0), st))
+            size_c.sort()
+            cand.update(st for _, st in size_c[:400])
+        if not cand:
+            continue
+        def metrics(st):
+            if st not in cache:
+                cache[st] = _func_features(pe, md, st, ends.get(st, st + 0x2000))
+            tf = cache[st]
+            if not tf:
+                return None
+            cos = _cosine(rf.get('hist', {}), tf['hist']) if rf else 0.0
+            cs = _call_targets_cap(pe, md, st)
+            recall = sum(1 for x in refs if x in cs) / len(refs) if refs else 0.0
+            size_score = (min(rf.get('size', 1), tf['size']) /
+                          max(rf.get('size', 1), tf['size'])) if rf else 0.0
+            r = _score_at(pe, md, st, sg)
+            strict = r[1] if r else 0
+            score = 0.45 * recall + 0.35 * cos + 0.20 * size_score
+            return score, recall, cos, size_score, strict
+        cur_m = metrics(cur) if cur is not None else None
+        best = None
+        for st in cand:
+            m = metrics(st)
+            if not m:
+                continue
+            key = (m[0], m[1], m[2], m[4])
+            if best is None or key > best[0]:
+                best = (key, st, m)
+        if not best:
+            continue
+        key, st, m = best
+        score, recall, cos, size_score, strict = m
+        if cur is None:
+            if score < 0.42 or (cos < 0.75 and recall < 0.2):
+                continue
+        else:
+            cscore, crecall, ccos, csize, cstrict = cur_m
+            if score < cscore + 0.08:
+                continue
+            if recall <= crecall and cos <= ccos + 0.03:
+                continue
+            if strict < sg['n'] - 4 and recall <= crecall:
+                continue
+        if st != cur:
+            addr_of[name] = st
+            changed += 1
+            if verbose:
+                print("    %-40s %-12s -> 0x%X  score %.2f cos %.2f recall %.2f size %.2f strict %d"
+                      % (name, 'MISSING' if cur is None else '0x%X' % cur, st,
+                         score, cos, recall, size_score, strict))
+    if verbose:
+        print("  targeted rescue：修正 %d 个" % changed)
+    return addr_of
+
+
+def _feature_rescue(pe, md, tva, tbytes, sigs, addr_of, verbose=True):
+    """BinDiff 风格：mnemonic 直方图 + callee recall + 函数大小。"""
+    funcs = _pdata_funcs(pe)
+    if not funcs:
+        return addr_of
+    if verbose:
+        print("  feature recall：目标函数 %d 个" % len(funcs))
+    cache = {}
+    feats = []
+    for st, en in funcs:
+        f = _func_features(pe, md, st, en)
+        if f:
+            cache[st] = f
+            feats.append((st, f))
+    changed = 0
+    # 只处理缺失 / 当前撞址 / 当前分数低的
+    counts = {}
+    for v in addr_of.values():
+        counts[v] = counts.get(v, 0) + 1
+    for sg in sigs:
+        name = sg['name']
+        rf = sg.get('features')
+        if not rf:
+            continue
+        cur = addr_of.get(name)
+        need = cur is None or counts.get(cur, 0) > 1
+        if not need:
+            r = _score_at(pe, md, cur, sg)
+            if r and r[1] >= sg['n'] - 2:
+                continue
+        ref_calls = []
+        for c in (sg.get('callees') or []):
+            if c != name and addr_of.get(c) is not None:
+                ref_calls.append(addr_of[c])
+        ref_calls = list(dict.fromkeys(ref_calls))
+        best = None
+        for st, tf in feats:
+            cos = _cosine(rf['hist'], tf['hist'])
+            if cos < 0.55:
+                continue
+            size_score = min(rf['size'], tf['size']) / max(rf['size'], tf['size']) if rf['size'] and tf['size'] else 0
+            recall = 0.0
+            if ref_calls:
+                cs = _call_targets_cap(pe, md, st)
+                recall = sum(1 for x in ref_calls if x in cs) / len(ref_calls)
+            score = 0.55 * cos + 0.25 * recall + 0.20 * size_score
+            key = (score, cos, recall)
+            if best is None or key > best[0]:
+                best = (key, st)
+        if not best:
+            continue
+        (score, cos, recall), st = best
+        if score < 0.72:
+            continue
+        if st != cur:
+            addr_of[name] = st
+            changed += 1
+            if verbose:
+                print("    %-40s %-12s -> 0x%X  score %.2f cos %.2f recall %.2f"
+                      % (name, 'MISSING' if cur is None else '0x%X' % cur, st, score, cos, recall))
+    if verbose:
+        print("  feature recall：修正 %d 个" % changed)
+    return addr_of
+
+
+def _callee_rescue(pe, md, tva, tbytes, sigs, addr_of, verbose=True):
+    """用 reference callees 在目标函数起点里做 recall 救援/消歧。"""
+    starts = _pdata_starts(pe)
+    if not starts:
+        starts = _enum_func_starts(pe, tva, tbytes)
+    # 当前命中附近也补上（.pdata 可能漏掉某些真函数）
+    for va in list(addr_of.values()):
+        starts.extend(_nearby_func_starts(pe, tva, tbytes, va, 0x100))
+    starts = sorted(set(x for x in starts if tva <= x < tva + len(tbytes)
+                        and not _is_stub(pe, md, x)))
+    if verbose:
+        print("  callee recall：候选函数起点 %d 个" % len(starts))
+    calls = {st: _call_targets_cap(pe, md, st) for st in starts}
+    changed = 0
+    sigmap = {sg['name']: sg for sg in sigs}
+    # 先处理未命中 + 撞址 + 分数低的
+    names = set(addr_of)
+    names.update(sg['name'] for sg in sigs if sg['name'] not in addr_of)
+    for name in sorted(names):
+        sg = sigmap.get(name)
+        if not sg:
+            continue
+        ref = []
+        for c in (sg.get('callees') or []):
+            if c == name:
+                continue
+            v = addr_of.get(c)
+            if v is not None:
+                ref.append(v)
+        ref = list(dict.fromkeys(ref))
+        if not ref:
+            continue
+        cur = addr_of.get(name)
+        cur_calls = calls.get(cur) or set()
+        cur_hitn = sum(1 for x in ref if x in cur_calls)
+        cur_recall = cur_hitn / len(ref)
+        cur_r = _score_at(pe, md, cur, sg) if cur is not None else None
+        cur_strict = cur_r[1] if cur_r else 0
+        best = None
+        for st in starts:
+            cs = calls.get(st) or set()
+            hitn = sum(1 for x in ref if x in cs)
+            if hitn == 0:
+                continue
+            recall = hitn / len(ref)
+            r = _score_at(pe, md, st, sg)
+            strict, loose = (r[1], r[0]) if r else (0, 0)
+            key = (recall, strict, loose)
+            if best is None or key > best[0]:
+                best = (key, st, hitn)
+        if not best:
+            continue
+        recall, strict, loose = best[0]
+        # 必须有足够强的字节证据，或“缺失 + 高 recall + 至少 2 个 callee”
+        if strict < sg['n'] - 4 and not (cur is None and recall >= 0.9 and len(ref) >= 2):
+            continue
+        if cur is not None:
+            # 不比当前更好就不动
+            if recall < cur_recall + 0.05 and strict <= cur_strict:
+                continue
+        st = best[1]
+        if st != cur:
+            addr_of[name] = st
+            changed += 1
+            if verbose:
+                print("    %-40s %-12s -> 0x%X  recall %.2f (%d/%d) strict %d"
+                      % (name, 'MISSING' if cur is None else '0x%X' % cur, st,
+                         recall, best[2], len(ref), strict))
+    if verbose:
+        print("  callee recall：修正 %d 个" % changed)
+    return addr_of
 
 
 def _call_targets(pe, md, va, maxbytes=32768):
@@ -359,7 +837,7 @@ def _score_at(pe, md, va, sg):
     off = pe.va2off(va)
     if off is None: return None
     insns = []
-    for ins in md.disasm(pe.D[off:off + 160], va):
+    for ins in md.disasm(pe.D[off:off + 8192], va):
         insns.append(ins)
         if len(insns) >= sg['skip'] + sg['n'] + len(sg.get('ext_loose') or ()): break
     if len(insns) < sg['skip'] + sg['n']: return None
@@ -392,7 +870,7 @@ def _score_at_gap(pe, md, va, sg, slack=8):
         return None
     need = sg['skip'] + sg['n'] + slack
     insns = []
-    for ins in md.disasm(pe.D[off:off + 400], va):
+    for ins in md.disasm(pe.D[off:off + 8192], va):
         insns.append(ins)
         if len(insns) >= need:
             break
@@ -402,6 +880,142 @@ def _score_at_gap(pe, md, va, sg, slack=8):
     lo = [toks_of(x, False) for x in seg]
     st = [toks_of(x, True) for x in seg]
     return _lcs(sg['strict'], st), _lcs(sg['loose'], lo)
+
+
+def _pdata_starts(pe):
+    """从 PE Exception Directory (.pdata) 取真实函数起点，过滤到 .text。
+    7.1 实测：163667 个起点，包含 0x1404C6DC0 / 0x140523400 / 0x14051D330。"""
+    import struct
+    D = pe.D
+    try:
+        e = struct.unpack_from('<I', D, 0x3c)[0]
+        opt = e + 24
+        magic = struct.unpack_from('<H', D, opt)[0]
+        dd = opt + (112 if magic == 0x20b else 96)
+        rva, size = struct.unpack_from('<II', D, dd + 3 * 8)
+        if not rva or not size:
+            return []
+        nsec = struct.unpack_from('<H', D, e + 6)[0]
+        so = opt + struct.unpack_from('<H', D, e + 20)[0]
+        secs = []
+        for i in range(nsec):
+            p = so + i * 40
+            name = D[p:p + 8].rstrip(b'\0').decode(errors='ignore')
+            vs, va, rs, ro = struct.unpack_from('<IIII', D, p + 8)
+            secs.append((va, vs, ro, rs, name))
+        def va2off(va):
+            for sva, vsz, roff, rsz, name in secs:
+                if sva <= va < sva + max(vsz, rsz):
+                    return roff + (va - sva)
+            return None
+        off = va2off(rva)
+        if off is None:
+            return []
+        tva, tbytes = pe.text
+        tend = tva + len(tbytes)
+        out = set()
+        for i in range(size // 12):
+            b, en, un = struct.unpack_from('<III', D, off + i * 12)
+            if not b:
+                continue
+            st = pe.img + b
+            if tva <= st < tend:
+                out.add(st)
+        return sorted(out)
+    except Exception:
+        return []
+
+
+def _pdata_funcs(pe):
+    """从 .pdata 取 (start, end)，过滤到 .text。"""
+    import struct
+    D = pe.D
+    try:
+        e = struct.unpack_from('<I', D, 0x3c)[0]
+        opt = e + 24
+        magic = struct.unpack_from('<H', D, opt)[0]
+        dd = opt + (112 if magic == 0x20b else 96)
+        rva, size = struct.unpack_from('<II', D, dd + 3 * 8)
+        nsec = struct.unpack_from('<H', D, e + 6)[0]
+        so = opt + struct.unpack_from('<H', D, e + 20)[0]
+        secs = []
+        for i in range(nsec):
+            p = so + i * 40
+            nm = D[p:p + 8].rstrip(b'\0').decode(errors='ignore')
+            vs, va, rs, ro = struct.unpack_from('<IIII', D, p + 8)
+            secs.append((va, vs, ro, rs, nm))
+        def va2off(va):
+            for sva, vsz, roff, rsz, nm in secs:
+                if sva <= va < sva + max(vsz, rsz):
+                    return roff + (va - sva)
+            return None
+        off = va2off(rva)
+        tva, tbytes = pe.text
+        tend = tva + len(tbytes)
+        out = []
+        for i in range(size // 12):
+            b, en, un = struct.unpack_from('<III', D, off + i * 12)
+            if not b:
+                continue
+            st = pe.img + b
+            ed = pe.img + en
+            if tva <= st < tend and st < ed <= tend and 4 <= ed - st <= 0x40000:
+                out.append((st, ed))
+        return sorted(set(out))
+    except Exception:
+        return []
+
+
+_PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
+           73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151,
+           157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229]
+_PRIME_MAP = {}
+
+
+def _prime_of(mn):
+    if mn not in _PRIME_MAP:
+        _PRIME_MAP[mn] = _PRIMES[len(_PRIME_MAP) % len(_PRIMES)]
+    return _PRIME_MAP[mn]
+
+
+def _func_features(pe, md, start, end, budget=0x4000):
+    """BinDiff 风格轻量特征：mnemonic 直方图 / prime / 分支/调用计数。"""
+    o = pe.va2off(start)
+    if o is None:
+        return None
+    hist = {}
+    prime = 1
+    calls = branches = rets = insn_n = 0
+    for ins in md.disasm(pe.D[o:o + min(budget, end - start + 32)], start):
+        if ins.address >= end:
+            break
+        mn = ins.mnemonic
+        if mn in ('int3', 'nop', 'nopw', 'nopl'):
+            continue
+        hist[mn] = hist.get(mn, 0) + 1
+        prime = (prime * _prime_of(mn)) & 0xFFFFFFFFFFFFFFFF
+        insn_n += 1
+        if mn == 'call':
+            calls += 1
+        elif mn in ('jmp', 'je', 'jne', 'jz', 'jnz', 'ja', 'jb', 'jg', 'jl', 'jle', 'jge', 'jae', 'jbe', 'js', 'jns'):
+            branches += 1
+        elif mn == 'ret':
+            rets += 1
+    if insn_n == 0:
+        return None
+    return {'hist': hist, 'prime': prime, 'insns': insn_n,
+            'calls': calls, 'blocks': 1 + branches, 'edges': branches + rets,
+            'size': end - start}
+
+
+def _cosine(a, b):
+    if not a or not b:
+        return 0.0
+    keys = set(a) | set(b)
+    dot = sum(a.get(k, 0) * b.get(k, 0) for k in keys)
+    na = sum(v * v for v in a.values()) ** 0.5
+    nb = sum(v * v for v in b.values()) ** 0.5
+    return dot / (na * nb) if na and nb else 0.0
 
 
 def _enum_func_starts(pe, tva, tbytes, limit=None):
@@ -414,6 +1028,20 @@ def _enum_func_starts(pe, tva, tbytes, limit=None):
             out.append(tva + k)
             if limit and len(out) >= limit:
                 break
+    return out
+
+
+def _nearby_func_starts(pe, tva, tbytes, va, radius=0x90):
+    """候选地址附近 ±radius 内的“像函数头”位置（前一个字节是 CC/90/C3）。
+    解决 skip_bytes 跨版本偏几字节 / 命中到相邻清理函数的问题。"""
+    out = [va]
+    lo = max(1, (va - tva) - radius)
+    hi = min(len(tbytes), (va - tva) + radius)
+    for k in range(lo, hi):
+        if tbytes[k - 1] in (0xCC, 0x90, 0xC3):
+            st = tva + k
+            if st not in out:
+                out.append(st)
     return out
 
 
@@ -749,11 +1377,19 @@ def cmd_scan(a):
     """
     import binascii, time
     t0 = time.time()
+    _perf0 = time.perf_counter(); _last = [_perf0]
+    def mark(label):
+        now = time.perf_counter()
+        if getattr(a, 'timing', False):
+            print("  [time] %-24s %.3fs" % (label, now - _last[0]))
+        _last[0] = now
     sigs = json.load(open(a.sigs))
+    mark('load sigs')
     pe = PE(a.exe)
     tva, tbytes = pe.text
     print("扫描 .text（%.1f MB，字节模式优先）…" % (len(tbytes) / 1e6))
     md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
+    mark('load PE')
     hit = miss = amb = 0
     # ---- 同目录缓存：version/<ver>/sig_hits.json 里是**已人工/工具确认过**的地址 ----
     #   换版本时缓存不存在 -> 正常扫描；扫完确认后写回缓存 -> 以后默认就是 100% 覆盖。
@@ -806,6 +1442,21 @@ def cmd_scan(a):
                 amb += 1; continue
             print("  %-42s \u26a0 候选 >%d（签名弱），但同版本自测只看记录的原地址" % (sg['name'], MAX_CANDS))
         cands = list(dict.fromkeys(cands))      # 去重：origin 可能被插了两次
+        # 跨版本 prologue 长度变化时，skip_bytes 会把起点算偏几字节/落到相邻清理函数。
+        # 在候选附近补上所有“像函数头”的位置，再统一打分。
+        near = []
+        for c in list(cands):
+            near.extend(_nearby_func_starts(pe, tva, tbytes, c, 0x90))
+        cands = list(dict.fromkeys(cands + near))
+        if getattr(a, 'funcs', None):
+            funcs = load_funcs(a.funcs)
+            snapped = []
+            for c in cands:
+                fs = snap_func(funcs, c)
+                if fs is not None:
+                    snapped.append(fs + sg.get('skip_bytes', 0))
+                # 不在任何函数里的候选（.text 外/垃圾）直接丢掉
+            cands = list(dict.fromkeys(snapped))
         scored = []
         for va in cands:
             if _is_stub(pe, md, va): continue
@@ -925,6 +1576,7 @@ def cmd_scan(a):
         print("  %-42s %-12s 函数起点 0x%-10X %s%s" % (
             sg['name'], tag, fstart, "=原地址 ✓" if same else "(原 0x%X)" % origin, flag))
         where.setdefault(fstart, []).append(sg['name'])
+    mark('byte scan')
     # ---- 歧义项：同组的（候选集合完全相同）按相对次序定夺 ----
     # 例：TypePredicateB/C/D 三个函数内容完全相同 -> 候选集合一样，
     #     但它们在 .text 里的**先后次序**跨版本保留，按记录次序一一对应。
@@ -949,6 +1601,7 @@ def cmd_scan(a):
             amb += 1
             print("  %-42s \u26a0 歧义：%d 个并列最高分 %s" % (
                 sg['name'], len(addrs), ", ".join("0x%X" % x for x in addrs[:4])))
+    mark('ambiguity')
     # ---- 模糊救援（--fuzzy）：用**已定位函数的 call 目标**当候选，对未定下来的签名做 token 打分 ----
     # 依据：这些函数在新版本里**字节模式完全变了**，但它们的**调用者**是已定位的 ->
     #       从调用图取候选，比"全 .text 模糊搜"快几个数量级，且不会落到垃圾代码里。
@@ -1084,9 +1737,17 @@ def cmd_scan(a):
     #   loose token 不看立即数，所以「常量改了但结构没改」仍然 loose 8/8 —— 这是我们要的
     conf = {'严格 8/8': 0, '严格 6-7/8': 0, '严格 <6/8': 0}
     ref = {sg2['name']: int(sg2['va'], 16) for sg2 in sigs}
+    mark('fuzzy')
     addr_of = {}
     for va, names in where.items():
-        for nm in names: addr_of[nm] = va
+        for nm in names:
+            addr_of[nm] = _skip_pad(pe, md, va)
+    if getattr(a, 'callee_recall', False):
+        addr_of = _callee_rescue(pe, md, tva, tbytes, sigs, addr_of)
+        mark('callee rescue')
+    if getattr(a, 'features', False):
+        addr_of = _targeted_rescue(pe, md, tva, tbytes, sigs, addr_of)
+        mark('targeted rescue')
     for nm, va in addr_of.items():
         if nm in fuzzy_names:
             fuzzy_names[nm] = None      # 稍后统一算
@@ -1462,6 +2123,87 @@ def cmd_consts(a):
 
 
 
+def cmd_stringkeys(a):
+    """自动生成 stringkeys.json：地址/偏移/key 都从 hits/globals 解析。"""
+    import json as _json
+    pe = PE(a.exe)
+    md = Cs(CS_ARCH_X86, CS_MODE_64); md.detail = True
+    root = os.path.dirname(os.path.abspath(a.exe))
+    hits_path = a.hits
+    if not hits_path:
+        for nm in ('sig_hits_fixed.json', 'sig_hits.json'):
+            p = os.path.join(root, nm)
+            if os.path.exists(p):
+                hits_path = p
+                break
+    if not hits_path or not os.path.exists(hits_path):
+        print('找不到 sig_hits.json'); return 1
+    H = _json.load(open(hits_path, encoding='utf-8'))
+    hits = H.get('hits', H)
+    dv = hits.get('GIMeta_DecryptString')
+    rt = hits.get('GIMeta_RuntimeInit')
+    if dv is None:
+        print('hits 里没有 GIMeta_DecryptString'); return 1
+    dv = int(dv)
+    gpath = a.globals or os.path.join(root, 'globals.json')
+    if not os.path.exists(gpath):
+        print('找不到 globals.json:', gpath); return 1
+    G = _json.load(open(gpath, encoding='utf-8'))
+    tab = None
+    for slot, e in (G.get('mhy_slots') or {}).items():
+        if e.get('table') == 'stringLiteralDataOffset':
+            tab = (slot, e); break
+    if not tab:
+        print('globals 里没有 stringLiteralDataOffset'); return 1
+    slot, e = tab
+    str_base = int(str(e.get('decoded')), 16)
+    consts, shifts = extract(pe, md, dv, a.bytes)
+    if not consts:
+        print('DecryptString 里没抽到 64 位常量'); return 1
+    lab = label_string_consts(consts)
+    if len(lab) < 4:
+        print('密钥标注不足:', lab); return 1
+    entry = None
+    if a.entry_xor:
+        entry = int(a.entry_xor, 0)
+    else:
+        cand = extract_entry_xor(pe, md, rt or dv, a.bytes, {dv})
+        if len(cand) == 1:
+            entry = cand[0][0]
+        elif cand:
+            print('entryXor 候选:', ['0x%X' % x[0] for x in cand])
+    shape = check_string_keys(a.dat, str_base, lab) if a.dat else None
+    if a.dat and not shape:
+        print('字符串自检失败，不写'); return 1
+    sd = {
+        'stringLiteralDataOffset': '0x%X' % str_base,
+        'slot': slot,
+        'op': e.get('op'),
+        'key': e.get('key'),
+        'keyMulA': '0x%X' % lab['keyMulA'],
+        'keyMulB': '0x%X' % lab['keyMulB'],
+        'keySeed': '0x%X' % lab['keySeed'],
+        'keyStep': '0x%X' % lab['keyStep'],
+        'offsetMask': '0xFFFFFF',
+        'lengthShift': 24,
+    }
+    if entry is not None:
+        sd['entryXor'] = '0x%X' % entry
+    out = {'version': os.path.basename(root), 'verified': 'mscorlib found at 0x%X' % str_base,
+           'stringDecrypt': sd}
+    for slot2, e2 in (G.get('mhy_slots') or {}).items():
+        if e2.get('table') == 'genericParameters':
+            out['genericParameters_offset'] = e2.get('decoded'); break
+    op = a.out or os.path.join(root, 'ida', 'stringkeys.json')
+    os.makedirs(os.path.dirname(op), exist_ok=True)
+    _json.dump(out, open(op, 'w', encoding='utf-8'), indent=1)
+    print('已写', op)
+    print('  shape:', shape)
+    print('  keys :', {k: '0x%X' % v for k, v in lab.items()})
+    print('  entryXor:', ('0x%X' % entry) if entry is not None else '(none)')
+    return 0
+
+
 # ============ entryexpr: 自动推导 entry 解码表达式 ============
 FAM = {}
 for _names, _f in ((('rax', 'eax', 'ax', 'al', 'ah'), 'a'), (('rbx', 'ebx', 'bx', 'bl', 'bh'), 'b'),
@@ -1689,6 +2431,8 @@ def main():
     g = sub.add_parser('gen');  g.add_argument('exe'); g.add_argument('--names', default=os.path.join(HERE, 'sig_names.txt'))
     g.add_argument('-o', '--out', default=os.path.join(HERE, 'sigs.json'))
     g.add_argument('--ninstr', type=int, default=8); g.add_argument('--skip', type=int, default=2)
+    g.add_argument('--funcs', default=None, help='IDA 导出的 funcs_wanted.json（精确函数起点）')
+    g.add_argument('--windows', type=int, default=1, help='用 funcs 时每函数生成几个高质量窗口（默认 1）')
     g.add_argument('--next', type=int, default=10, help='额外存的参考 token 条数（仅并列时定夺用）')
     g.set_defaults(fn=cmd_gen)
     s = sub.add_parser('scan'); s.add_argument('exe'); s.add_argument('--sigs', default=os.path.join(HERE, 'sigs.json'))
@@ -1698,7 +2442,18 @@ def main():
     s.add_argument('--vtable', action='store_true', help='把 .rdata 里全部函数指针(vtable)当候选源（+12s，用于证明搜索空间已穷尽）')
     s.add_argument('--slow', action='store_true',
                    help='启用「立即数种子 + callee 指纹」两轮重救援（+20s；7.0 实测 48→50/54）')
-    s.add_argument('--loose-only', action='store_true'); s.set_defaults(fn=cmd_scan)
+    s.add_argument('--loose-only', action='store_true')
+    s.add_argument('--funcs', default=None, help='IDA 导出的 funcs_wanted.json（精确函数起点）')
+    s.add_argument('--callee-recall', dest='callee_recall', action='store_true', default=False,
+                   help='用 reference callees 做 recall 救援（默认关，开启后要遍历所有函数）')
+    s.add_argument('--no-callee', dest='callee_recall', action='store_false',
+                   help='关闭 callee recall')
+    s.add_argument('--features', dest='features', action='store_true', default=False,
+                   help='用 mnemonic 直方图特征救援（默认关，开启后要遍历所有函数）')
+    s.add_argument('--no-features', dest='features', action='store_false',
+                   help='关闭 mnemonic 特征')
+    s.add_argument('--timing', action='store_true', help='打印各阶段耗时')
+    s.set_defaults(fn=cmd_scan)
 
     c = sub.add_parser('consts', help='从 sig 定位的函数里通用抽取 64 位常量（如字符串解密密钥）')
     c.add_argument('exe'); c.add_argument('--func', required=True, action='append',
@@ -1708,6 +2463,16 @@ def main():
     c.add_argument('--dat', default=None, help='global-metadata.dat（用于字符串密钥自检）')
     c.add_argument('--str-base', default=None, help='字符串数据基址（如 0x429A948）')
     c.set_defaults(fn=cmd_consts)
+
+    sk = sub.add_parser('stringkeys', help='自动生成 stringkeys.json')
+    sk.add_argument('exe')
+    sk.add_argument('--hits', default=None)
+    sk.add_argument('--dat', default=None)
+    sk.add_argument('--globals', default=None)
+    sk.add_argument('--entry-xor', default=None)
+    sk.add_argument('--bytes', type=lambda x: int(x, 0), default=0x4000)
+    sk.add_argument('--out', '-o', default=None)
+    sk.set_defaults(fn=cmd_stringkeys)
 
     ee = sub.add_parser('entryexpr', help='自动推导 entry 解码表达式（跨版本比较结构）')
     ee.add_argument('exe'); ee.add_argument('--decrypt', required=True)

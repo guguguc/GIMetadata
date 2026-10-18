@@ -16,10 +16,12 @@
 #   · 首次对 400MB 的 gi.exe 跑会自动分析，**小时级** ✗
 #   · 需要 Hex-Rays 反编译器授权（脚本会调 decompile）
 set -euo pipefail
-TARGET="${1:?usage: $0 <exe|.i64> <out.json> [hits.json]}"
-OUT="${2:?usage: $0 <exe|.i64> <out.json> [hits.json]}"
+TARGET="${1:?usage: $0 <exe|.i64> <out.json> [hits.json] [extra EAs...]}"
+OUT="${2:?usage: $0 <exe|.i64> <out.json> [hits.json] [extra EAs...]}"
 HITS="${3:-/tmp/h.json}"
 IDAT="${IDAT:-idat64}"
+if [ "$#" -ge 3 ]; then shift 3; else shift "$#"; fi
+EXTRA="$*"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 DB="$TARGET"
@@ -45,7 +47,7 @@ fi
 # ✅ 实测：正确顺序是 `-A -S"<script> <args>" <input>`（脚本参数必须在同一个引号里）
 # 默认**只**反编译 sig 定位到的函数：
 #   全量抓到的表达式**没有标签**（不知道是哪张表），所以没有收益 ✗
-ARGS="$OUT $HITS --fast"
+ARGS="$OUT $HITS --fast $EXTRA"
 echo "[ida_headless] $IDAT -A -S\"$HERE/ida_export.py $ARGS\" \"$DB\""
 "$IDAT" -A -S"$HERE/ida_export.py $ARGS" "$DB"
 echo "[ida_headless] 完成，检查 $OUT"

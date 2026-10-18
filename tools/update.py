@@ -77,6 +77,48 @@ def resolve_path(p, base=ROOT):
     return p if os.path.isabs(p) else os.path.join(base, p)
 
 
+def flatten_json(obj, prefix='', top=True):
+    """把嵌套 JSON 压成 path -> leaf，忽略 _update/_origin。"""
+    out = {}
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if top and k in ('_update', '_origin'):
+                continue
+            p = '%s.%s' % (prefix, k) if prefix else str(k)
+            if isinstance(v, (dict, list)):
+                out.update(flatten_json(v, p, False))
+            else:
+                out[p] = v
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            p = '%s[%d]' % (prefix, i)
+            if isinstance(v, (dict, list)):
+                out.update(flatten_json(v, p, False))
+            else:
+                out[p] = v
+    return out
+
+
+class Provenance:
+    def __init__(self, base, label):
+        self.prev = flatten_json(base)
+        self.origin = {p: label for p in self.prev}
+
+    def mark(self, draft, source):
+        cur = flatten_json(draft)
+        for p, v in cur.items():
+            if p not in self.prev or self.prev[p] != v:
+                self.origin[p] = source
+        # 删除的字段不写回 draft；origin 中也不保留不存在的 path
+        for p in list(self.origin):
+            if p not in cur:
+                del self.origin[p]
+        self.prev = cur
+
+    def result(self):
+        return dict(sorted(self.origin.items()))
+
+
 def parse_relocate_log(log):
     auto = {}
     # ⑦ 反查：结构自证得到的值 -> 唯一 (slot,op,key)
@@ -313,8 +355,13 @@ def main():
                     help='覆盖 <target>/version.json（目标已有 JSON 时默认只写 version.draft.json）')
     ap.add_argument('--check', action='store_true',
                     help='仅最终验证：与目标已有 version.json 对照；默认冷启动不读它')
+    ap.add_argument('--no-auto', action='store_true',
+                    help='不自动运行 offline_extract/fielddecode_auto/keyformulas_auto/table_roles')
+    ap.add_argument('--no-origin', action='store_true',
+                    help='不写 _origin（默认写入每个字段的来源）')
     args = ap.parse_args()
 
+    auto_ran = []
     root = resolve_root(args.target)
     base_path = resolve_path(args.base)
     if not os.path.exists(base_path):
@@ -325,6 +372,19 @@ def main():
     ida = resolve_path(args.ida) if args.ida else os.path.join(root, 'ida.json')
     if not os.path.exists(ida):
         ida = None
+
+    # 0) 若存在逐函数反编译文本，先离线补扫 ida.json（IDA 正则会漏 int/变量中转）
+    if ida and not args.no_auto and os.path.isdir(os.path.join(root, 'ida', 'decomp')):
+        try:
+            oe_cmd = [sys.executable, os.path.join(TOOLS, 'offline_extract.py'), root,
+                      '--ida', ida, '--ida-map', args.ida_map]
+            pr = subprocess.run(oe_cmd, capture_output=True, text=True)
+            if pr.returncode == 0:
+                auto_ran.append('offline_extract')
+            else:
+                print('offline_extract failed:', (pr.stdout + pr.stderr)[-500:])
+        except Exception as e:
+            print('offline_extract failed:', e)
 
     emit = resolve_path(args.emit) if args.emit else None
     target_json = os.path.join(root, 'version.json')
@@ -363,6 +423,7 @@ def main():
 
     base = load_json(base_path)
     draft = copy.deepcopy(base)
+    prov = Provenance(base, 'base:%s' % os.path.relpath(base_path, ROOT))
     # 0) 离线补充表（offline_extract.py 产出的可直接命名表）
     extra_filled = []
     _extra_path = os.path.join(root, 'ida', 'tables_extra.json')
@@ -458,6 +519,164 @@ def main():
         except Exception:
             pass
 
+    prov.mark(draft, 'auto:relocate+ida')
+    # 4.5) 自动恢复 fieldDecode / keyFormulas（可选）
+    seed = os.path.join(tempfile.gettempdir(), 'draft_seed_%s.json' % os.path.basename(root))
+    if not args.no_auto:
+        try:
+            json.dump(draft, open(seed, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+            fd_cmd = [sys.executable, os.path.join(TOOLS, 'fielddecode_auto.py'), root,
+                      '--draft', seed,
+                      '--keyformulas', os.path.join(root, 'ida', 'keyformulas.auto.json'),
+                      '--out', os.path.join(root, 'ida', 'fielddecode.auto.json')]
+            if os.path.isdir(os.path.join(root, 'ida', 'decomp')):
+                pr = subprocess.run(fd_cmd, capture_output=True, text=True)
+                if pr.returncode == 0:
+                    auto_ran.append('fielddecode_auto')
+                else:
+                    print('fielddecode_auto failed:', (pr.stdout + pr.stderr)[-500:])
+            kf_cmd = [sys.executable, os.path.join(TOOLS, 'keyformulas_auto.py'), root,
+                      '--base', base_path,
+                      '--values', os.path.join(root, 'ida', 'keyformulas.values.json'),
+                      '--out', os.path.join(root, 'ida', 'keyformulas.auto.json')]
+            if os.path.exists(os.path.join(root, 'ida', 'keyformulas.values.json')):
+                pr = subprocess.run(kf_cmd, capture_output=True, text=True)
+                if pr.returncode == 0:
+                    auto_ran.append('keyformulas_auto')
+                else:
+                    print('keyformulas_auto failed:', (pr.stdout + pr.stderr)[-500:])
+            cnt_cmd = [sys.executable, os.path.join(TOOLS, 'count_auto.py'), root,
+                       '--base', base_path, '--exe', os.path.join(root, 'gi.exe'),
+                       '--out', os.path.join(root, 'ida', 'count.auto.json')]
+            if os.path.isdir(os.path.join(root, 'ida', 'decomp')):
+                pr = subprocess.run(cnt_cmd, capture_output=True, text=True)
+                if pr.returncode == 0:
+                    auto_ran.append('count_auto')
+                else:
+                    print('count_auto failed:', (pr.stdout + pr.stderr)[-500:])
+        except Exception as e:
+            print('auto tools failed:', e)
+
+    # 5) fieldDecode / structOffsets 自证结果
+    fd_auto = {}
+    _fd_path = os.path.join(root, 'ida', 'fielddecode.auto.json')
+    if os.path.exists(_fd_path):
+        try:
+            fd_auto = json.load(open(_fd_path, encoding='utf-8'))
+            for st, fs in fd_auto.get('fieldDecode', {}).items():
+                draft.setdefault('fieldDecode', {}).setdefault(st, {}).update(fs)
+            for st, fs in fd_auto.get('structOffsets', {}).items():
+                draft.setdefault('structOffsets', {}).setdefault(st, {}).update(fs)
+        except Exception:
+            fd_auto = {}
+    prov.mark(draft, 'auto:fielddecode')
+    # 5.1) 字符串密钥（stringkeys.json 的已验证部分）
+    sd_auto = {}
+    _sd_path = os.path.join(root, 'ida', 'stringkeys.json')
+    if os.path.exists(_sd_path):
+        try:
+            _sd = json.load(open(_sd_path, encoding='utf-8')).get('stringDecrypt', {})
+            for k in ('keyMulA', 'keyMulB', 'keySeed', 'keyStep', 'offsetMask', 'lengthShift', 'entryXor'):
+                if k in _sd:
+                    draft.setdefault('stringDecrypt', {})[k] = _sd[k]
+                    sd_auto[k] = _sd[k]
+        except Exception:
+            sd_auto = {}
+    prov.mark(draft, 'auto:stringkeys')
+    # 6) keyFormulas 反编译恢复结果
+    kf_auto = {}
+    _kf_path = os.path.join(root, 'ida', 'keyformulas.auto.json')
+    if os.path.exists(_kf_path):
+        try:
+            kf_auto = json.load(open(_kf_path, encoding='utf-8'))
+            if kf_auto:
+                # 目标版本没有的旧 key 公式必须删除，否则 decodeExpr/生成头文件会继续引用旧形状。
+                draft['keyFormulas'] = dict(kf_auto)
+        except Exception:
+            kf_auto = {}
+    prov.mark(draft, 'auto:keyformulas')
+    # 6.1) T0/T1 计数公式（RuntimeInit 消费者）
+    cnt_auto = {}
+    _cnt_path = os.path.join(root, 'ida', 'count.auto.json')
+    if os.path.exists(_cnt_path):
+        try:
+            cnt_auto = json.load(open(_cnt_path, encoding='utf-8'))
+            for name, f in cnt_auto.items():
+                if name.endswith('CountFormula'):
+                    draft[name] = f
+        except Exception:
+            cnt_auto = {}
+
+    prov.mark(draft, 'auto:countformulas')
+    # 7) 表角色修正（fieldsOffset/fieldOffset/methodSpecs/...）
+    if not args.no_auto:
+        try:
+            json.dump(draft, open(seed, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+            tr_cmd = [sys.executable, os.path.join(TOOLS, 'table_roles.py'), root,
+                      '--draft', seed, '--ida', ida or os.path.join(root, 'ida.json'),
+                      '--base', base_path, '--apply']
+            pr = subprocess.run(tr_cmd, capture_output=True, text=True)
+            if pr.returncode == 0:
+                draft = load_json(seed)
+                auto_ran.append('table_roles')
+            else:
+                print('table_roles failed:', (pr.stdout + pr.stderr)[-500:])
+        except Exception as e:
+            print('table_roles failed:', e)
+
+    prov.mark(draft, 'auto:table_roles')
+    # 7.05) 可选的人工 addresses 覆盖（只用于目标版本确实无法自动推导的地址）
+    addr_override = {}
+    _ao_path = os.path.join(root, 'ida', 'addresses.override.json')
+    if os.path.exists(_ao_path):
+        try:
+            addr_override = json.load(open(_ao_path, encoding='utf-8'))
+            for k, v in addr_override.items():
+                draft.setdefault('addresses', {})[k] = v
+            auto_ran.append('addresses_override')
+        except Exception:
+            addr_override = {}
+    prov.mark(draft, 'manual:addresses.override')
+    # 7.1) registrationFields：T0/T1 偏移、掩码、generic class 表
+    reg_auto = {}
+    if not args.no_auto:
+        try:
+            json.dump(draft, open(seed, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+            rg_cmd = [sys.executable, os.path.join(TOOLS, 'regfields_auto.py'), root,
+                      '--draft', seed, '--base', base_path,
+                      '--out', os.path.join(root, 'ida', 'regfields.auto.json')]
+            pr = subprocess.run(rg_cmd, capture_output=True, text=True)
+            if pr.returncode == 0:
+                reg_auto = json.load(open(os.path.join(root, 'ida', 'regfields.auto.json'), encoding='utf-8'))
+                draft.setdefault('registrationFields', {}).update(reg_auto)
+                auto_ran.append('regfields_auto')
+            else:
+                print('regfields_auto failed:', (pr.stdout + pr.stderr)[-500:])
+        except Exception as e:
+            print('regfields_auto failed:', e)
+    prov.mark(draft, 'auto:regfields')
+    # 8) decodeExpr：根据最终 fieldDecode/keyFormulas 重生成，避免继承上一版公式形状
+    de_auto = {}
+    if not args.no_auto:
+        try:
+            json.dump(draft, open(seed, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+            de_cmd = [sys.executable, os.path.join(TOOLS, 'decodeexpr_auto.py'), root,
+                      '--draft', seed,
+                      '--out', os.path.join(root, 'ida', 'decodeexpr.auto.json')]
+            pr = subprocess.run(de_cmd, capture_output=True, text=True)
+            if pr.returncode == 0:
+                de_auto = json.load(open(os.path.join(root, 'ida', 'decodeexpr.auto.json'), encoding='utf-8'))
+                draft['decodeExpr'] = de_auto
+                auto_ran.append('decodeexpr_auto')
+            else:
+                print('decodeexpr_auto failed:', (pr.stdout + pr.stderr)[-500:])
+        except Exception as e:
+            print('decodeexpr_auto failed:', e)
+
+    prov.mark(draft, 'auto:decodeexpr')
+    if not args.no_origin:
+        draft['_origin'] = prov.result()
+
     draft['_update'] = {
         'base': os.path.relpath(base_path, ROOT),
         'target': os.path.relpath(root, ROOT),
@@ -465,8 +684,17 @@ def main():
         'relocate_auto': sorted(auto.keys()),
         'ida_filled': [n for n, _, _ in ida_filled],
         'extra_filled': extra_filled,
+        'fieldDecode_auto': sorted(fd_auto.get('fieldDecode', {}).keys()) if fd_auto else [],
+        'structOffsets_auto': sorted(fd_auto.get('structOffsets', {}).keys()) if fd_auto else [],
+        'keyFormulas_auto': sorted(kf_auto.keys()) if kf_auto else [],
+        'countFormulas_auto': sorted(cnt_auto.keys()) if cnt_auto else [],
+        'registrationFields_auto': sorted(reg_auto.keys()) if reg_auto else [],
+        'addresses_override': sorted(addr_override.keys()) if addr_override else [],
+        'decodeExpr_auto': sorted(de_auto.keys()) if de_auto else [],
+        'stringDecrypt_auto': sorted(sd_auto.keys()) if sd_auto else [],
         'typeDefinitionsOffset': ('0x%X' % tdoff) if tdoff else None,
         'mhyTableVA': ('0x%X' % mhy) if mhy else None,
+        'auto_ran': auto_ran,
         'note': 'draft: 未列出的常量仍是旧版本值；不能直接发布。',
     }
     with open(emit, 'w', encoding='utf-8') as fh:

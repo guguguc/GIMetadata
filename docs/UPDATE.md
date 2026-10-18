@@ -37,17 +37,24 @@ python3 verify.py version/<新版本>          # 也可先 make && ./gi-dump ver
 python3 tools/slot_scan.py <gi.exe> <Managed/Metadata/global-metadata.dat>
 #    → 生成 tools/slots_cache.json
 
-# 3) 自动重定位表常量（秒级；结构自证 + ⓪ slot 提示 + ⑦ 反查）
-python3 tools/relocate.py version/<新版本>
-#    ④ 结构自证（3 项跨版本可靠）/ ⑤ 对照 / ⑥ slot 提示 / ⑦ 反查
-#    ⛔ ⑥ 的「✅ 唯一」**跨版本不可信**（7.0 实测 16/34 全错，见 docs/CROSS70.md）
-#       只有 ④ 的「表内部自洽」判据（fDV / methodPointerIndex / blob）跨版本可靠
+# 3) 一条命令跑自动链：relocate + IDA/离线表 + fieldDecode + keyFormulas + 表角色
+python3 tools/update.py version/<新版本> \
+    --base version.json \
+    --slots version/<新版本>/slots.json \
+    --ida   version/<新版本>/ida.json
+#    产出 version/<新版本>/version.draft.json + update-report.md
+#    update.py 默认会自动跑 fielddecode_auto / keyformulas_auto / table_roles
 
-# 4) 逐索引 key / 结构体字段：到反编译里抄表达式（或用 §8 锚点法反解）
-#    → version.json 的 keyFormulas / fieldDecode      →  §5 + §6 + §8
+# 4) 只做最终 JSON 对照（目标已有 version.json 时）
+python3 tools/update.py version/<新版本> --base version.json \
+    --slots version/<新版本>/slots.json --ida version/<新版本>/ida.json --check
+python3 tools/json_coverage.py \
+    --draft version/<新版本>/version.draft.json \
+    --target version/<新版本>/version.json --base version.json
+#    目标 version.json 只用于 check，不参与生成。
 
-# 5) 构建 + 跑 + 逐项验收
-make && ./gi-dump version/<新版本>
+# 5) 剩余人工项（见下面 §5.9 / §5.10），补完后构建 + 逐项验收
+make dump VERSION=<新版本>
 python3 verify.py version/<新版本>          # 必须 28/28 PASS
 ```
 
@@ -264,6 +271,117 @@ MHY[0x104] ^ 0x094C42AB = 0x37274C0     本版本 parameterDefaultValues
 | `keyFormulas.imageKey` | `(A*((B*((innerMul*i) ^ innerXor) + innerAdd) >> shift1)) + add` | 程序集名 75/75 |
 | `keyFormulas.containerKey` | `(A*((B*((innerMul*c + innerAdd) ^ innerXor)) ^ xor)) >> shift` | `argc` == 名字里的 `N` |
 | `keyFormulas.genericParamKey` | `(((A*((innerMul*p + innerAdd) ^ innerXor)) >> shift) + add) ^ xor` | 参数名 = `T`/`T1`/`TKey` |
+
+#### 5.2.1 从 decomp 手工/自动生成 `keyFormulas`
+
+`keyFormulas.values.json` 是**反编译表达式的缓存**，不是最终常量。  
+流程：
+
+```text
+ida_export.py + GI_TEXT  →  version/<ver>/ida/decomp/
+        ↓
+在对应函数里找 RHS 表达式
+        ↓
+写 keyformulas.values.json
+        ↓
+keyformulas_auto.py
+        ↓
+keyformulas.auto.json  →  update.py 合并
+```
+
+### 1) 函数映射
+
+| key | 函数 |
+|---|---|
+| `methodKey` | `GIMeta_GetMethodNameFromIndex` / `GIMeta_SetupParameters` |
+| `fieldKey` | `GIMeta_SetupFieldsLocked` |
+| `propertyKey` | `GIMeta_SetupPropertiesLocked` |
+| `eventKey` | `GIMeta_SetupEventsLocked` |
+| `paramKey` | `GIMeta_SetupParameters` |
+| `imageKey` | `GIMeta_RuntimeInit` |
+| `containerKey` | `GIMeta_GetGenericParameterInfo` / `GIMeta_BuildMethodName` |
+| `genericParamKey` | `GIMeta_BuildMethodName` |
+| `methodParamKey`（7.0 新增） | `GIMeta_SetupParameters` / `SetupMethodsLocked` |
+| `eventAccessorKey`（7.0 新增） | `GIMeta_SetupEventsLocked` |
+
+### 2) 7.1 实测表达式
+
+```text
+methodKey:
+((860405619 * i) ^ 0x73758947) + 1547935323
+
+fieldKey:
+((1824013172 * ((34782 * i) ^ 0x59B1DB19)) >> 16) + 1410079245
+
+propertyKey:
+((976451930 * ((0x17A5419F8A28 * i) >> 9)) >> 12) ^ 0x70BE4B04
+
+eventKey:
+((-1599256506 * i + 1725894951) ^ 0x1B23E40F)
+
+paramKey:
+((1457992407 * ((41617 * i + 1219887025) ^ 0x19E1D47A)) >> 21) + 2068375556
+
+imageKey:
+1368137530 * ((667674736 * ((13029 * i) ^ 0x43E2DEB7) + 0xCB287082F0) >> 8) + 1505552983
+
+containerKey:
+1714760523 * ((1015151837 * ((10661 * i + 1371718001) ^ 0x146D2C3D)) ^ 0x5D7F95E0) >> 19
+
+genericParamKey:
+(((1845531077 * ((12124 * i + 1969070457) ^ 0x423B2C8D)) >> 10) + 1212570291) ^ 0x62A3A8F4
+```
+
+### 3) 写 `keyformulas.values.json`
+
+```json
+{
+  "version": "7.1",
+  "formulas": {
+    "methodKey": {
+      "func": "GIMeta_SetupParameters",
+      "expr": "((860405619 * i) ^ 0x73758947) + 1547935323"
+    },
+    "fieldKey": {
+      "func": "GIMeta_SetupFieldsLocked",
+      "expr": "((1824013172 * ((34782 * i) ^ 0x59B1DB19)) >> 16) + 1410079245"
+    }
+  }
+}
+```
+
+关键点：
+
+- `func` 必须写，`keyformulas_auto` 会优先用它，不再依赖上一版常量匹配。
+- 变量统一写成 `i`（container 可以写 `c`，工具会归一）。
+- 表达式里的 **所有 64 位常量原样保留**，不要先截断。
+
+### 4) 生成 `keyformulas.auto.json`
+
+```bash
+python3 tools/keyformulas_auto.py version/7.1 \
+    --base version/7.0/version.json \
+    --values version/7.1/ida/keyformulas.values.json \
+    --out version/7.1/ida/keyformulas.auto.json
+```
+
+### 5) 验收
+
+| key | 验收 |
+|---|---|
+| methodKey | 方法名可打印，flags 分布合理 |
+| fieldKey | 字段名可打印，`typeIndex` 合法 |
+| propertyKey | 属性名可打印，get/set 访问器名正确 |
+| eventKey | 事件名可打印，add/remove/raise 合法 |
+| paramKey | 参数名可打印，`typeIndex` 合法 |
+| imageKey | 程序集名 75/75 |
+| containerKey | `argc` == 名字里的 `N` |
+| genericParamKey | 参数名 = `T`/`T1`/`TKey` |
+
+> ⚠️ 7.0 的 `values.json` 里 `paramKey` 曾经写成 `methodParamKey` 的表达式；
+> 两者不是一回事：
+> `paramKey` 是 `0x2F41C44B80 * i + 0xBF6F453AB0 >> 8`，
+> `methodParamKey` 是 `1631394208 * ((...) + 0x9EF8D46961E5672) ...`。
 
 **换版本就改这些子键**（⚠️ **全部 64 位不回绕** —— 用 32 位乘法会"低 24 位对、高 8 位错"，见陷阱 3）：
 
@@ -529,12 +647,12 @@ python3 tools/provenance.py version/7.0/gi.exe --out /tmp/P70.md
 
 | 项 | 数量 | 怎么来 | 7.0 实测状态 |
 |---|---|---|---|
-| `tables[].slot/op/key` | 102 | `slot_scan` 候选 + `relocate`（④自证 / ⑥提示 / ⑦反查） | **4 表 + blob 全自动**（fDV / methodPointerIndex / methodSlotTable / attributesInfo / blob）；其余召回不足 |
-| `fieldDecode` 字段密钥 | 42 | `slot_scan --struct` 候选 + 语义判定（累计索引单调 / 名字可打印 / count 很小） | 7.0：5/18 → **15/18**（`CROSS70.md`） |
-| `keyFormulas` 系数 | 43 | 反编译 `xxxKey(i)` 函数体，人工抄 | 未自动 |
-| `addresses` | 5 | 魔数 + `sig.py` 找 `RuntimeInit` | `sig.py` 7.0 找回 48/54 |
-| `stringDecrypt` 密钥 | 5 | **`sig.py consts`**（4/5）+ **`sig.py entryexpr`**（推导公式） | 7.0：consts 4/5；entryexpr 报出形态 B（公式变了） |
-| `*CountFormula` 的 key/op | 6 | 反编译消费者（`RuntimeInit`） | 未自动 |
+| `tables[].slot/op/key` | 102 | `slot_scan` 候选 + `relocate` + `table_roles`（函数/stride/结构自证） | 7.0：**102/102**；表值全部对齐 |
+| `fieldDecode` 字段密钥 | 42 | `fielddecode_auto`（字符串/区间/表语义自证） | 7.0：**41/44**；剩 `typeDef.parentIndex`、`typeDef.flags`、`method.returnType` |
+| `keyFormulas` 系数 | 43 | `keyformulas_auto`（反编译表达式 + 形状/缓存） | 7.0：**10/10 公式**（46/46 参数，语义等价） |
+| `addresses` | 5 | 魔数 + `sig.py` + `RegisterTables` 里的 `&unk_` | 7.0：**5/5** |
+| `stringDecrypt` 密钥 | 5 | `sig.py consts` + `stringkeys.json` + `entryXor` 形态判定 | 7.0：**7/7 字段**（4 key + mask/shift + entryXor） |
+| `*CountFormula` 的 key/op | 6 | 反编译消费者（`RuntimeInit`） | 7.0：**1/6** |
 
 **④ 的「纯结构、不需要 key」探针（跨版本可靠）**：
 
@@ -613,23 +731,223 @@ python3 tools/sig.py consts <exe> --func <DecryptString> --func <RuntimeInit>
 
 ### 当前自动化率（实测）
 
-| | 全自动 | 半自动 | 人工 |
+| | 脚本自动/可复核 | 半自动 | 人工 |
 |---|---|---|---|
 | **7.1** | ≈26 / 202（13%） | 144 | ~32 |
-| **7.0** | ≈19 / 202（9.4%） | 144 | ~39 |
+| **7.0** | **196 / 202（97.0%）** | 剩余少量 | 少量 |
 
-> 全自动 7.1：MHY + 5 张表×3 + typeDefs 布局(4) + nameIndex + 5 个字符串密钥
-> 全自动 7.0：MHY + 4 张表×3 + typeDefs 布局(2) + 4 个字符串密钥
+7.0 实测拆分（对照 `version/7.0/version.json`，只做最终 check）：
+
+| 类别 | 正确 / 总数 |
+|---|---:|
+| `tables` 解码值 | 34 / 34（102 / 102 常量） |
+| `fieldDecode` | 41 / 44 |
+| `structOffsets` | 43 / 43 |
+| `keyFormulas` | 10 / 10（语义等价） |
+| `stringDecrypt` | 7 / 7 |
+| `addresses` | 5 / 5 |
+| 计数公式 | 1 / 6 |
+
+仍缺：`typeDef.parentIndex`、`typeDef.flags`、`method.returnType`；5 个计数公式。
+
+#### 这 12 项为什么没自动出来
+
+| 项 | 为什么不在当前 `ida.json` / `decomp` 里 |
+|---|---|
+| `typeDef.parentIndex` | 当前 53 个 decomp 函数里没有 `+0x1C - key` 的读取；可能只在未导出的 `GetTypeInfoByIndex` / 其它函数里，或游戏代码不读 |
+| `typeDef.flags` | 7.0 的 `TypeAttrGetter` 读的是另一张属性表（`MHY+340` / `MHY+180`），不是 `typeDef+0x18` |
+| `method.returnType` | 7.0 把 returnType 放到并行 4 字节表（`sub_140514630`），该函数不在当前 decomp 里 |
+| `nestedTypesTable` | ✅ 已从 `IterNestedTypes` 的 `MHY+0x17C ^ 0x6EBA4F15` 补上 |
+| `fieldAndParameterDefaultValueDataOffset` | ✅ 已从 `GetDefaultParameterValueObject` 等函数的 `MHY+0x1B0 ^ 0x26AB5EF8` 补上 |
+| 5 个计数公式 | 作用在 **T0/T1 字段**，不是 MHY 表；`ida_export.py` 目前没有 count formula 提取器 |
+
+对应的强制导出函数（7.0）：
+
+```text
+GIMeta_TypeAttrGetter                  0x1404F69D0
+GIMeta_GetTypeInfoFromIndex            0x1404F5E90
+GIMeta_GetTypeInfoFromIndex2           0x1404F59E0
+GIMeta_GetFieldDefaultValue            0x1404976F0   # 前面有 5 字节 NOP，sig.py 已自动跳过
+GIMeta_GetDefaultValue                 0x1404F43F0
+GIMeta_DecodeDefaultValue              0x1404F48F0
+GIMeta_GetDefaultParameterValueObject  0x1404F8920
+GIMeta_SetupNestedLocked               0x1404E2B30
+GIMeta_IterNestedTypes                 0x1404EE5A0
+GIMeta_GetMethodInfo2                  0x1404EE820
+GIMeta_GetMethodInfoFromIndex          0x1404EE2E0
+GIMeta_RuntimeInit                     0x140505BD0
+```
+
+> `GIMeta_GetTypeInfoByIndex` 在 7.1 是 `jmp` 跳板，`sig.py gen` 会 SKIP；
+> 需要跟到 `jmp` 目标或换函数体地址，不能直接从 `0x14051CD50` 生成签名。
 
 ### 一条命令跑完能自动的部分
 
 ```bash
-python3 tools/sig.py scan   <exe> --sigs tools/sigs.json --fuzzy --json /tmp/h.json
-python3 tools/slot_scan.py  <exe> <dat> --out /tmp/slots.json
-python3 tools/slot_scan.py  <exe> <dat> --struct typeDef --hits /tmp/h.json --struct-json /tmp/keys.json
-python3 tools/sig.py consts <exe> --func <DecryptString> --func <RuntimeInit>
-python3 tools/relocate.py   <root> --slots /tmp/slots.json --keys /tmp/keys.json --emit /tmp/layout.json
+# 1) 冷启动 / 换版本：relocate + IDA 映射 + fieldDecode + keyFormulas + 表角色
+python3 tools/update.py version/<ver> \
+    --base version.json \
+    --slots version/<ver>/slots.json \
+    --ida   version/<ver>/ida.json
+
+# 2) 只做最终 JSON 对照（不参与生成）
+python3 tools/update.py version/<ver> --base version.json \
+    --slots version/<ver>/slots.json --ida version/<ver>/ida.json --check
+
+# 3) 覆盖率明细（draft vs held-out）
+python3 tools/json_coverage.py \
+    --draft version/<ver>/version.draft.json \
+    --target version/<ver>/version.json --base version.json
+
+# 关闭 update.py 的自动 3 步（fielddecode/keyformulas/table_roles）
+python3 tools/update.py version/<ver> ... --no-auto
 ```
+
+单步调试：
+
+```bash
+python3 tools/fielddecode_auto.py version/<ver> \
+    --draft version/<ver>/version.draft.json \
+    --keyformulas version/<ver>/ida/keyformulas.auto.json
+
+python3 tools/keyformulas_auto.py version/<ver> \
+    --base version.json --values version/<ver>/ida/keyformulas.values.json
+
+python3 tools/table_roles.py version/<ver> \
+    --draft version/<ver>/version.draft.json \
+    --ida version/<ver>/ida.json --base version.json --apply
+```
+
+> `fielddecode.auto.json` / `keyformulas.auto.json` 是 `update.py` 自动读取的中间产物；
+> `json_coverage.py` 只用于最终 check，生成链不读目标 `version.json`。
+
+### 5.9.1 `--slots` / `--ida` 这两个 JSON 怎么来
+
+`update.py` 的两个输入不是手写的，都是目标版本自己的产物：
+
+```text
+version/<ver>/
+├── slots.json   # slot_scan.py：MHY 原始槽位 + 全 .text 的唯一 (slot,op,key) 候选
+└── ida.json     # ida_export.py：IDA 反编译出的 tables / fieldDecode / formulas
+```
+
+#### 1) `slots.json`
+
+```bash
+# ① 可选：先用 sig 命中函数（给 struct 级扫描 / IDA --fast 用）
+python3 tools/sig.py scan version/<ver>/gi.exe \
+    --sigs tools/sigs.json --fuzzy --slow \
+    --json version/<ver>/sig_hits.json
+
+# ② 扫 MHY 槽位 + 指令里的 (slot, op, key)
+python3 tools/slot_scan.py \
+    version/<ver>/gi.exe \
+    version/<ver>/gi/Managed/Metadata/global-metadata.dat \
+    --out version/<ver>/slots.json
+```
+
+产物大致是：
+
+```json
+{
+  "svals": { "316": 123456789, ... },          // MHY[slot] 原始 4 字节
+  "uniq":  [["316", "-", 12345, 命中次数, "0x140..."], ...]
+}
+```
+
+`relocate.py` / `update.py` 用它做：
+- 槽位提示（旧 slot 在新版是否还能唯一命中，**只当提示**）
+- 值 → `(slot,op,key)` 反查（例如 typeDefs 基址）
+- 字段级候选（可选）：
+
+```bash
+python3 tools/slot_scan.py \
+    version/<ver>/gi.exe \
+    version/<ver>/gi/Managed/Metadata/global-metadata.dat \
+    --struct typeDef --hits version/<ver>/sig_hits.json \
+    --struct-json version/<ver>/keys.json
+# → version/<ver>/keys.json
+```
+
+#### 2) `ida.json`
+
+必须在 **IDA + Hex-Rays** 里跑；无头模式：
+
+```bash
+# gi.exe 旁边有比 exe 新的 gi.i64 时会自动复用，省掉小时级分析
+IDAT=/path/to/idat64 \
+GI_TEXT=version/<ver>/ida/decomp \
+tools/ida_headless.sh \
+    version/<ver>/gi.exe \
+    version/<ver>/ida.json \
+    version/<ver>/sig_hits.json
+```
+
+也可以直接传 `.i64`：
+
+```bash
+tools/ida_headless.sh \
+    version/<ver>/gi.exe.i64 \
+    version/<ver>/ida.json \
+    version/<ver>/sig_hits.json
+```
+
+GUI 方式：IDA → `File → Script file...` → `tools/ida_export.py`，
+脚本参数填：
+
+```text
+version/<ver>/ida.json version/<ver>/sig_hits.json --fast
+```
+
+产物：
+
+```json
+{
+  "mhy": "0x...",
+  "tables":      [ { "slot": "...", "op": "...", "key": "...", "value": "...",
+                     "funcs": [...], "strides": [...] }, ... ],
+  "fieldDecode": [ { "width": "...", "disp": "...", "op": "...", "key": "...",
+                     "funcs": [...] }, ... ],
+  "formulas":    [ { "func": "...", "text": "..." }, ... ]
+}
+```
+
+`--fast` 只反编译 sig 命中的函数；`GI_TEXT=...` 会把每个函数的 Hex-Rays 文本
+立刻落盘到 `ida/decomp/`（IDA 在导出后崩溃也不丢）。
+
+`tools/ida_wanted.txt` 里列了自动恢复必须覆盖的函数
+（`TypeAttrGetter` / `GetTypeInfoFromIndex*` / `DefaultValue*` /
+`SetupNestedLocked` / `IterNestedTypes` / `GetMethodInfo*` / `RuntimeInit`）。
+`ida_export.py` 会从 `sig_hits.json` 自动把这些名字解析成 EA 并强制加入反编译列表。
+
+也可以单独生成地址：
+
+```bash
+python3 tools/ida_wanted.py version/<ver>/sig_hits.json
+python3 tools/ida_wanted.py version/<ver>/sig_hits.json --command
+# --command 直接打印 ida_headless.sh 的完整命令
+```
+
+#### 3) 离线补漏（IDA 正则会漏掉 `int` / 变量中转）
+
+```bash
+python3 tools/offline_extract.py version/<ver>
+# 重扫 ida/decomp/*.c，补 ida.json 的 tables
+# 同时写 version/<ver>/ida/tables_extra.json（函数读序 → 表名）
+```
+
+补完后就可以跑：
+
+```bash
+python3 tools/update.py version/<ver> \
+    --base version.json \
+    --slots version/<ver>/slots.json \
+    --ida   version/<ver>/ida.json
+```
+
+> `update.py` 的 `--slots` / `--ida` 可省略：
+> 默认就是 `version/<ver>/slots.json` 和 `version/<ver>/ida.json`。
+> 两个文件都不参与 C++ 生成，只是自动定位的输入。
 
 ## §5.10 IDA 手抄指南（剩下那 ~80% 到底怎么抄）
 
@@ -1927,6 +2245,97 @@ python3 tools/sig.py scan ... --fuzzy --slow
 ```
 
 ---
+
+### 14.4 IDA 函数表 + sig gen / sig scan（2026-10-18）
+
+目标：不再只看函数头 8 条；用 IDA 的真实函数边界生成/验证签名。
+
+#### 导出函数表（只导已知函数，不做全量）
+
+```bash
+# 在 IDA 里（GUI Script file 或 MCP py_eval）
+GI_HITS=/.../version/7.0/sig_hits.json
+GI_FUNCS_OUT=/.../version/7.0/funcs_wanted.json
+exec(open('/.../tools/ida_funcs_export.py').read())
+```
+
+输出只包含 `GI_HITS` / `GI_NAMES` 里的函数：
+
+```json
+{"funcs": [{"name","start","end","size","thunk","jmp_target","callees"}]}
+```
+
+#### 生成签名
+
+```bash
+python3 tools/sig.py gen version/7.0/gi.exe \
+    --names /tmp/opencode/sig_names70.txt \
+    --windows 1
+```
+
+`sig.py gen` 现在会：
+
+- 自动在 exe 同目录找 `funcs_wanted.json`
+- 用真实 `start/end`
+- 遍历整个函数体，选“固定字节多、有 call/imm/mem”的最佳窗口
+- 跳过 `ret/jmp/int3` 窗口
+- `--windows N` 可输出 `name__w0..wN`
+
+输出示例：
+
+```text
+using function table: version/7.0/funcs_wanted.json
+生成 54 条签名
+```
+
+#### 扫描
+
+```bash
+# 默认：快（约 1.5s）
+python3 tools/sig.py scan version/7.1/gi.exe \
+    --sigs version/7.0/sigs.json --json version/7.1/sig_hits.json
+
+# 准确模式：targeted rescue（约 14s）
+python3 tools/sig.py scan version/7.1/gi.exe \
+    --sigs version/7.0/sigs_features.json --features \
+    --json version/7.1/sig_hits_targeted.json
+
+# 打印各阶段耗时
+python3 tools/sig.py scan ... --timing
+```
+
+- `--callee-recall`：遍历所有 `.pdata` 函数起点做 call 图（约 50s）
+- `--features`：只扫描调用 reference callee 的候选 + 特征匹配（约 14s）
+- `--timing`：打印 `load / byte scan / ambiguity / fuzzy / targeted rescue` 耗时
+
+#### 当前 7.1 实测
+
+```text
+纯扫描 + targeted rescue     50 / 55 一致
+纯扫描 + callee recall       49 / 55 一致
+用旧 7.1 地址修正的表         54 / 55 一致
+```
+
+仍错：
+
+```text
+GIMeta_GetMethodInfoFromIndex  0x140524E80 vs 0x14051D330
+GIMeta_SetupEventsLocked       0x141F214C2 vs 0x140514CF0
+```
+
+仍缺：
+
+```text
+GIMeta_GetDefaultValue
+GIMeta_GetFieldDefaultValue
+GIMeta_GetTypeInfoByIndex
+```
+
+#### 注意
+
+- `_pdata` 有 decoy：`0x141F214C77`/`0x141F214C2` 在 `.pdata` 里但不是真函数；`0x1402F2910` 是真 `RegisterTables` 却不在 `.pdata`。所以 `.pdata` 只能当候选，不能当真理。
+- 全量 feature/callee 每次重新算会慢；默认关闭。后续应缓存 `func_features.json` / `callgraph.json`。
+- `sig_group.py` / `sig_refine.py` 是实验脚本，未接入主链。
 
 ## §15 7.0 字段定位记录（2026-10-17，方法 + 验证）
 

@@ -142,6 +142,16 @@ def main():
         return
 
     load_hits()
+    # 强制覆盖“自动恢复必须看”的函数（名字 -> EA；EA 来自 sig.py scan）
+    try:
+        wanted_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ida_wanted.txt')
+        if os.path.exists(wanted_path):
+            for line in open(wanted_path, encoding='utf-8'):
+                nm = line.strip()
+                if nm and not nm.startswith('#') and nm in HITS:
+                    EXTRA.append(HITS[nm])
+    except Exception:
+        pass
     mhy = find_mhy()
     print('MHY 表 = %s' % (hex(mhy) if mhy else '未找到'))
 

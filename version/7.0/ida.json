@@ -866,6 +866,61 @@
    ],
    "seq": 34153,
    "source": "offline:GIMeta_SetupTypeInfoLocked_1404E3DB0"
+  },
+  {
+   "slot": "0x10C",
+   "op": "-",
+   "key": "0x7878EE08",
+   "base": "g_MHY_Table",
+   "value": "0xD8444",
+   "n_funcs": 3,
+   "funcs": [
+    "sub_140497720",
+    "sub_1404EB4F0",
+    "sub_1404ED990"
+   ],
+   "func_eas": [
+    "0x140497720"
+   ],
+   "seq": 967,
+   "source": "offline:sub_140497720_140497720"
+  },
+  {
+   "slot": "0xC",
+   "op": "^",
+   "key": "0x720EB389",
+   "base": "g_MHY_Table",
+   "value": "0x1022CA8",
+   "n_funcs": 4,
+   "funcs": [
+    "sub_140497720",
+    "sub_1404EB4F0",
+    "sub_1404ECE90",
+    "sub_1404ED990"
+   ],
+   "func_eas": [
+    "0x140497720"
+   ],
+   "seq": 1238,
+   "source": "offline:sub_140497720_140497720"
+  },
+  {
+   "slot": "0x1B0",
+   "op": "^",
+   "key": "0x26AB5EF8",
+   "base": "g_MHY_Table",
+   "value": "0x41FB240",
+   "n_funcs": 3,
+   "funcs": [
+    "sub_140497720",
+    "sub_1404EB4F0",
+    "sub_1404ECE90"
+   ],
+   "func_eas": [
+    "0x140497720"
+   ],
+   "seq": 1704,
+   "source": "offline:sub_140497720_140497720"
   }
  ],
  "fieldDecode": [
