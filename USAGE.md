@@ -96,6 +96,34 @@ ida/                    IDA 数据库（~10GB，gitignore）
 
 ## 5. 输出
 
+### 阶段日志和统计
+
+`gi-dump` 会向 stderr 输出各阶段耗时和最终统计，不影响 `out/dump.cs` 内容：
+
+```text
+[dump] stage stringLiteral         0.000s
+[dump] stage customAttr            0.000s
+[dump] stage imageDef              0.000s
+[dump] stage typeDef               1.120s
+[dump] stats images=75 types=88902 methods=733442 fields=440172 properties=115596 events=628
+[dump] stage total                 1.120s
+```
+
+如果崩溃需要定位到具体类型，用：
+
+```bash
+./gi-dump --trace version/7.1
+```
+
+会额外输出：
+
+```text
+[dump] type 724/88902
+[dump]   name=InLevelMapPageContext
+```
+
+最后一条 `type`/`name` 就是崩溃时正在处理的类型。`--trace` 不影响 dump 内容，只是 stderr 变多，速度会稍慢。
+
 ### `out/dump.cs`
 
 ```csharp
@@ -136,6 +164,7 @@ public class MonoBehaviour: Behaviour // TypeDefIndex: 2344
 | `make run ARGS=version/7.2` | 指定样本 |
 | `make clean` | 删除 `gi-dump` |
 | `./gi-dump <game_root>` | 产出 `out/dump.cs` |
+| `./gi-dump --trace <game_root>` | 额外输出每个 TypeDefIndex/类型名检查点 |
 | `python3 verify.py` | 验收默认样本（28 项） |
 | `python3 verify.py version/7.2` | 验收别的样本 |
 | `python3 verify.py <exe> <global.dat> <startup.dat>` | 手动指定三个文件 |
@@ -153,8 +182,15 @@ python3 tools/gi_string_decrypt.py version/7.1/gi.exe \
 ### `tools/slot_scan.py` —— 扫 MHY 槽位
 ```bash
 python3 tools/slot_scan.py version/7.1/gi.exe version/7.1/gi/Managed/Metadata/global-metadata.dat
+# 并行 + 详细计时
+python3 tools/slot_scan.py version/6.7.0/gi.exe \
+  version/6.7.0/gi/Managed/Metadata/global-metadata.dat \
+  --out /tmp/slots67.json --jobs 8 \
+  --timing-json /tmp/slots67_timing.json
 ```
-全 `.text` 反汇编（**几分钟**），得 3000+ 组 `(slot, op, key)`，并自带 3 条锚点自检：
+全 `.text` 反汇编（**几分钟**），得 3000+ 组 `(slot, op, key)`，并自带 3 条锚点自检。
+
+`--jobs N` 按 `.pdata` 函数区间分片并行；结果必须与 `--jobs 1` 完全一致。
 ```
 MHY[0x13C] ^ 0x593DE464 = 0x3D00478   OK
 MHY[0x0A0] ^ 0x3F525210 = 0xF1754C    OK
@@ -244,7 +280,8 @@ python3 tools/dump_align.py \
   --src-exe version/7.1/gi.exe \
   --dst-exe version/7.0/gi.exe \
   --src-funcs /tmp/opencode/funcs71_dump.json \
-  --dst-funcs /tmp/opencode/funcs70_dump.json
+  --dst-funcs /tmp/opencode/funcs70_dump.json \
+  --timing-json /tmp/opencode/hk70_dumpalign_timing.json
 ```
 
 说明：
@@ -260,6 +297,34 @@ python3 tools/dump_align.py \
 
 按**类/方法签名形状**对齐两个版本，忽略被混淆的名字；只负责召回候选，不负责最终判定。
 `hk70_best.json` 的 95 个 key 来自 `hk_71_all_named_map.json`，不是 69 项的 `hk_71_map.json`。
+
+单跑 `dump_align.py` 不要期待 67/67。7.0 实测：
+
+```text
+输出:             95 项
+matched:          92
+ambiguous_class:   3
+对照 67 个权威项: 55 正确 / 9 错 / 3 missing
+```
+
+它之后必须再跑 `hook_resolve.py` 或 `hooks_pipeline.py` 做证据重排。
+
+`dump_align.py` 也支持 `--jobs`：
+
+```bash
+--jobs 4
+```
+
+实测 7.1 → 7.0：
+
+```text
+--jobs 1   53.03s
+--jobs 10  31.14s
+```
+
+`--jobs 1` 和 `--jobs 10` 的 95 项输出完全一致；每个 worker 使用独立
+capstone decoder，避免 fork 后复用 decoder 导致 reselect 分数变化。
+
 
 ### `tools/hook_resolve.py` —— 7.1→7.0 hook 自动重排
 
@@ -390,7 +455,11 @@ caller 的类/方法形状和嵌套关系
 --dst-export     目标版本 IDA 导出；缺失的 xref 会自动查 IDA MCP
 --dst-xrefs      也可以传缓存的目标 xref JSON
 --ida-url        默认 http://127.0.0.1:13337/mcp
+--no-ida         禁止查询 IDA MCP
 --max-body       最多做多少个函数体评分；候选多时用 300
+--jobs           并行候选生成/评分 worker 数，默认 1
+--dump-cache-dir dump 解析缓存目录，默认 out/cache
+--timing-json    输出各阶段耗时 JSON
 ```
 
 关键行为：
@@ -433,6 +502,130 @@ missing / ambiguous 才会用新候选补全
 ```
 
 > `hooks_7.0.json` 只能用于最后的独立对照，不能作为自动查找的锚点。
+
+### 一条命令：hooks_pipeline.py
+
+如果不想手动串 `dump_funcs -> dump_align -> hook_resolve`：
+
+```bash
+python3 tools/hooks_pipeline.py \
+  --src-version 7.1 \
+  --dst-version 7.2 \
+  --ida-mode none
+```
+
+默认 `--ida-mode none`，**不要求任何 IDA 导出**；只用 dump、类/方法形状和 PE 函数体评分。
+
+模式：
+
+```text
+--ida-mode none    完全不用 IDA
+--ida-mode cache   读取已有 --src-export / --dst-export
+--ida-mode mcp     自动查目标 IDA MCP 的 xrefs
+```
+
+可选参数：
+
+```text
+--hooks out/hk_71_all_named_map.json
+--src-export out/ida71_source_export.json
+--dst-export out/ida72_candidates.json
+--base out/hk72_best.json
+--out out/hk72_auto_resolved.json
+--report out/hk72_auto_resolved_report.json
+--force-base
+--max-body 300
+--jobs 1                     # 默认 1；4 可并行，结果必须保持一致
+--verify-hooks out/hooks_7.0.json
+--dry-run
+--auto-export
+--log out/cache/hooks_pipeline_71_72.log
+--timing-json out/cache/hooks_pipeline_71_72_timing.json
+```
+
+默认会生成：
+
+```text
+out/cache/hooks_pipeline_<src>_<dst>.log
+out/cache/hooks_pipeline_<src>_<dst>_timing.json
+out/cache/hook_resolve_<src>_<dst>_timing.json
+```
+
+日志包含每个阶段的耗时：
+
+```text
+func-boundaries
+base-candidates
+hook-resolve
+validation
+total
+```
+
+`hook_resolve` 内部还会记录：
+
+```text
+load-dumps
+candidate-generation
+xrefs
+scoring
+group-assignment
+write-result
+```
+
+`--jobs N` 只并行候选生成和评分：
+
+```text
+candidate-generation  -> worker 独立计算
+scoring               -> worker 独立计算
+group-assignment      -> 仍然串行
+output/confidence     -> 仍然串行
+```
+
+默认 `--jobs 1`。并行结果必须和 `--jobs 1` 完全一致，包括：
+
+```text
+target_rva
+target_class
+target_name
+confidence_level
+confidence_score
+review_required
+```
+
+本轮在本机实测（7.1 → 7.0，95 个 hook）：
+
+```text
+--jobs 1   108.67s
+--jobs 4    62.55s
+--jobs 10   35.62s   # 加入类指纹/名称索引后
+```
+
+`--jobs 10` 和 `--jobs 1` 的 95 个 target_rva、confidence_level、
+confidence_score 全部一致。
+
+导出文件默认**不自动发现**：
+
+```text
+不传 --src-export  -> 没有源 xref 证据
+不传 --dst-export  -> 目标候选现场查 MCP（none 模式下则没有目标 xref）
+```
+
+只有显式加 `--auto-export` 才会尝试按约定路径寻找：
+
+```text
+out/ida71_source_export.json
+out/ida71_export.json
+out/ida72_candidates.json
+out/ida72_group_candidates.json
+```
+
+`--ida-mode none` 的局限：
+
+```text
+没有目标 call-site xref 证据
+部分 hook 会变成 medium/low
+但不会因为没有 IDA 导出而直接失败
+```
 
 ### 新版本怎么用
 
@@ -493,6 +686,10 @@ hook_resolve 会按源类形状重新搜索目标类
 ```bash
 python3 tools/gen_version.py        # version.json -> src/version.hpp（make 会调）
 ```
+
+type kind 由 `version.json` 的 `structOffsets.Il2CppTypeDefinition.bitfield` 和
+`decodeExpr.decTypeBitfield` 决定。6.7 使用 `+0x36`，解码 `raw ^ 2`；
+7.0/7.1 使用各自的 `bitfield` 偏移。
 
 ### `tools/provenance.py` —— 逐条溯源（每个常量从哪来）
 **直接扫 `gi.exe`**（不读 `slots_cache.json`），给出 `version.json` 里每条偏移/密钥的

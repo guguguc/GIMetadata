@@ -14,6 +14,7 @@ MHY 槽位扫描器 —— 自动找出「MHY[slot] OP key => 元数据偏移」
 
 用法:
     python3 slot_scan.py <gi.exe> [global-metadata.dat] [--out CACHE]
+        [--jobs N] [--timing-json FILE]
 输出:
     1) MHY 地址 + 已知锚点自检（7.1 的常数；换版本必然不符，属正常）
     2) 所有解出「像元数据偏移」的组合
@@ -178,7 +179,8 @@ def find_mhy_globals(D, secs, MHY_VA):
     return out
 
 
-def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None, stats=None):
+def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None,
+              stats=None, ranges=None, return_records=False):
     """返回 [(slot, op, key, 出现次数, 首个VA)]
 
     匹配**四种**形态：
@@ -221,11 +223,18 @@ def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None, stats=N
         实测 7.1 上与原来的线性扫描结果**逐条一致**（4730 组三元组，地址一字不差），
         好处是每条记录的 VA 都能落在真实指令边界上，不用担心跨函数的流错位。
         """
-        t0 = time.perf_counter()
-        rng = None if va0 is not None else pdata_ranges(D, secs)
-        if stats is not None:
-            stats['pdata_sec'] += time.perf_counter() - t0
-            stats['ranges'] = len(rng) if rng else 1
+        if ranges is not None:
+            rng = ranges
+            if stats is not None:
+                stats['ranges'] = len(rng)
+            if not rng:
+                return
+        else:
+            t0 = time.perf_counter()
+            rng = None if va0 is not None else pdata_ranges(D, secs)
+            if stats is not None:
+                stats['pdata_sec'] += time.perf_counter() - t0
+                stats['ranges'] = len(rng) if rng else 1
         if not rng:
             if stats is not None:
                 stats['functions'] = 1
@@ -371,8 +380,48 @@ def scan_text(D, secs, va0=None, size=None, maxdisp=NSLOT, anchors=None, stats=N
     if stats is not None:
         stats['records'] = len(records)
         stats['total_sec'] = time.perf_counter() - t_scan0
+    if return_records:
+        return records
     return [(d, op, imm, len(v), v[0]) for (d, op, imm), v in uniq.items()]
 
+
+
+def _split_ranges(ranges, jobs):
+    """Split contiguous .pdata ranges into deterministic, byte-balanced chunks."""
+    if jobs <= 1 or len(ranges) <= 1:
+        return [list(ranges)] if ranges else []
+    total = sum(max(1, fe - fs) for fs, fe in ranges)
+    target = total / float(jobs)
+    chunks, cur, acc = [], [], 0
+    for r in ranges:
+        if cur and acc >= target and len(chunks) < jobs - 1:
+            chunks.append(cur)
+            cur, acc = [], 0
+        cur.append(r)
+        acc += max(1, r[1] - r[0])
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
+# fork workers inherit the large PE image and immutable section table.
+_SLOT_WORKER = {}
+
+
+def _slot_scan_chunk(chunk):
+    st = {}
+    recs = scan_text(
+        _SLOT_WORKER['D'], _SLOT_WORKER['secs'],
+        maxdisp=_SLOT_WORKER['maxdisp'], anchors=_SLOT_WORKER['anchors'],
+        stats=st, ranges=chunk, return_records=True)
+    return recs, st
+
+
+def _rows_from_records(records):
+    uniq = {}
+    for d, op, imm, va in records:
+        uniq.setdefault((d, op, imm), []).append(va)
+    return [(d, op, imm, len(v), v[0]) for (d, op, imm), v in uniq.items()]
 
 
 # 结构体字段偏移 -> 字段名（镜像 src/il2cpp_image.hpp 的 struct；**布局跨版本稳定**，
@@ -495,8 +544,11 @@ def main():
     argv = sys.argv[1:]
     out_path = None
     timing_path = None
+    jobs = 1
     if '--timing-json' in argv:
         i = argv.index('--timing-json'); timing_path = argv[i + 1]; del argv[i:i + 2]
+    if '--jobs' in argv:
+        i = argv.index('--jobs'); jobs = max(1, int(argv[i + 1])); del argv[i:i + 2]
     if '--out' in argv:
         i = argv.index('--out'); out_path = argv[i + 1]; del argv[i:i + 2]
     funcs = []
@@ -571,7 +623,41 @@ def main():
     mark('anchor-discovery')
     print("\n扫描 .text ...")
     scan_stats = {}
-    rows = scan_text(D, secs, anchors=anchors, stats=scan_stats)
+    t_scan = time.perf_counter()
+    rows = None
+    if jobs > 1:
+        t_pdata = time.perf_counter()
+        ranges = pdata_ranges(D, secs)
+        pdata_sec = time.perf_counter() - t_pdata
+        chunks = _split_ranges(ranges, jobs) if ranges else []
+        if chunks:
+            import multiprocessing as mp
+            _SLOT_WORKER.update({'D': D, 'secs': secs, 'maxdisp': NSLOT,
+                                 'anchors': anchors})
+            try:
+                ctx = mp.get_context('fork')
+                with ctx.Pool(processes=jobs) as pool:
+                    results = pool.map(_slot_scan_chunk, chunks, chunksize=1)
+            except (ValueError, OSError) as e:
+                print('[timing] parallel scan unavailable (%s), fallback serial' % e,
+                      file=sys.stderr)
+                chunks = []
+            if chunks:
+                records = []
+                for recs, st in results:
+                    records.extend(recs)
+                    for k in ('functions', 'bytes', 'instructions',
+                              'disasm_sec'):
+                        scan_stats[k] = scan_stats.get(k, 0) + st.get(k, 0)
+                rows = _rows_from_records(records)
+                scan_stats.update({
+                    'ranges': len(ranges), 'pdata_sec': pdata_sec,
+                    'records': len(records),
+                    'total_sec': time.perf_counter() - t_scan})
+                print('[timing] scan jobs=%d chunks=%d pdata=%.3fs' % (
+                    jobs, len(chunks), pdata_sec), file=sys.stderr)
+    if rows is None:
+        rows = scan_text(D, secs, anchors=anchors, stats=scan_stats)
     mark('scan-text')
     print('[timing] scan pdata=%.3fs disasm=%.3fs total=%.3fs' % (
         scan_stats.get('pdata_sec', 0), scan_stats.get('disasm_sec', 0),

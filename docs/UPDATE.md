@@ -48,10 +48,14 @@ version/<ver>/
 ```bash
 python3 tools/slot_scan.py version/<ver>/gi.exe \
   version/<ver>/gi/Managed/Metadata/global-metadata.dat \
-  --out version/<ver>/slots.json
+  --out version/<ver>/slots.json \
+  --jobs 8
 ```
 
 这一步会扫 `.text`/`.pdata`。**不要用 IDA 做全量扫描**；IDA 只做局部函数确认。
+
+`--jobs N` 按 `.pdata` 函数区间分片并行；默认 1，结果与串行一致。
+6.7 实测：串行 589.6s → `--jobs 8` 84.6s，输出 json 的 md5 完全一致。
 
 ### 3. 用上一版 sig 找函数
 
