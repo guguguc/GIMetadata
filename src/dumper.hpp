@@ -127,8 +127,9 @@ void imageDef()
         // 本版本的逐索引 key（解密用；已验证 75/75）
         uint32_t key = img_.ImageIndexKey(imageIndex);
 
-        // typeStart 的混淆公式仍是旧版本的常量，未重新定位 —— 保持原样不动
-        uint32_t typeStart = (imageDefinition->typeStart ^ 0x5AF8F775) - key - 0x605F970E - 290428500;
+        // typeStart 的字段偏移和解码公式都由各自的 version.json 提供。
+        uint32_t rawTypeStart = *(const uint32_t*)((const uint8_t*)imageDefinition + ver::kIl2CppImageDefinitionTypeStartOffset);
+        uint32_t typeStart = ver::decImageTypeStart(rawTypeStart, key);
 
         // nameIndex 属于解密部分：offset(24)+length(8)；字段偏移/解码形状由 version.json 决定
         uint32_t rawNameIndex = *(const uint32_t*)((const uint8_t*)imageDefinition + ver::kIl2CppImageDefinitionNameIndexOffset);
@@ -191,7 +192,7 @@ std::vector<FieldInfo> collectFields(const Il2CppTypeDefinition* typeDefinition)
         std::string name{ img_.GetStringFromIndex(
             img_.fieldNameIndex((uint32_t)fieldDefinition->nameIndex, fieldIndex)) };
 
-        // typeIndex 在字段条目 +0，与 nameIndex 同一个 key（sub_140512870）
+        // typeIndex 在字段条目 +0，与 nameIndex 同一个 key (sub_140512870)
         int32_t typeIndexDec = img_.fieldTypeIndex((uint32_t)fieldDefinition->typeIndex, fieldIndex);
         if (typeIndexDec == -1) continue;
         const Il2CppType* type = img_.GetIl2CppTypeFromIndex(typeIndexDec);
@@ -200,8 +201,20 @@ std::vector<FieldInfo> collectFields(const Il2CppTypeDefinition* typeDefinition)
         std::string typeName{ img_.NameFromIl2CppType(type) };
 
         uint32_t offset = v35 & (uint32_t)ver::kFieldOffsetMask;
-        bool isStatic = (v35 & (uint32_t)ver::kFieldStaticMask) == (uint32_t)ver::kFieldStaticValue;
+        // 7.1 的静态字段标记在 0x01000000/0x02000000/0x04000000，
+        // 7.0 是 0x01000000；统一按“高位有标记”处理。
+        bool isStatic = ((v35 & (uint32_t)ver::kFieldStaticMask) == (uint32_t)ver::kFieldStaticValue) ||
+                        ((v35 & (uint32_t)ver::kFieldStaticHighMask) != 0);
         if (isStatic && ver::kFieldStaticZero) offset = 0;   // 7.0：静态字段没有实例偏移
+
+        // Il2Cpp 的实例字段偏移表包含对象头；只有 7.1 的参考 dump
+        // 需要把值类型实例字段减去 0x10。7.0/6.7 的偏移表本身已经是最终值。
+        const bool isValueType = img_.typeIsValueType(
+            img_.tdU8(typeDefinition, ver::kIl2CppTypeDefinitionBitfieldOffset)) != 0;
+        if (isValueType && !isStatic && ver::kFieldOffsetValueTypeAdjust > 0 &&
+            offset >= ver::kFieldOffsetValueTypeAdjust) {
+            offset -= ver::kFieldOffsetValueTypeAdjust;
+        }
 
         out.push_back({ fieldIndex, std::move(name), type, std::move(typeName), offset });
     }
@@ -322,7 +335,11 @@ std::string methodDef(const Il2CppTypeDefinition* typeDefinition)
         //   非虚     = *(T0+0x60)[ MHY[0x94][methodIndex] ]
         //   虚/重写  = *(T0+0x48)[ MHY[0x140] 里查到的 slot ]
         uint64_t mptr = img_.methodPointer((uint32_t)index);
-        if ((flags & METHOD_ATTRIBUTE_VIRTUAL) && !(flags & METHOD_ATTRIBUTE_ABSTRACT))
+        // 7.1 的 slot 表覆盖了非虚/值类型方法：参考 dump 取的是
+        // invoker 入口，而不是直接 methodPointer。7.0/6.7 仍保持原来的
+        // “只有 virtual 才走 invoker”路径（由版本配置控制）。
+        if (!(flags & METHOD_ATTRIBUTE_ABSTRACT) &&
+            (ver::kUseInvokerForSlotMethods || (flags & METHOD_ATTRIBUTE_VIRTUAL)))
         {
             uint64_t inv = img_.methodInvoker((uint32_t)index);
             if (inv) mptr = inv;
@@ -356,7 +373,14 @@ std::string methodDef(const Il2CppTypeDefinition* typeDefinition)
         }
         if (flags & METHOD_ATTRIBUTE_STATIC)   attrs += "static ";
         if (flags & METHOD_ATTRIBUTE_ABSTRACT) attrs += "abstract ";
-        else if (flags & METHOD_ATTRIBUTE_VIRTUAL) attrs += "virtual ";
+        else if (flags & METHOD_ATTRIBUTE_VIRTUAL) {
+            // 7.1 reference distinguishes override from a new virtual slot;
+            // older versions keep their original virtual wording.
+            if (ver::kUseOverrideKeyword && !(flags & METHOD_ATTRIBUTE_NEW_SLOT))
+                attrs += "override ";
+            else
+                attrs += "virtual ";
+        }
         if (flags & METHOD_ATTRIBUTE_PINVOKE_IMPL) attrs += "extern ";
 
         // 泛型方法实例（已接，见下）；旧版整段保留在 #if 0。

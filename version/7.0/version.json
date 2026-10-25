@@ -360,7 +360,11 @@
   "fieldOffsetMask": "0xFFFFFF",
   "fieldStaticMask": "0x1000000",
   "fieldStaticValue": "0x1000000",
+  "fieldStaticHighMask": "0x0",
   "fieldStaticZero": 1,
+  "fieldOffsetValueTypeAdjust": "0x0",
+  "useInvokerForSlotMethods": 0,
+    "useOverrideKeyword": 1,
   "propertyNoGetter": "0xDBAE",
   "genericClassesOffset": "0xC0830",
   "genericClassesCount": 398168
@@ -454,6 +458,7 @@
   }
  },
  "decodeExpr": {
+    "decImageTypeStart": { "sig": "uint32_t decImageTypeStart(uint32_t raw, uint32_t key)", "cpp": "return (raw ^ 0x5AF8F775) - key - 0x605F970E - 290428500;" },
   "decTypeNameIndex": {
    "sig": "int32_t decTypeNameIndex(uint32_t raw)",
    "cpp": "return (int32_t)(raw - (uint32_t)kTypeDefNameIndex.key);"
@@ -683,6 +688,8 @@
    "nameIndexXor": "xor:0x1BD33CC0"
   }
  },
+
+
  "structSizes": {
   "Il2CppImageDefinition": "0x28",
   "Il2CppTypeDefinition": "0x46",
@@ -739,7 +746,7 @@
    "set": 4
   },
   "Il2CppImageDefinition": {
-   "nameIndex": 8
+   "nameIndex": 8, "typeStart": 16
   },
   "Il2CppFieldDefaultValue": {
    "dataIndex": 0,

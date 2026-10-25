@@ -48,7 +48,7 @@ inline constexpr Table kParametersOffset = { 0x114, '^', 0x3E5D33E6, 8, false, "
 inline constexpr Table kPropertiesOffset = { 0x150, '-', 0x1C3D5389, 10, false, "offset", 0 };
 inline constexpr Table kFieldsOffset = { 0x18C, '-', 336578260, 8, false, "offset", 0 };
 inline constexpr Table kEventsOffset = { 0x1E8, '^', 0x100547B1, 14, false, "offset", 0 };
-inline constexpr Table kFieldOffset = { 0x204, '-', 450622139, 4, false, "offset", 0 };
+inline constexpr Table kFieldOffset = { 0x128, '^', 0xF92DC85, 4, false, "offset", 0 };
 inline constexpr Table kInterfacesTable = { 0x1C4, '-', 1518027399, 6, false, "offset", 0 };
 inline constexpr Table kNestedTypesTable = { 0x05C, '-', 381850355, 4, false, "offset", 0 };
 inline constexpr Table kGenericContainers = { 0x028, '^', 0x774A3BA6, 16, false, "offset", 0 };
@@ -80,12 +80,16 @@ inline constexpr uint32_t kT0InvokerArray = 0x48;
 inline constexpr uint32_t kT0GenericMethodPointers = 0x00;
 inline constexpr uint32_t kT1GenericInsts = 0x08;
 inline constexpr uint32_t kT1Il2CppTypes = 0x48;
-inline constexpr uint32_t kFieldOffsetBaseTable = 0;
-inline constexpr uint32_t kFieldIndexTable = 0;
-inline constexpr uint32_t kFieldOffsetMask = 0x1FFFFFFF;
-inline constexpr uint32_t kFieldStaticMask = 0xE0000000;
-inline constexpr uint32_t kFieldStaticValue = 0xC0000000;
+inline constexpr uint32_t kFieldOffsetBaseTable = 0x23B9F24;
+inline constexpr uint32_t kFieldIndexTable = 0x22293E0;
+inline constexpr uint32_t kFieldOffsetMask = 0xFFFFFF;
+inline constexpr uint32_t kFieldStaticMask = 0x0F000000;
+inline constexpr uint32_t kFieldStaticValue = 0x01000000;
+inline constexpr uint32_t kFieldStaticHighMask = 0x0F000000;
 inline constexpr uint32_t kFieldStaticZero = 0;
+inline constexpr uint32_t kFieldOffsetValueTypeAdjust = 0x10;
+inline constexpr uint32_t kUseInvokerForSlotMethods = 1;
+inline constexpr uint32_t kUseOverrideKeyword = 1;
 inline constexpr uint32_t kPropertyNoGetter = 0;
 inline constexpr uint32_t kGenericClassesOffset = 0xC5520;
 inline constexpr uint32_t kGenericClassesCount = 406569;
@@ -188,6 +192,7 @@ inline constexpr OpKey kGenericContainerParameterStart = { '^', 0x138FD4C7 };  /
 inline constexpr OpKey kGenericContainerArgc = { '-', 1053517166 };  // sub:1053517166
 inline constexpr OpKey kGenericParameterNameIndex = { '^', 0x664CCEB9 };  // xor:0x664CCEB9
 
+inline constexpr uint32_t decImageTypeStart(uint32_t raw, uint32_t key) { return ((raw ^ key) & 0xFFFF) ^ 0x47; }
 inline constexpr int32_t decTypeNameIndex(uint32_t raw) { return (int32_t)(raw - (uint32_t)kTypeDefNameIndex.key); }
 inline constexpr int32_t decTypeNamespaceIndex(uint32_t raw) { return (int32_t)(raw - (uint32_t)kTypeDefNamespaceIndex.key); }
 inline constexpr int32_t decTypeMethodStart(uint32_t raw) { return (int32_t)(raw ^ (uint32_t)kTypeDefMethodStart.key); }
@@ -251,6 +256,7 @@ inline constexpr size_t kSize_Il2CppGenericMethodFunctionsDefinitions = 0x0E;
 inline constexpr uint32_t kIl2CppPropertyDefinitionGetOffset = 6;
 inline constexpr uint32_t kIl2CppPropertyDefinitionSetOffset = 8;
 inline constexpr uint32_t kIl2CppImageDefinitionNameIndexOffset = 32;
+inline constexpr uint32_t kIl2CppImageDefinitionTypeStartOffset = 12;
 inline constexpr uint32_t kIl2CppGenericContainerArgcOffset = 8;
 inline constexpr uint32_t kIl2CppGenericContainerParameterStartOffset = 4;
 inline constexpr uint32_t kIl2CppFieldDefaultValueFieldIndexOffset = 0;
