@@ -481,7 +481,7 @@
   },
   "decTypeParentIndex": {
    "sig": "int32_t decTypeParentIndex(uint32_t raw)",
-   "cpp": "return (int32_t)(raw - (uint32_t)kTypeDefParentIndex.key);"
+   "cpp": "return (int32_t)(raw ^ (uint32_t)kTypeDefParentIndex.key);"
   },
   "decTypeGenericContainerIndex": {
    "sig": "int16_t decTypeGenericContainerIndex(uint32_t raw)",
@@ -629,7 +629,7 @@
    "namespaceIndex": "xor:0x14BE1B80",
    "propertyStart": "sub:0x6AE4E32A",
    "methodStart": "sub:0x42C81546",
-   "parentIndex": "sub:0x6748C2A3",
+   "parentIndex": "xor:0x4339F98A",
    "fieldStart": "sub:0x1E6871E4",
    "unknown20": "sub:0x431A2141",
    "nameIndex": "sub:0x5F8AB6E2",
@@ -773,7 +773,7 @@
    "namespaceIndex": 8,
    "propertyStart": 32,
    "methodStart": 36,
-   "parentIndex": 28,
+   "parentIndex": 12,
    "fieldStart": 44,
    "unknown20": 16,
    "nameIndex": 40,
@@ -819,7 +819,7 @@
   "nestedTypesCount": 65,
   "interfaces_count": 68,
   "nestedTypesStart": 52,
-  "parentIndex": 28,
+  "parentIndex": 12,
   "flags": 24,
   "unknown20": 16,
   "bitfield": 56
