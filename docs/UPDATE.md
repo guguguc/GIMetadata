@@ -1395,7 +1395,7 @@ python3 tools/sig.py consts <exe> --func <DecryptString> --func <RuntimeInit>
 
 | 项 | 为什么不在当前 `ida.json` / `decomp` 里 |
 |---|---|
-| `typeDef.parentIndex` | 当前 53 个 decomp 函数里没有 `+0x1C - key` 的读取；可能只在未导出的 `GetTypeInfoByIndex` / 其它函数里，或游戏代码不读 |
+| `typeDef.parentIndex` | ✅ 2026-10-25 按 enum/struct 锚点确认：`+0x0C ^ 0x4339F98A`；不再按 `+0x1C - key` 猜测。见 §15.4d |
 | `typeDef.flags` | 7.0 的 `TypeAttrGetter` 读的是另一张属性表（`MHY+340` / `MHY+180`），不是 `typeDef+0x18` |
 | `method.returnType` | 7.0 把 returnType 放到并行 4 字节表（`sub_140514630`），该函数不在当前 decomp 里 |
 | `nestedTypesTable` | ✅ 已从 `IterNestedTypes` 的 `MHY+0x17C ^ 0x6EBA4F15` 补上 |
@@ -3112,7 +3112,7 @@ GIMeta_GetTypeInfoByIndex
 
 | 字段 | 偏移 | 解码 | 怎么找到 | 验证 |
 |---|---|---|---|---|
-| `parentIndex` | `+0x1C` | `-0x6748C2A3` | top raw `0x6748C2A4` 出现 61,675 次 → 假设是 **Object(索引 1)**，反推 key；前 8 个类型的父类解出全是 `1` | 全部 <2²¹，max 662,667（Il2CppType 索引域）|
+| `parentIndex` | `+0x0C` | `^0x4339F98A` | 2026-10-25 按 `status.md §6/附7` 的 enum/struct 锚点重扫：父类存 **Il2CppType 索引**；枚举 7965/7965、结构体 4702/4702 全部命中 | `NEDGCCFMKBC→GlobalManager`、`GlobalManager→BaseManager`、`TimerManager→GlobalManager`；不再使用 `+0x1C/-0x6748C2A3` |
 | `flags` | `+0x18` | `^0x569439D0` | 7.0 该列 **distinct=106**，与 7.1 flags 的 distinct=106 完全吻合；top raw `0x568439D1/0x568438D1/0x568438D3` 反推 key | top = `0x100001/0x100101/0x100103`，与 7.1 flags 集合 **106/106** 交集 |
 | `unknown20` | `+0x10` | `-0x431A2141` | top raw `0x431A2141/0x431A218B/0x431A214D` 对应 7.1 unknown20 的 top `0/0x4a/0xc`；反推 key | distinct 44,995 ≈ 7.1 的 45,830；top 完全一致 |
 
@@ -4179,7 +4179,7 @@ genericInsts = *(T1+0x30)  // { argc, pad, argv }
 namespace@8   raw ^ 0x14BE1B80
 propertyStart@32 raw - 0x6AE4E32A
 methodStart@36 raw - 0x42C81546
-parent@28      raw - 0x6748C2A3
+parent@12      raw ^ 0x4339F98A
 fieldStart@44  raw - 0x1E6871E4
 name@40        raw - 0x5F8AB6E2
 flags@24       raw ^ 0x569439D0
@@ -5745,4 +5745,450 @@ verify.py 的版本特定检查
 
 Hook 7.1→7.0 的匹配是另一条独立流程，不属于本次 6.7 版本更新链；
 不要把 hook 映射结果混进 version JSON 或 dump 生成流程。
+
+## 18.7 7.1 image `typeStart` 定位记录
+
+这一节记录 7.1 image 头部的 `typeStart` 是怎么从“随机大数”修到
+和 `out/dump-right-71.cs` 75/75 一致的。定位时用的是 7.1 IDA MCP
+（`version/7.1/gi.exe`），不是拿参考 dump 反填。
+
+### 18.7.1 IDA 里先确认 image 表
+
+在 `GIMeta_RuntimeInit`（`0x140534B80`）里确认：
+
+```text
+imagesOffset = 0x22C5C
+image 记录步长 = 40 (0x28)
+imagesCount = 75
+```
+
+image 循环的核心形状：
+
+```c
+v131 = startup_metadata + MHY[0x20C] - 248195061; // 0x22C5C
+v622 = 5 * imageIndex;                            // 5 * 8 = 40
+v149 = &v131[8 * v622];                           // imageDefinition + 40*i
+```
+
+也就是说 image 原始记录是：
+
+```text
+imageDefinition + 0x00 .. + 0x27
+```
+
+循环会读取 `+0x00/+0x04/+0x08/+0x0C/+0x10/...+0x24`，
+并用逐 image key `v134` 写入一个 88 字节的运行时 image info。
+
+关键点：**旧代码用的 `+0x10` 不是 7.1 的 typeStart**。
+`+0x10` 解码后近似常量，正是之前头部出现
+`3542644948`、`3751280980` 这类随机大数的原因。
+
+### 18.7.2 真正字段和公式
+
+7.1 的 `typeStart` 在：
+
+```text
+imageDefinition + 0x0C
+```
+
+解码方式：
+
+```cpp
+uint32_t raw = *(uint32_t*)((uint8_t*)imageDefinition + 0x0C);
+uint32_t key = keyImage(imageIndex);
+uint32_t typeStart = ((raw ^ key) & 0xFFFF) ^ 0x47;
+```
+
+等价于：
+
+```text
+raw ^ key 的高 16 位是固定常量 0x73F6
+低 16 位再异或 0x47，得到 image 的全局 TypeDef 起始索引
+```
+
+验证结果：
+
+```text
+Image 0 -> 0
+Image 1 -> 1335
+Image 2 -> 1420
+Image 3 -> 2085
+...
+全部 75 个 image: 75/75
+```
+
+### 18.7.3 为什么一开始算错了
+
+`keyImage()` 的中间乘法是 C++ `uint64_t` 运算，会按 64 位回绕。
+如果直接用 Python 任意精度整数算，不模拟：
+
+```python
+M = (1 << 64) - 1
+v = (B * inner + add) & M
+```
+
+得到的 key 是错的，后面所有 XOR 结果都会看起来像随机数。
+
+这次修复的关键顺序是：
+
+```text
+1. 用 IDA 确认 image 表 base/stride
+2. 用 C++ 的 uint64_t 语义重新算 keyImage
+3. 逐个 image 对比 raw ^ key
+4. 发现 +0x0C 的低 16 位与 typeStart 只差 0x47
+5. 用全部 75 个 image 验证，而不是只看前几个
+```
+
+### 18.7.4 现在写在 JSON 里
+
+结构体字段偏移：
+
+```json
+"Il2CppImageDefinition": {
+  "nameIndex": 32,
+  "typeStart": 12
+}
+```
+
+解码公式：
+
+```json
+"decImageTypeStart": {
+  "sig": "uint32_t decImageTypeStart(uint32_t raw, uint32_t key)",
+  "cpp": "return ((raw ^ key) & 0xFFFF) ^ 0x47;"
+}
+```
+
+`src/dumper.hpp` 只调用生成出来的函数：
+
+```cpp
+uint32_t rawTypeStart = *(const uint32_t*)(
+    (const uint8_t*)imageDefinition + ver::kIl2CppImageDefinitionTypeStartOffset
+);
+uint32_t typeStart = ver::decImageTypeStart(rawTypeStart, key);
+```
+
+7.0/6.7 各自的 `version.json` 里保留旧偏移和旧公式，
+所以不会把 7.1 的 `+0x0C/0x47` 编码套到旧版本。
+
+### 18.7.5 7.2 / 7.3 怎么复用
+
+不要改 `dumper.hpp`，只更新新版本目录下的 `version.json`：
+
+```text
+version/7.2/version.json
+version/7.3/version.json
+```
+
+需要确认/填写：
+
+```json
+"structOffsets": {
+  "Il2CppImageDefinition": {
+    "nameIndex": 32,
+    "typeStart": 12
+  }
+}
+```
+
+```json
+"decodeExpr": {
+  "decImageTypeStart": {
+    "sig": "uint32_t decImageTypeStart(uint32_t raw, uint32_t key)",
+    "cpp": "return ((raw ^ key) & 0xFFFF) ^ 0x47;"
+  }
+}
+```
+
+新版本如果字段或公式变了，就在 IDA 的 `GIMeta_RuntimeInit`
+image 循环里重新定位，并至少验证：
+
+```text
+1. image 名字全部正确
+2. typeStart 单调递增
+3. 第一个 image 从 0 开始
+4. 最后一个 image 的 typeStart + typeCount 不超过 typeDefinitionsCount
+5. 有参考 dump 时逐行对比全部 image
+```
+
+没有参考 dump 时，不能只看前几个 image 就宣布公式正确；
+这次最开始就是只验了前 10 个，后面才用 75/75 发现边界问题。
+
+---
+
+## §19 用 2.8 无混淆 dump 定位 7.1 字段（实例）
+
+> 适用于游戏逻辑字段，不是 metadata 表常量。
+> 2.8 dump 只提供未混淆的**类名、字段名、类型和 enum 值**；
+> 7.1 的实际 offset/RVA 必须在 7.1 自己的 dump/IDA 里确认。
+
+### 19.1 为什么不能直接抄 offset
+
+```text
+2.8 offset  != 7.1 offset
+2.8 RVA     != 7.1 RVA
+```
+
+2.8 和 7.1 的字段顺序、基类大小、对齐都可能变化。
+2.8 的 `_state` 在 `0x178`，7.1 的同一个语义字段可能已经移到 `0x194`。
+所以只能把 2.8 当作“名字和结构参考”，不能当作“地址表”。
+
+### 19.2 标准流程
+
+```text
+1. 在 2.8 里找到语义类，记录字段名/类型/enum/方法
+2. 在 7.1 里用 7.1 自己的 RVA 找方法
+3. 找到方法所属的混淆类
+4. 用字段类型、顺序、nested enum 证明类匹配
+5. 从 7.1 类里读取真实 offset
+6. 检查对象链 v2 -> v4 -> v5，确认不是把不同对象硬串起来
+7. 最后才改 hooks.json / mod 代码
+```
+
+关键点：**2.8 的 RVA 不能拿到 7.1 里搜索**。7.1 的 RVA 来自
+`config/hooks.json`、IDA 或当前版本的函数定位结果。
+
+### 19.2.1 新版本里到底怎么找字段 offset
+
+2.8 的 offset 只用来**认出字段**，不能直接填到新版本。实际做法：
+
+1. 在 2.8 记录字段指纹：
+   - 所属类、基类
+   - 字段名、字段类型
+   - 前一个/后一个字段
+   - 相关 enum 的名字和数值
+   - 哪个方法读写它
+2. 在新版本找到对应类：
+   - 用新版本自己的方法 RVA（`hooks.json` / IDA）
+   - 或按类结构、基类、nested enum 匹配
+3. 在新版本类里找字段：
+   - 把基类字段也算进去
+   - 先按类型和相邻字段缩小范围
+   - enum 数值是最强指纹
+   - 最后看 native 代码里的 `+0x...` 访问
+4. 找到后再把**新版本的 offset**写回 `hooks.json` / mod 代码。
+5. 如果新旧 offset 碰巧相同，只能算巧合，不能作为证明。
+
+例如：
+
+```text
+2.8 GadgetDataItem.gadgetState @0x60
+7.1 OECHIOBHMHD.INKCGMAFJGM @0x178
+```
+
+新版本不能去搜 `0x60` 当作 gadgetState；`0x178` 是靠
+`GadgetState` 的 101..106 数值和 `LCGadgetMisc._dataItem` 类型链确认的。
+
+`dump_field_search.py --offset` 只用于列候选，不能单独证明字段身份。
+简单类名重复、继承字段、泛型字段都会让它误报，必须回类定义手工核对。
+
+### 19.3 实例：`LCSelectPickup` -> `JPJLHAEKMJD`
+
+2.8 里：
+
+```csharp
+public sealed class MoleMole.LCSelectPickup : LCBase
+{
+    private BaseShape3d _inShape;          // 0x140
+    private BaseShape3d _outShape;         // 0x148
+    private Action<uint> _pickupCB;        // 0x170
+    private LCSelectPickup.State _state;   // 0x178
+}
+
+private enum LCSelectPickup.State
+{
+    WaitToBegin = 0,
+    BeginToCheckDisappear = 1,
+    CheckingDisappear = 2,
+    BeginToCheckAppear = 3,
+    CheckingAppear = 4,
+}
+```
+
+2.8 的方法语义：
+
+```text
+IsInPosition(BaseEntity) -> bool
+IsOutPosition(BaseEntity) -> bool
+AddInteeBtnByID(BaseEntity)
+NeedShowPickUpBtn(BaseEntity) -> bool
+```
+
+在 7.1 里，用 7.1 的 RVA 找到：
+
+```text
+0xA9234B0  private bool GNPDFPGFPDH(JDIIHHFJKBM)  -> IsInPosition
+0xA925DA0  private bool GCEOCEFIBJE(JDIIHHFJKBM)  -> IsOutPosition
+0xA9242B0  private void FCLOKODIIIJ(JDIIHHFJKBM)  -> AddInteeBtnByID
+```
+
+这些方法属于：
+
+```csharp
+public sealed class JPJLHAEKMJD : IKGPCCBAMMF
+{
+    private List<uint> PKPLGFJIGCI;               // 0x138
+    private FAFHCIIHCNN IBPHODJGDGM;              // 0x140
+    private FAFHCIIHCNN GHMGBJGGODC;              // 0x148
+    private List<uint> MCNDJMJLLKF;               // 0x150
+    private SliceFrameWatch IGPIODHCIHA;          // 0x158
+    private HashSet<uint> KHEAJBLIOIK;            // 0x160
+    private KALCGFHCJFF BAMENJILIKM;              // 0x168
+    private EAKBAJKBIEP EHINONDLIFN;              // 0x170
+    private Action<uint> MCOKAHPKJIH;             // 0x178
+    private EAKBAJKBIEP AFMNEAACLCA;              // 0x180
+    private KALCGFHCJFF NKJBOLEJFMP;              // 0x188
+    private float CIGJJBCLIDC;                    // 0x190
+    private DOLKFDDNDAO PPGKFFDNNKK;              // 0x194
+}
+```
+
+`DOLKFDDNDAO` 的枚举值同样是 `WaitToBegin=0` 到 `CheckingAppear=4`，
+所以可以确认它就是 `LCSelectPickup.State`：
+
+| 语义 | 2.8 | 7.1 |
+|---|---|---|
+| 进入范围 | `_inShape @ 0x140` | `IBPHODJGDGM @ 0x140` |
+| 离开范围 | `_outShape @ 0x148` | `GHMGBJGGODC @ 0x148` |
+| 拾取回调 | `_pickupCB @ 0x170` | `MCOKAHPKJIH @ 0x178` |
+| 状态 | `_state @ 0x178` | `PPGKFFDNNKK @ 0x194` |
+
+结论：
+
+```text
+7.1 0x148 -> LCSelectPickup._outShape   ✅
+7.1 0x178 -> LCSelectPickup._pickupCB   ✅（不是 state）
+7.1 0x194 -> LCSelectPickup._state      ✅
+```
+
+### 19.4 `sub_180193F40` 链已确认：LCChestPlugin -> LCGadgetMisc -> GadgetDataItem
+
+之前把 `0x178` 和 `LCSelectPickup` 对比，结论是“0x178 不是
+LCSelectPickup._state”，这是对的；但 `sub_180193F40` 读的并不是
+LCSelectPickup，而是下面这条链：
+
+```text
+v2 = Entity_FindComponentByClass(entity, LCChestPlugin class)
+v4 = *(v2 + 0xA0)          // LCChestPlugin._owner
+v5 = *(v4 + 0x148)         // LCGadgetMisc._dataItem
+state = *(v5 + 0x178)      // GadgetDataItem.gadgetState
+```
+
+2.8 名字和 7.1 混淆类的对应：
+
+| 语义 | 2.8 字段 | 2.8 offset | 7.1 混淆类 | 7.1 字段 | 7.1 offset |
+|---|---|---:|---|---|---:|
+| 宝箱插件 | `LCChestPlugin` | — | `DJNFNMGHJPL` | — | — |
+| 插件 owner | `LCChestPlugin._owner` | `0x58` | `DJNFNMGHJPL` | `KMAALPCPDLL` | `0xA0` |
+| 宝箱逻辑 | `LCGadgetMisc` | — | `GLLEELLBINA` | — | — |
+| 数据项 | `LCGadgetMisc._dataItem` | `0x148` | `GLLEELLBINA` | `MLEIJAAEJFO` | `0x148` |
+| 宝箱状态 | `GadgetDataItem.gadgetState` | `0x60` | `OECHIOBHMHD` | `INKCGMAFJGM` | `0x178` |
+
+`GadgetDataItem.gadgetState` 的 enum 值正好解释样本里的 switch：
+
+```text
+'e' = 101  ChestLocked
+'f' = 102  ChestOpened
+'g' = 103  ChestTrap
+'h' = 104  ChestBramble
+'i' = 105  ChestFrozen
+'j' = 106  ChestRock
+```
+
+所以样本里的：
+
+```text
+case 'e': return 2;   // ChestLocked
+case 'f': return 0;   // ChestOpened
+case 'g': return 6;   // ChestTrap
+case 'h': return 5;   // ChestBramble
+case 'i': return 4;   // ChestFrozen
+case 'j': return 3;   // ChestRock
+```
+
+不是“随手写的字符”，而是 `GadgetState` 的真实值。
+
+结论：
+
+```text
+7.1 qword_2A2C30 -> LCChestPlugin class
+7.1 qword_2A2C18 + 0xA0  -> LCChestPlugin._owner
+7.1 qword_2A2C20 + 0x148 -> LCGadgetMisc._dataItem
+7.1 qword_2A2C10 + 0x178 -> GadgetDataItem.gadgetState
+```
+
+因此 `AutoLoot_TreasureState = 0x178` 在**这条链里是正确的**。
+它和 `LCSelectPickup._state = 0x194` 是两个完全不同的类，不能混用：
+
+```text
+LCSelectPickup._pickupCB   @ 0x178
+LCSelectPickup._state      @ 0x194
+GadgetDataItem.gadgetState @ 0x178   ← AutoLoot 用的是这个
+```
+
+IDA 里的对应重命名：
+
+```text
+sub_180193EC0 -> Entity_FindComponentByClass
+sub_180194000 -> Component_FindPluginByClass
+sub_180193F40 -> Entity_GetTreasureChestStateInternal
+qword_2A2C30 -> LCChestPlugin_ClassPtr
+qword_2A2C18 -> LCChestPlugin_OwnerOffset
+qword_2A2C20 -> LCGadgetMisc_DataItemOffset
+qword_2A2C10 -> GadgetDataItem_GadgetStateOffset
+```
+
+### 19.5 复现命令
+
+```bash
+D28=/home/gugugu/Repo/gs/dump_2.8.cs
+D71=/home/gugugu/Repo/gs/dump71.cs
+
+# 2.8 语义类
+grep -a -n "class MoleMole.LCSelectPickup" "$D28"
+grep -a -n "class MoleMole.LCChestPlugin" "$D28"
+grep -a -n "class MoleMole.LCGadgetMisc" "$D28"
+grep -a -n "class MoleMole.GadgetDataItem" "$D28"
+
+# 7.1：用 7.1 RVA 找方法
+grep -a -n -B12 -A8 "RVA: 0xA9234B0" "$D71"
+
+# 7.1 类字段（注意同名 enum 会干扰简单名搜索）
+grep -a -n -A40 "class JPJLHAEKMJD" "$D71"
+grep -a -n -A30 "class DJNFNMGHJPL" "$D71"
+grep -a -n -A30 "class GLLEELLBINA" "$D71"
+grep -a -n -A80 "class OECHIOBHMHD" "$D71"
+
+# offset / 类名过滤
+python3 tools/dump_field_search.py "$D28" \
+  --offset 0x178 --name LCSelectPickup
+python3 tools/dump_field_search.py "$D71" \
+  --offset 0x194 --name JPJLHAEKMJD
+
+# 注意：--chain 只按简单类名和直接字段追踪；
+# dump 里存在同名 enum/嵌套类型时，它可能误报 no chain。
+python3 tools/dump_field_search.py "$D71" \
+  --chain 0xA0,0x148,0x178
+```
+
+### 19.6 检查清单
+
+```text
+[ ] 2.8 类名/字段名/类型/enum 已记录
+[ ] 7.1 方法用 7.1 RVA 定位，而不是 2.8 RVA
+[ ] 混淆类已用字段结构确认
+[ ] nested enum 值一致
+[ ] offset 从 7.1 类读取
+[ ] --chain 仅作辅助；同名类型/继承时要手工核对
+[ ] v2/v4/v5 类型已确认
+[ ] 最后才改 hooks.json / mod 代码
+[ ] 构建 + 游戏内验证
+```
+
+一句话：
+
+```text
+2.8 回答“这个字段是什么”；
+7.1 回答“这个字段现在在哪”。
+```
 

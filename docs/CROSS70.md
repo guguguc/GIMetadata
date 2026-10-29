@@ -87,7 +87,7 @@ typeDefs / nestedTypes / interfaces）。7.0 上只有前两个能验出来，
 | `methodStart` | `xor 0x4D8127F2` | 同 | ✅ |
 | `fieldStart` / `field_count` / `interfacesStart` / `nestedTypesCount` … | 同 | 同 | ✅ |
 | `namespaceIndex` | `add 0xBBB4CF40` | `add 0xFEB47CB0` | ❌ |
-| `parentIndex` | `add 0xE1` | `add 0xC28B6FE1` | ❌ |
+| `parentIndex` | `add 0xE1` | `add 0xC28B6FE1` | ❌（2026-10-25 已另行确认 `+0x0C ^ 0x4339F98A`，见 `status.md` §6） |
 | `nameIndex` | `xor 0x6A3E22EA` | `add 0xFBAD8E98`（排第 2） | ❌ |
 | `flags` | `xor 0x774A3BA6` | `add 0xBEAA4472`（不在前 4） | ❌ |
 | `method_count` | `add 0xFFFFFFF8` | `add 0xFFFF1266`（不在前 3） | ❌ |

@@ -228,6 +228,42 @@ qword_145AD52B8 = 0x1427D4BD0   (MHY 表)
 **结论**：`parentIndex` **不是** typeDefinition 里常数-K 解码的索引字段（其它类型字段 name/ns/flags 都是常数）。
 要么用逐索引 key，要么不在 typeDefinition 里（`GIMeta_SetupTypeInfoLocked` 确实只读 `+60`/`+32`）。
 
+### 2026-10-25：7.0 `parentIndex` 重新验证成功
+
+上面“7.0 穷举零命中”的结论是针对**旧锚点/旧布局**的；按附录 7 的正确方法重新做：
+
+```text
+parentIndex 存的是 Il2CppType 索引
+枚举 parent -> System.Enum 的 Il2CppType
+结构体 parent -> System.ValueType 的 Il2CppType
+```
+
+对 7.0 的所有候选偏移/宽度/op/key 重扫后，唯一同时满足：
+
+```text
+枚举  7965/7965
+结构体 4702/4702
+```
+
+的组合是：
+
+```text
+typeDef +0x0C
+raw ^ 0x4339F98A
+```
+
+验证：
+
+```text
+NEDGCCFMKBC -> MoleMole.GlobalManager
+GlobalManager -> MoleMole.BaseManager
+TimerManager -> MoleMole.GlobalManager
+```
+
+因此 7.0 不再使用 `+0x1C - 0x6748C2A3`。`docs/UPDATE.md` 的
+§15.4d 已同步修正；`version/7.0/version.json` 的 `parentIndex`、
+`structOffsets`/`typeDefOffsets` 和 `decodeExpr` 也已改为上值。
+
 ### 附 2：`fieldDefaultValues` / 常量值 blob 的**成功**记录（两种可复用方法）
 
 **方法 ① 结构 + 已知计数锚点**
